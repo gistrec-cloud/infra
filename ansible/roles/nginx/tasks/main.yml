@@ -51,6 +51,7 @@
     -d {{ item.server_name }}
   args:
     creates: "/etc/letsencrypt/live/{{ item.server_name }}/fullchain.pem"
+  changed_when: true
   loop: "{{ nginx_sites }}"
   loop_control:
     label: "{{ item.server_name }}"

@@ -1,5 +1,7 @@
 # infra
 
+[![CI](https://github.com/gistrec-cloud/infra/actions/workflows/ci.yml/badge.svg)](https://github.com/gistrec-cloud/infra/actions/workflows/ci.yml)
+
 Infrastructure as code for the **gistrec-cloud** fleet.
 
 - **Ansible** configures what lives *inside* the servers — base hardening, firewall, nginx, Node/pm2 apps, monitoring.
