@@ -12,11 +12,11 @@ The repository is deliberately split into **code** (public, here) and **live dat
 ```
    registrar (reg.ru / godaddy)          ┌──────────────┐
    nameservers delegated to  ──────────► │  Cloudflare  │   DNS as code
-                                          │     DNS      │   (terraform/)
-                                          └──────┬───────┘
-                                                 │  A / CNAME
-                    ┌────────────────────────────┼────────────────────────────┐
-                    ▼                             ▼                             ▼
+                                         │     DNS      │   (terraform/)
+                                         └──────┬───────┘
+                                                │  A / CNAME
+                    ┌───────────────────────────┼─────────────────────────────┐
+                    ▼                           ▼                             ▼
               ┌───────────┐               ┌───────────┐                 ┌───────────┐
               │  web-01   │               │  web-02   │                 │    ...    │
               │  nginx    │               │  nginx    │                 │           │   Ansible-managed
