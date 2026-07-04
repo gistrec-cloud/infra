@@ -29,6 +29,9 @@ id_ed25519
 # ─── Terraform state & cache ──────────────────────────────────────
 **/.terraform/*
 .terraform.lock.hcl
+# One-shot import scaffolding (contains real resource ids)
+import.tf
+generated.tf
 *.tfstate
 *.tfstate.*
 crash.log
