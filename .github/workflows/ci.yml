@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Ansible + ansible-lint
-        run: pip install ansible-core ansible-lint
+        run: pip install "ansible-core==2.21.1" "ansible-lint==26.6.0"
       - name: Install Galaxy collections
         run: ansible-galaxy collection install -r ansible/requirements.yml
       - name: Run ansible-lint

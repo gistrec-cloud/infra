@@ -82,8 +82,8 @@
     chdir: "{{ item.cwd }}"
   become: true
   become_user: "{{ admin_user }}"
-  register: pm2_reload
-  changed_when: "'Applying action' in pm2_reload.stdout or 'Starting' in pm2_reload.stdout"
+  register: nodeapp_pm2_reload
+  changed_when: "'Applying action' in nodeapp_pm2_reload.stdout or 'Starting' in nodeapp_pm2_reload.stdout"
   loop: "{{ nodeapp_node_apps }}"
   loop_control:
     label: "{{ item.name }}"
