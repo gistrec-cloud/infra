@@ -28,6 +28,7 @@ id_ed25519
 
 # ─── Terraform state & cache ──────────────────────────────────────
 **/.terraform/*
+.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 crash.log

@@ -15,7 +15,7 @@ nginx_sites:
 certbot_email: admin@example.com
 
 # nodeapp role: Node apps managed by pm2 on this host.
-node_apps:
+nodeapp_node_apps:
   - name: app
     repo: "git@github.com:example/app.git"
     branch: main

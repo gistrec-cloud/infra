@@ -1,5 +1,6 @@
 ---
 - name: Reload pm2
   ansible.builtin.command: pm2 reload all
+  become: true
   become_user: "{{ admin_user }}"
   changed_when: false

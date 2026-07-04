@@ -8,7 +8,7 @@
     update_cache: true
 
 - name: Bind netdata to localhost only
-  ansible.builtin.ini_file:
+  community.general.ini_file:
     path: /etc/netdata/netdata.conf
     section: web
     option: "bind to"

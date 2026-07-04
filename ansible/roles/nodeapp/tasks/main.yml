@@ -13,7 +13,7 @@
 
 - name: Add NodeSource apt repository
   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_{{ nodejs_major }}.x nodistro main"
+    repo: "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_{{ nodeapp_nodejs_major }}.x nodistro main"
     filename: nodesource
     state: present
 
@@ -36,7 +36,7 @@
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0755"
-  loop: "{{ node_apps }}"
+  loop: "{{ nodeapp_node_apps }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -46,8 +46,9 @@
     dest: "{{ item.cwd }}"
     version: "{{ item.branch | default('main') }}"
     accept_hostkey: true
+  become: true
   become_user: "{{ admin_user }}"
-  loop: "{{ node_apps }}"
+  loop: "{{ nodeapp_node_apps }}"
   loop_control:
     label: "{{ item.name }}"
   notify: Reload pm2
@@ -57,8 +58,9 @@
     path: "{{ item.cwd }}"
     production: true
     state: present
+  become: true
   become_user: "{{ admin_user }}"
-  loop: "{{ node_apps }}"
+  loop: "{{ nodeapp_node_apps }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -69,7 +71,7 @@
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0644"
-  loop: "{{ node_apps }}"
+  loop: "{{ nodeapp_node_apps }}"
   loop_control:
     label: "{{ item.name }}"
   notify: Reload pm2
@@ -78,10 +80,11 @@
   ansible.builtin.command:
     cmd: pm2 startOrReload ecosystem.config.js
     chdir: "{{ item.cwd }}"
+  become: true
   become_user: "{{ admin_user }}"
   register: pm2_reload
   changed_when: "'Applying action' in pm2_reload.stdout or 'Starting' in pm2_reload.stdout"
-  loop: "{{ node_apps }}"
+  loop: "{{ nodeapp_node_apps }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -92,5 +95,6 @@
 
 - name: Persist the pm2 process list
   ansible.builtin.command: pm2 save
+  become: true
   become_user: "{{ admin_user }}"
   changed_when: false

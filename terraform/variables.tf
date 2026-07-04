@@ -18,9 +18,9 @@ variable "dns_records" {
     name     = string
     type     = string
     content  = string
-    ttl      = optional(number, 1)  # 1 = automatic (required when proxied = true)
+    ttl      = optional(number, 1) # 1 = automatic (required when proxied = true)
     proxied  = optional(bool, false)
-    priority = optional(number)     # required for MX; omit for other types
+    priority = optional(number) # required for MX; omit for other types
   }))
   default = []
 

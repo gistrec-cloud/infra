@@ -16,7 +16,7 @@ table inet filter {
         ip6 nexthdr ipv6-icmp accept
 
         tcp dport { {{ ssh_port }}, 80, 443 } accept
-{% for port in extra_open_tcp_ports %}
+{% for port in firewall_extra_open_tcp_ports %}
         tcp dport {{ port }} accept
 {% endfor %}
     }

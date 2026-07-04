@@ -1,8 +1,8 @@
 ---
 # Extra inbound TCP ports to open (besides SSH, 80, 443).
-extra_open_tcp_ports: []
+firewall_extra_open_tcp_ports: []
 
 # fail2ban tuning
-fail2ban_bantime: "1h"
-fail2ban_findtime: "10m"
-fail2ban_maxretry: 5
+firewall_fail2ban_bantime: "1h"
+firewall_fail2ban_findtime: "10m"
+firewall_fail2ban_maxretry: 5
