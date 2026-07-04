@@ -1,0 +1,21 @@
+aws_region  = "eu-central-1"
+name_prefix = "gistrec"
+
+functions = {
+  "openai-relay" = {
+    handler     = "index.handler"
+    runtime     = "nodejs22.x"
+    s3_bucket   = "my-lambda-artifacts"
+    s3_key      = "openai-relay/latest.zip"
+    memory_size = 256
+    public_url  = true # public Function URL (authorization_type = NONE)
+    env         = { UPSTREAM_HOST = "api.openai.com" }
+  }
+  "anthropic-relay" = {
+    handler    = "index.handler"
+    runtime    = "nodejs22.x"
+    s3_bucket  = "my-lambda-artifacts"
+    s3_key     = "anthropic-relay/latest.zip"
+    public_url = true
+  }
+}

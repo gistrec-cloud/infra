@@ -1,27 +1,40 @@
-# terraform — DNS as code (Cloudflare)
+# terraform — infrastructure by provider
 
-Manages DNS records for the fleet. Domains stay registered at reg.ru / GoDaddy;
-their nameservers are delegated to Cloudflare, and records are managed here.
+Each subdirectory is an independent root module with its own state (independent blast radius):
 
-## Usage
+| Module | Provider | Manages |
+|--------|----------|---------|
+| `dns/`    | Cloudflare   | DNS records for the fleet |
+| `aws/`    | AWS          | Lambda functions + Function URLs |
+| `yandex/` | Yandex Cloud | Object Storage, Managed MySQL, Compute, Cloud Function |
 
-```bash
-cp terraform.tfvars.example terraform.tfvars   # gitignored — put real values here
-export TF_VAR_cloudflare_api_token=...          # or set it inside the tfvars file
+Run Terraform inside a module directory (`cd terraform/aws && terraform init`).
 
-terraform init
-terraform plan
-terraform apply
+## Remote state (recommended for real use)
+
+State holds secrets (DB passwords, access keys), so keep it private and encrypted. Use the built-in
+`s3` backend pointed at Yandex Object Storage, in a **gitignored** `backend.tf` per module (the bucket
+name is data, not code):
+
+```hcl
+terraform {
+  backend "s3" {
+    endpoints                   = { s3 = "https://storage.yandexcloud.net" }
+    bucket                      = "my-tfstate-bucket"
+    region                      = "ru-central1"
+    key                         = "aws/terraform.tfstate"
+    skip_region_validation      = true
+    skip_credentials_validation = true
+    skip_requesting_account_id  = true
+    skip_s3_checksum            = true
+  }
+}
 ```
 
-## Notes
+Backend credentials come from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars (a Yandex service
+account static key). CI runs `terraform init -backend=false`, so it never touches real state.
 
-- `terraform.tfvars`, `*.tfstate` and `.terraform/` are gitignored — no secrets or
-  state ever land in the repo.
-- Provider pinned to `cloudflare/cloudflare ~> 5.0`, which uses the
-  `cloudflare_dns_record` resource and the `content` argument. (Provider v4 used
-  `cloudflare_record` + `value`; bump the pin deliberately if you ever change it.)
-- Records are driven by the `dns_records` list variable, so adding a record is a
-  one-line change in `terraform.tfvars`. A `validation` block rejects `proxied =
-  true` on record types Cloudflare cannot proxy, and MX records are supported via
-  the optional `priority` field.
+## Adopting existing resources
+
+Everything here already runs. Use `import { }` blocks or `terraform import` so Terraform adopts the
+live resources instead of recreating them, and iterate until `terraform plan` shows no changes.

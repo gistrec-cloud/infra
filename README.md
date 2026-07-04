@@ -5,7 +5,7 @@
 Infrastructure as code for the **gistrec-cloud** fleet.
 
 - **Ansible** configures what lives *inside* the servers — base hardening, firewall, nginx, Node/pm2 apps, monitoring.
-- **Terraform** manages what lives *outside* — DNS as code, via Cloudflare.
+- **Terraform** manages cloud resources — DNS (Cloudflare), AWS Lambda, and Yandex Cloud (Object Storage, Managed MySQL, Compute, Cloud Functions).
 
 The repository is deliberately split into **code** (public, here) and **live data** (private, never committed): real inventory, IPs, tokens and state stay out of git. Everything you see here uses placeholders — copy the `*.example` files, fill them locally, and they are already covered by `.gitignore`.
 
@@ -45,7 +45,10 @@ infra/
 │       ├── nginx/                # reverse proxy + Let's Encrypt
 │       ├── nodeapp/              # Node.js + pm2 deploy
 │       └── netdata/              # monitoring agent
-└── terraform/                    # Cloudflare DNS records (data in gitignored tfvars)
+└── terraform/                    # cloud resources as code (one root module per provider)
+    ├── dns/                      # Cloudflare DNS records
+    ├── aws/                      # Lambda functions + Function URLs
+    └── yandex/                   # Object Storage, Managed MySQL, Compute, Cloud Function
 ```
 
 ## Roles

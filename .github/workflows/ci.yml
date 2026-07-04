@@ -36,10 +36,13 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - name: Check formatting
         run: terraform fmt -check -recursive
-      - name: Init (no backend)
-        run: terraform init -backend=false
-      - name: Validate
-        run: terraform validate
+      - name: Validate each module
+        run: |
+          for d in dns aws yandex; do
+            echo "== $d =="
+            terraform -chdir="$d" init -backend=false
+            terraform -chdir="$d" validate
+          done
 
   gitleaks:
     name: gitleaks
