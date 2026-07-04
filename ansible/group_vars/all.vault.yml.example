@@ -1,0 +1,11 @@
+---
+# Copy to all.vault.yml and encrypt:
+#   ansible-vault encrypt group_vars/all.vault.yml
+# The real file is gitignored. These are the keys the roles expect.
+
+# SSH public keys installed for the admin user (common role).
+vault_admin_ssh_keys:
+  - "ssh-ed25519 AAAAC3Nz...REPLACE_WITH_YOUR_PUBLIC_KEY you@laptop"
+
+# Optional: Cloudflare token if you drive DNS-01 challenges from a host.
+# vault_cloudflare_api_token: "REPLACE_ME"

@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored) and fill with real values.
+# Better: pass the token via the environment instead of a file:
+#   export TF_VAR_cloudflare_api_token=...
+
+cloudflare_api_token = "cf_REPLACE_WITH_REAL_TOKEN"
+cloudflare_zone_id   = "0123456789abcdef0123456789abcdef"
+
+dns_records = [
+  { name = "@", type = "A", content = "203.0.113.10", proxied = true },
+  { name = "www", type = "CNAME", content = "example.com", proxied = true },
+  { name = "api", type = "A", content = "203.0.113.11", proxied = false },
+  { name = "@", type = "MX", content = "mail.example.com", priority = 10 },
+]

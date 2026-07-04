@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[DEFAULT]
+bantime  = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+backend  = systemd
+# Ban via nftables to match the firewall this role deploys (not iptables).
+banaction          = nftables-multiport
+banaction_allports = nftables-allports
+
+[sshd]
+enabled = true
+port    = {{ ssh_port }}
+
+[nginx-http-auth]
+enabled = true

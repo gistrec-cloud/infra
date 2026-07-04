@@ -1,0 +1,8 @@
+---
+# Overridable defaults (real values usually come from group_vars/all.yml).
+timezone: Etc/UTC
+admin_user: deploy
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+vault_admin_ssh_keys: []

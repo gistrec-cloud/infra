@@ -1,0 +1,6 @@
+---
+# List of reverse-proxy vhosts; usually set per host in host_vars/.
+# Each item: { server_name, upstream_port, tls (bool, optional) }
+nginx_sites: []
+
+# Set certbot_email (e.g. in host_vars) to enable Let's Encrypt issuance.

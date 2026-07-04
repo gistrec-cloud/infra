@@ -1,0 +1,43 @@
+# ─── Secrets & live data — NEVER commit ───────────────────────────
+# Real Ansible inventory (keep only *.example)
+ansible/inventory/hosts.yml
+
+# Real per-host vars (keep only *.example)
+ansible/host_vars/*.yml
+
+# Vault / secret var files (keep only *.example)
+*.vault.yml
+.vault_pass
+.vault-password
+
+# Raw key / certificate material (defense-in-depth alongside gitleaks)
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa
+id_ed25519
+*_rsa
+
+# Terraform variable files with real values (keep only *.example)
+*.tfvars
+*.auto.tfvars
+*.tfvars.json
+*.auto.tfvars.json
+
+# ─── Terraform state & cache ──────────────────────────────────────
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ─── Misc ─────────────────────────────────────────────────────────
+*.retry
+*.log
+.DS_Store

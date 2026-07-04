@@ -1,0 +1,16 @@
+---
+# Master playbook. Run: ansible-playbook site.yml
+- name: Baseline for every host (hardening, firewall, monitoring)
+  hosts: all
+  become: true
+  roles:
+    - common
+    - firewall
+    - netdata
+
+- name: Web servers — nginx reverse proxy + Node/pm2 apps
+  hosts: web
+  become: true
+  roles:
+    - nginx
+    - nodeapp

@@ -1,0 +1,23 @@
+---
+# Debian/Ubuntu ship a netdata package. For the newest version you can swap
+# this for the official kickstart script; the package keeps the role simple.
+- name: Install netdata
+  ansible.builtin.apt:
+    name: netdata
+    state: present
+    update_cache: true
+
+- name: Bind netdata to localhost only
+  ansible.builtin.ini_file:
+    path: /etc/netdata/netdata.conf
+    section: web
+    option: "bind to"
+    value: "{{ netdata_bind_to }}"
+    mode: "0644"
+  notify: Restart netdata
+
+- name: Enable and start netdata
+  ansible.builtin.service:
+    name: netdata
+    enabled: true
+    state: started

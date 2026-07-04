@@ -1,0 +1,31 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+# Flush only OUR table so fail2ban's inet f2b-table survives reloads.
+add table inet filter
+flush table inet filter
+
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        ct state established,related accept
+        ct state invalid drop
+        iif "lo" accept
+
+        ip protocol icmp accept
+        ip6 nexthdr ipv6-icmp accept
+
+        tcp dport { {{ ssh_port }}, 80, 443 } accept
+{% for port in extra_open_tcp_ports %}
+        tcp dport {{ port }} accept
+{% endfor %}
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}

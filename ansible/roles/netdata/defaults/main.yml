@@ -1,0 +1,3 @@
+---
+# Keep the agent private; expose it through nginx + auth if you need remote access.
+netdata_bind_to: "127.0.0.1"

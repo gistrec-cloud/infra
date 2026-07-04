@@ -1,0 +1,60 @@
+---
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - sudo
+      - curl
+      - ca-certificates
+      - gnupg
+      - unattended-upgrades
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure admin user exists
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    state: present
+
+- name: Install authorized SSH keys for the admin user
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ item }}"
+    state: present
+    exclusive: false
+  loop: "{{ vault_admin_ssh_keys | default([]) }}"
+  no_log: true
+
+- name: Refuse to lock ourselves out
+  ansible.builtin.assert:
+    that:
+      - (vault_admin_ssh_keys | default([]) | length > 0) or (ssh_password_authentication != 'no')
+    fail_msg: >-
+      Disabling password authentication with an empty vault_admin_ssh_keys would
+      lock you out. Add a public key to group_vars/all.vault.yml, or set
+      ssh_password_authentication to something other than "no".
+    quiet: true
+
+- name: Deploy sshd hardening drop-in
+  ansible.builtin.template:
+    src: sshd_hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Restart sshd
+  # The assert above guarantees a key is present before password auth is disabled.
+  # backup: true keeps the previous drop-in so a bad config can be restored from
+  # /etc/ssh/sshd_config.d/ if the sshd -t check below ever fails.
+
+- name: Verify full sshd configuration is valid
+  ansible.builtin.command: sshd -t
+  changed_when: false

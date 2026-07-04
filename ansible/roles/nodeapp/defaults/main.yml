@@ -1,0 +1,5 @@
+---
+nodejs_major: 20
+# List of Node apps managed by pm2; usually set per host in host_vars/.
+# Each item: { name, repo, branch, cwd, script, instances, exec_mode, env }
+node_apps: []

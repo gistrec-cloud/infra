@@ -1,0 +1,28 @@
+---
+# Per-host configuration for web-01.
+# Copy to web-01.yml (gitignored) and adjust. Real repo URLs / domains stay here.
+
+# nginx role: reverse-proxy vhosts on this host.
+nginx_sites:
+  - server_name: app.example.com
+    upstream_port: 8080
+    tls: true
+  - server_name: api.example.com
+    upstream_port: 8081
+    tls: true
+
+# nginx TLS via certbot (omit to skip cert issuance)
+certbot_email: admin@example.com
+
+# nodeapp role: Node apps managed by pm2 on this host.
+node_apps:
+  - name: app
+    repo: "git@github.com:example/app.git"
+    branch: main
+    cwd: /srv/app
+    script: dist/server.js
+    instances: 1
+    exec_mode: fork
+    env:
+      NODE_ENV: production
+      PORT: "8080"

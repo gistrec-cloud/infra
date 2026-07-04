@@ -1,0 +1,14 @@
+---
+# Non-secret defaults shared by all hosts.
+# Secrets belong in group_vars/all.vault.yml (gitignored, ansible-vault encrypted).
+
+timezone: Etc/UTC
+
+# --- common role ---
+admin_user: deploy
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+
+# --- netdata role ---
+netdata_bind_to: "127.0.0.1"

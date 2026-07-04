@@ -1,0 +1,13 @@
+// {{ ansible_managed }}
+module.exports = {
+  apps: [
+    {
+      name: {{ item.name | to_json }},
+      script: {{ item.script | to_json }},
+      cwd: {{ item.cwd | to_json }},
+      instances: {{ item.instances | default(1) }},
+      exec_mode: {{ item.exec_mode | default('fork') | to_json }},
+      env: {{ item.env | default({}) | to_json }},
+    },
+  ],
+};
