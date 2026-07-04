@@ -53,13 +53,13 @@ infra/
 
 ## Roles
 
-| Role       | What it does                                                        |
-|------------|---------------------------------------------------------------------|
-| `common`   | Admin user, SSH key auth + sshd hardening, base packages, timezone  |
-| `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-auth)   |
-| `nginx`    | Install nginx, deploy vhosts, obtain TLS certs via certbot          |
-| `nodeapp`  | Node.js (NodeSource) + pm2, deploy apps, persist across reboot      |
-| `netdata`  | Install netdata, bind to localhost (expose via nginx if needed)     |
+| Role       | What it does                                                            |
+|------------|-------------------------------------------------------------------------|
+| `common`   | Admin user, SSH key auth + sshd hardening, base packages, timezone      |
+| `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth)  |
+| `nginx`    | Install nginx, deploy vhosts, obtain TLS certs via certbot              |
+| `nodeapp`  | Node.js (NodeSource) + pm2, deploy apps, persist across reboot          |
+| `netdata`  | Install netdata, bind to localhost (expose via nginx if needed)         |
 
 ## Quickstart
 
@@ -101,4 +101,4 @@ See the `Makefile` for the full list of targets (`make help`).
 
 ## Notes
 
-Example IPs use the `203.0.113.0/24` / `198.51.100.0/24` documentation ranges (RFC 5737) and `example.com` — replace them with your own in the gitignored copies.
+Example IPs use the `203.0.113.0/24` documentation range (RFC 5737) and `example.com` — replace them with your own in the gitignored copies.
