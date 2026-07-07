@@ -52,42 +52,67 @@ terraform plan     # must show 0 changes before you apply anything
 
 ---
 
-## Yandex Cloud (`terraform/yandex`)
+## Yandex Cloud — three folders, one root module each
 
-### 1. Discover
-```bash
-yc managed-mysql cluster list           # -> cluster id
-yc compute instance list                # -> instance id
-yc serverless function list             # -> function id
-yc storage bucket list                  # -> bucket name
-```
+The cloud `b1gbdqnplunl11lqrv6h` has **three folders**, each adopted as its own root module
+(own provider `folder_id` + own state):
 
-### 2. Adjust config for adoption
-- **MySQL user password** — add `lifecycle { ignore_changes = [password] }` to
-  `yandex_mdb_mysql_user.this`, otherwise `apply` rotates the production DB password to the
-  freshly generated one.
-- The service account, static access key and Lockbox secret are **new** (created on apply). Keep
-  them only if you want them; drop them for a pure adoption.
+| Folder | Module | Resources |
+|--------|--------|-----------|
+| `default` (`b1gs8d5lqs5n7dhd3ntf`) | [`terraform/yandex`](yandex) | 71 |
+| `budget-explorer` (`b1gvcvqp72jn00eck6o1`) | [`terraform/yandex-budget-explorer`](yandex-budget-explorer) | 10 |
+| `vk-ads-tool` (`b1gb7scjmu5adgrjlko7`) | [`terraform/yandex-vk-ads-tool`](yandex-vk-ads-tool) | 1 |
 
-### 3. Import
-```bash
-cd terraform/yandex
-cp terraform.tfvars.example terraform.tfvars   # fill cloud_id/folder_id/network_id/subnet_id/names
-export YC_TOKEN=...                            # (bucket import also needs AWS_ACCESS_KEY_ID/SECRET from a SA static key)
-terraform init
+Apps are split across folders (e.g. `budget-explorer`/`vk-ads-tool` data lives in the shared
+MySQL cluster in `default`, their functions/buckets in their own folders). The recipe below
+documents the `default` folder; the two sibling modules were adopted the same way.
 
-terraform import yandex_compute_instance.this       <instance_id>
-terraform import yandex_function.this               <function_id>
-terraform import yandex_storage_bucket.this         <bucket_name>
-terraform import yandex_mdb_mysql_cluster.this       <cluster_id>
-terraform import yandex_mdb_mysql_database.this      <cluster_id>:appdb    # verify composite id in provider docs
-terraform import yandex_mdb_mysql_user.this          <cluster_id>:appuser  # verify composite id in provider docs
-```
+## `terraform/yandex` (default folder) — DONE ✅
 
-### 4. Verify
-```bash
-terraform plan     # iterate the resource args until this shows 0 changes
-```
+The Yandex footprint has already been adopted: **71 resources** (8 service accounts, 3 Lockbox
+secrets, 1 MySQL cluster + 15 databases + 18 users, 5 buckets, 2 compute instances, 18 folder IAM
+bindings, 1 Cloud Function) are in state and `terraform plan` reports `No changes`. The module was
+rewritten from the greenfield single-app shape into `for_each` maps over a `locals` inventory — see
+[`yandex/README.md`](yandex/README.md).
+
+### How it was done (reproducible recipe)
+
+1. **Discover** every object: `yc {compute instance,serverless function,storage bucket} list`,
+   `yc managed-mysql {cluster,database,user} list`, `yc iam service-account list`,
+   `yc lockbox secret list`.
+2. **Harvest ground-truth HCL** instead of hand-writing it — flat `import {}` blocks + generate:
+   ```bash
+   export YC_TOKEN="$(yc config get token)"
+   terraform plan -generate-config-out=generated.tf   # writes exact HCL read from live state
+   ```
+   (the generator emits a couple of invalid values — `object_size_less_than = 0` on bucket
+   lifecycle rules, and `user_hash` for functions — treat `generated.tf` as reference, not final).
+3. **Refactor** the harvested resources into `for_each` maps; put real ids in a **gitignored**
+   `import.tf` using `for_each` import blocks keyed to match the resources.
+4. **Adopt** — never apply until the plan is import-only:
+   ```bash
+   terraform plan     # must read: "52 to import, 0 to add, 0 to change, 0 to destroy"
+   terraform apply    # imports into state; makes NO cloud changes when 0 to change
+   terraform plan     # verify: No changes
+   ```
+
+### Adoption decisions worth knowing
+
+- **MySQL users** carry `lifecycle { ignore_changes = [password] }` + a placeholder password —
+  without it the first `apply` rotates all 18 production passwords.
+- **Compute** uses `ignore_changes = [metadata]` (metadata is huge and `private_ui_modified_at`
+  changes whenever the VM is opened in the console).
+- **Buckets** use `ignore_changes = [lifecycle_rule, logging]` (managed over the S3 API).
+- **Folder IAM** uses additive `yandex_resourcemanager_folder_iam_member` (one role↔member each),
+  **not** the authoritative `_iam_binding`/`_iam_policy` that would delete any grant not in config.
+  Import id format is `folder_id,role,type:subject_id` (comma-separated).
+- **Cloud Function `realm-status`** is adopted with Terraform as the deployer: `data.archive_file`
+  builds the zip from the source checkout (`realm_status_source_dir`) and `yandex_function`
+  publishes a version — a function import is never a 0-change no-op (the deployed `user_hash` isn't
+  readable), so the first apply republishes the same code as a fresh version.
+- **Not adopted:** `upload-photo-to-recepter-s3` (its source isn't on disk), static access keys
+  (secret unrecoverable), Lockbox secret *versions* (payloads), and the auto `default` network /
+  subnets / DNS zones.
 
 ---
 

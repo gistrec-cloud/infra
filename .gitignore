@@ -27,6 +27,8 @@ id_ed25519
 *.auto.tfvars.json
 
 # ─── Terraform state & cache ──────────────────────────────────────
+# Built function deployment artifacts
+**/.dist/
 **/.terraform/*
 .terraform.lock.hcl
 # One-shot import scaffolding (contains real resource ids)
@@ -34,6 +36,9 @@ import.tf
 generated.tf
 *.tfstate
 *.tfstate.*
+# Saved plan files may embed resource data — never commit
+tfplan
+*.tfplan
 crash.log
 crash.*.log
 override.tf
