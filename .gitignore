@@ -10,6 +10,9 @@ ansible/host_vars/*.yml
 .vault_pass
 .vault-password
 
+# Per-directory env (direnv) — pulls secrets from the macOS Keychain
+.envrc
+
 # Raw key / certificate material (defense-in-depth alongside gitleaks)
 *.pem
 *.key
