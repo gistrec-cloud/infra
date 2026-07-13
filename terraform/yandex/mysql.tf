@@ -62,6 +62,7 @@ locals {
     "clear-transcript-bot",
     "clear-transcript-bot-test",
     "dnd-crime",
+    "dnd-crime-staging",
     "eve-contracts",
     "food-scraper",
     "libre",
@@ -94,6 +95,7 @@ locals {
     "clear-transcript-bot-ro"   = { global_permissions = [], permissions = [{ database_name = "clear-transcript-bot", roles = ["SELECT"] }] }
     "clear-transcript-bot-test" = { global_permissions = [], permissions = [{ database_name = "clear-transcript-bot-test", roles = ["ALL"] }] }
     "dnd-crime"                 = { global_permissions = [], permissions = [{ database_name = "dnd-crime", roles = ["ALL"] }] }
+    "dnd-crime-staging"         = { global_permissions = [], permissions = [{ database_name = "dnd-crime-staging", roles = ["ALL"] }] }
     "eve-contracts"             = { global_permissions = [], permissions = [{ database_name = "eve-contracts", roles = ["ALL"] }] }
     "food-scraper"              = { global_permissions = [], permissions = [{ database_name = "food-scraper", roles = ["ALL"] }] }
     "libre"                     = { global_permissions = [], permissions = [{ database_name = "libre", roles = ["ALL"] }] }
