@@ -1,0 +1,6 @@
+# False positives, one fingerprint per line: <commit>:<file>:<rule-id>:<line>
+# "placeholder-ignored" is a dummy MySQL password that is never applied
+# (lifecycle.ignore_changes strips it) — the real passwords live outside TF.
+2bb222e34a02089f0d3aad92f881f92fd387ede4:terraform/yandex/mysql.tf:hashicorp-tf-password:117
+# Same line in the pre-squash commit of the terraform/yandex-import branch
+767583fa76360a5ba96881a88e3d0639428a3ffc:terraform/yandex/mysql.tf:hashicorp-tf-password:117

@@ -114,7 +114,7 @@ resource "yandex_mdb_mysql_user" "this" {
 
   cluster_id         = yandex_mdb_mysql_cluster.projects.id
   name               = each.key
-  password           = "placeholder-ignored" # never applied — see lifecycle below
+  password           = "placeholder-ignored" # gitleaks:allow — never applied, see lifecycle below
   global_permissions = each.value.global_permissions
 
   dynamic "permission" {
