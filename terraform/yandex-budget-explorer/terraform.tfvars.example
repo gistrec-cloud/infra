@@ -1,0 +1,7 @@
+cloud_id  = "b1gxxxxxxxxxxxxxxxxx"
+folder_id = "b1gyyyyyyyyyyyyyyyyy"
+zone      = "ru-central1-b"
+
+# Local path to the budget-explorer source (zip for both functions is built from it).
+# Empty string = don't manage the functions.
+functions_source_dir = ""

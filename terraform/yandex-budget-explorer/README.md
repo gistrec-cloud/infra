@@ -1,0 +1,32 @@
+# terraform/yandex-budget-explorer — budget-explorer folder
+
+Root module for the Yandex Cloud **`budget-explorer`** folder (`b1gvcvqp72jn00eck6o1`),
+separate from `terraform/yandex` (the `default` folder) with its own provider `folder_id`
+and state. All resources were adopted via import — see [`../IMPORT.md`](../IMPORT.md).
+
+## What it manages (10 resources)
+
+| File                  | Resource                       | Count | Notes |
+|-----------------------|--------------------------------|-------|-------|
+| `service_accounts.tf` | `yandex_iam_service_account`   | 1     | `budget-explorer` |
+| `lockbox.tf`          | `yandex_lockbox_secret`        | 6     | containers only (payloads untouched) |
+| `triggers.tf`         | `yandex_function_trigger`      | 1     | timer, fires `sync-transactions` every 6h |
+| `functions.tf`        | `yandex_function`              | 2     | `sync-transactions`, `telegram-bot` — TF owns deploy |
+
+The `budget-explorer` **MySQL database + user** live in the shared `projects` cluster in the
+`default` folder and are managed by `terraform/yandex`, not here.
+
+## Function deploy
+
+Both functions are built from one source checkout (`functions_source_dir`) via
+`data.archive_file` and published by Terraform — this replaces the `yc function version create`
+step in the app repo's `deploy.sh` (its VPS bot deploy is unrelated and stays). `telegram-bot`
+appears dormant (no trigger; the live bot runs via pm2 on the VPS).
+
+## Usage
+
+```bash
+export YC_TOKEN="$(yc config get token)"
+cp terraform.tfvars.example terraform.tfvars    # gitignored — fill ids + functions_source_dir
+terraform init && terraform plan                 # expect: No changes
+```

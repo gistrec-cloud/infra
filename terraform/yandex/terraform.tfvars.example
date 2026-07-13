@@ -1,15 +1,15 @@
 cloud_id  = "b1gxxxxxxxxxxxxxxxxx"
 folder_id = "b1gyyyyyyyyyyyyyyyyy"
-zone      = "ru-central1-a"
+zone      = "ru-central1-b"
 
-# Existing VPC (referenced by id — not created by this module)
+# Existing VPC — the auto-created "default" network and its ru-central1-b subnet
+# (referenced by id, not created by this module)
 network_id = "enpxxxxxxxxxxxxxxxxx"
-subnet_id  = "e9bxxxxxxxxxxxxxxxxx"
+subnet_id  = "e2lxxxxxxxxxxxxxxxxx"
 
-bucket_name = "gistrec-app-bucket"
+# Personal user-account ids with folder monitoring.viewer (empty is fine)
+monitoring_viewer_user_ids = []
 
-mysql_db_name   = "appdb"
-mysql_user_name = "appuser"
-
-compute_name  = "app-vm"
-function_name = "app-fn"
+# Local path to the realm-status function source (zip is built from it).
+# Empty string = don't manage the function.
+realm_status_source_dir = ""
