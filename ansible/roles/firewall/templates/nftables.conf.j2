@@ -23,6 +23,12 @@ table inet filter {
 
     chain forward {
         type filter hook forward priority 0; policy drop;
+
+        # Docker bridge traffic: every hooked chain must accept a packet, so
+        # a bare "policy drop" here silently blackholes containers even though
+        # Docker maintains its own accept rules in the ip filter table.
+        ct state established,related accept
+        iifname "docker0" accept
     }
 
     chain output {
