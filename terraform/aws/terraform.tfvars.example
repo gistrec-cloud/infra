@@ -2,20 +2,23 @@ aws_region  = "eu-central-1"
 name_prefix = "gistrec"
 
 functions = {
+  # A NEW function created from scratch: needs s3_bucket/s3_key for the first
+  # deploy and uses the shared exec role (no role_arn).
   "openai-relay" = {
     handler     = "index.handler"
     runtime     = "nodejs22.x"
     s3_bucket   = "my-lambda-artifacts"
     s3_key      = "openai-relay/latest.zip"
     memory_size = 256
-    public_url  = true # public Function URL (authorization_type = NONE)
+    public_url  = true # true = public URL, false = AWS_IAM URL, omit = no Function URL
     env         = { UPSTREAM_HOST = "api.openai.com" }
   }
+  # An ADOPTED function: code/env are shipped outside Terraform (ignore_changes),
+  # so s3_* and env are omitted; the pre-existing role is referenced by ARN.
   "anthropic-relay" = {
     handler    = "index.handler"
     runtime    = "nodejs22.x"
-    s3_bucket  = "my-lambda-artifacts"
-    s3_key     = "anthropic-relay/latest.zip"
+    role_arn   = "arn:aws:iam::123456789012:role/anthropic-relay-role"
     public_url = true
   }
 }

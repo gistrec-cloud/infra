@@ -19,12 +19,14 @@ variable "functions" {
   type = map(object({
     handler     = string
     runtime     = string
-    s3_bucket   = string
-    s3_key      = string
+    s3_bucket   = optional(string) # required to CREATE a function; inert for adopted ones (code ships outside TF)
+    s3_key      = optional(string)
     memory_size = optional(number, 256)
     timeout     = optional(number, 30)
     env         = optional(map(string), {})
-    public_url  = optional(bool, false)
+    public_url  = optional(bool)               # true = public URL, false = AWS_IAM URL, omit = no Function URL
+    invoke_mode = optional(string, "BUFFERED") # or RESPONSE_STREAM for streaming responses
+    role_arn    = optional(string)             # per-function execution role; omit to use the shared one
   }))
   default = {}
 }
