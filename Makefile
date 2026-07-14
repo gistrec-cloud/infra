@@ -1,5 +1,5 @@
 ANSIBLE_DIR := ansible
-TF_DIR      := terraform
+TF_DIR      := terraform/dns
 VAULT_ARGS  ?=
 
 .PHONY: help ping check deploy lint tf-init tf-plan tf-apply

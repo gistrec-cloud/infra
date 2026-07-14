@@ -7,10 +7,10 @@ provider "cloudflare" {
 resource "cloudflare_dns_record" "this" {
   for_each = {
     for r in var.dns_records :
-    "${r.type}:${r.name}:${r.content}:${r.priority == null ? "" : tostring(r.priority)}" => r
+    "${r.zone}:${r.type}:${r.name}:${r.content}:${r.priority == null ? "" : tostring(r.priority)}" => r
   }
 
-  zone_id  = var.cloudflare_zone_id
+  zone_id  = var.cloudflare_zone_ids[each.value.zone]
   name     = each.value.name
   type     = each.value.type
   content  = each.value.content

@@ -85,7 +85,7 @@ make check                                           # ansible-playbook --check 
 make deploy
 
 # 3. DNS as code
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+cp terraform/dns/terraform.tfvars.example terraform/dns/terraform.tfvars
 make tf-plan                                         # then: make tf-apply
 ```
 
