@@ -24,6 +24,15 @@ certbot_email: admin@example.com
 # firewall_allow_tcp:
 #   - { port: 19999, from: 203.0.113.7 }
 
+# netdata role: go.d httpcheck probes and the health alarms that bind to them.
+# When netdata_httpcheck_jobs is non-empty the role OWNS go.d/httpcheck.conf —
+# add probes here, not by editing the file on the host.
+# netdata_httpcheck_jobs:
+#   - name: myapp
+#     url: http://127.0.0.1:9000/healthcheck
+# netdata_health_files:
+#   - files/netdata/health.d/myapp.conf
+
 # nodeapp role: Node apps managed by pm2 on this host.
 nodeapp_node_apps:
   - name: app

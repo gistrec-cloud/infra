@@ -18,3 +18,18 @@ netdata_pm2_apps: []
 # dashboard-only). Real values come from the vault via group_vars/all.yml.
 netdata_telegram_bot_token: ""
 netdata_telegram_chat_id: ""
+
+# go.d httpcheck jobs (empty list = file untouched). When set, the role OWNS
+# /etc/netdata/go.d/httpcheck.conf: add new probes here / in host_vars, never
+# by editing the file on the host — a manual copy over that file is exactly
+# how the ClearTranscriptBot job vanished and the 2026-07-14 outage went
+# unalerted. Health templates bind to jobs via the _collect_job chart label.
+#   name:            collector job name (referenced by health.d alarms)
+#   url:             endpoint to probe
+#   timeout:         seconds, default 2
+#   status_accepted: list of healthy HTTP codes, default [200]
+netdata_httpcheck_jobs: []
+
+# Custom health.d alarm files (empty list = nothing copied). Paths relative to
+# the playbook dir; each file lands in /etc/netdata/health.d/<basename>.
+netdata_health_files: []

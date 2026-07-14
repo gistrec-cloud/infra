@@ -51,6 +51,23 @@
   notify: Restart netdata
   when: netdata_pm2_apps | length > 0
 
+# go.d re-reads job configs only at startup, hence the full restart.
+- name: Configure go.d httpcheck probes
+  ansible.builtin.template:
+    src: httpcheck.conf.j2
+    dest: /etc/netdata/go.d/httpcheck.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_httpcheck_jobs | length > 0
+
+- name: Install custom health alarm files
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/{{ item }}"
+    dest: "/etc/netdata/health.d/{{ item | basename }}"
+    mode: "0644"
+  loop: "{{ netdata_health_files }}"
+  notify: Restart netdata
+
 # alarm-notify.sh re-reads this file on every notification — no restart needed.
 - name: Send health alerts to Telegram
   ansible.builtin.template:

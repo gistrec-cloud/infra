@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# go.d httpcheck collector jobs. Defined in netdata_httpcheck_jobs (host_vars);
+# manual edits here are overwritten on the next ansible run.
+jobs:
+{% for job in netdata_httpcheck_jobs %}
+  - name: {{ job.name }}
+    url: {{ job.url }}
+    timeout: {{ job.timeout | default(2) }}
+    status_accepted: [{{ (job.status_accepted | default([200])) | join(', ') }}]
+{% endfor %}
