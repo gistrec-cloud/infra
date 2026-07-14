@@ -5,6 +5,6 @@ output "function_urls" {
 }
 
 output "role_arn" {
-  description = "Shared Lambda execution role ARN."
-  value       = aws_iam_role.lambda_exec.arn
+  description = "Shared Lambda execution role ARN (null when every function brings its own role)."
+  value       = one(aws_iam_role.lambda_exec[*].arn)
 }
