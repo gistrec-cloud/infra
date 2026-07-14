@@ -19,6 +19,9 @@ table inet filter {
 {% for port in firewall_extra_open_tcp_ports %}
         tcp dport {{ port }} accept
 {% endfor %}
+{% for rule in firewall_allow_tcp %}
+        ip saddr {{ rule.from }} tcp dport {{ rule.port }} accept
+{% endfor %}
     }
 
     chain forward {
