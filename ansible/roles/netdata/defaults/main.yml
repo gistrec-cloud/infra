@@ -33,3 +33,13 @@ netdata_httpcheck_jobs: []
 # Custom health.d alarm files (empty list = nothing copied). Paths relative to
 # the playbook dir; each file lands in /etc/netdata/health.d/<basename>.
 netdata_health_files: []
+
+# Metrics streaming (parent/child). The shared API key (a UUID) comes from the
+# vault via group_vars/all.yml. A host is a child when
+# netdata_stream_destination is set (push everything to the parent), a parent
+# when netdata_stream_accept is true (accept children; also needs
+# netdata_bind_to reachable by them + a source-restricted firewall_allow_tcp
+# rule for 19999). Neither set = stream.conf untouched.
+netdata_stream_api_key: ""
+netdata_stream_destination: ""
+netdata_stream_accept: false

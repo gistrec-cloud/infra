@@ -14,3 +14,6 @@ vault_admin_ssh_keys:
 # your DM with the bot or a group it is in).
 # vault_netdata_telegram_bot_token: "123456789:REPLACE_ME"
 # vault_netdata_telegram_chat_id: "-1001234567890"
+
+# Optional: netdata streaming shared API key — any UUID (uuidgen).
+# vault_netdata_stream_api_key: "00000000-0000-0000-0000-000000000000"

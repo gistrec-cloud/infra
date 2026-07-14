@@ -16,6 +16,18 @@
     mode: "0644"
   notify: Restart netdata
 
+- name: Configure metrics streaming (parent/child)
+  ansible.builtin.template:
+    src: stream.conf.j2
+    dest: /etc/netdata/stream.conf
+    owner: root
+    group: netdata
+    mode: "0640"
+  notify: Restart netdata
+  when: >-
+    netdata_stream_api_key | length > 0 and
+    (netdata_stream_accept or netdata_stream_destination | length > 0)
+
 # Monitoring follows the deployed apps: derive one group per nodeapp_node_apps
 # entry so adding an app to host_vars wires its alert automatically. Manual
 # netdata_pm2_apps entries keep priority (same name = derived entry skipped).
