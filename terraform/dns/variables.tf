@@ -1,20 +1,23 @@
 variable "cloudflare_api_token" {
-  description = "Cloudflare API token with DNS:Edit permission for the zone."
+  description = "Cloudflare API token with DNS:Edit permission for all managed zones."
   type        = string
   sensitive   = true
 }
 
-variable "cloudflare_zone_id" {
-  description = "Cloudflare Zone ID of the domain to manage."
-  type        = string
+variable "cloudflare_zone_ids" {
+  description = "Managed domains: map of domain name => Cloudflare Zone ID. Real values live in terraform.tfvars (gitignored)."
+  type        = map(string)
+  default     = {}
 }
 
 variable "dns_records" {
   description = <<-EOT
     DNS records to manage. Real values live in terraform.tfvars (gitignored).
+    Each record's `zone` must be a key of `cloudflare_zone_ids`.
     Supports A / AAAA / CNAME / TXT / NS and priority-bearing MX (via `priority`).
   EOT
   type = list(object({
+    zone     = string
     name     = string
     type     = string
     content  = string

@@ -21,6 +21,11 @@ jobs:
         run: pip install "ansible-core==2.21.1" "ansible-lint==26.6.0"
       - name: Install Galaxy collections
         run: ansible-galaxy collection install -r ansible/requirements.yml
+      - name: Stub vault password file
+        # ansible.cfg points vault_password_file at the gitignored .vault_pass;
+        # without it every syntax-check ansible-lint runs errors out. Nothing
+        # vault-encrypted is in the repo, so the value is never used.
+        run: echo ci-dummy > ansible/.vault_pass
       - name: Run ansible-lint
         working-directory: ansible
         run: ansible-lint
