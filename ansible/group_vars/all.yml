@@ -15,3 +15,5 @@ netdata_bind_to: "127.0.0.1"
 # Telegram delivery for health alerts (empty = alerts stay dashboard-only).
 netdata_telegram_bot_token: "{{ vault_netdata_telegram_bot_token | default('') }}"
 netdata_telegram_chat_id: "{{ vault_netdata_telegram_chat_id | default('') }}"
+# Streaming: shared parent/child API key (per-host role set in host_vars).
+netdata_stream_api_key: "{{ vault_netdata_stream_api_key | default('') }}"

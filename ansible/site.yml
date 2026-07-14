@@ -11,12 +11,15 @@
   vars_files:
     - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
   roles:
-    # Adopted live servers keep their existing users, sshd and firewall setup.
-    # common (deploy user + sshd hardening) and firewall (nftables default-drop)
-    # are for freshly provisioned hosts — re-enable deliberately, and fill
-    # firewall_extra_open_tcp_ports (game servers etc.) BEFORE the first run.
+    # Adopted live servers keep their existing users and sshd setup. common
+    # (deploy user + sshd hardening) is for freshly provisioned hosts —
+    # re-enable deliberately. firewall is opt-in per host: set
+    # firewall_managed: true in host_vars AFTER filling
+    # firewall_extra_open_tcp_ports / firewall_allow_tcp for everything the
+    # host serves (default-drop closes the rest).
     # - common
-    # - firewall
+    - role: firewall
+      when: firewall_managed | default(false)
     - netdata
 
 - name: Web servers — nginx reverse proxy + Node/pm2 apps

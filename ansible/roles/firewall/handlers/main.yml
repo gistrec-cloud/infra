@@ -1,8 +1,11 @@
 ---
+# reloaded, not restarted: nftables.service ExecStop runs "nft flush ruleset",
+# which wipes Docker's iptables-nft tables (DNAT/MASQUERADE) until the Docker
+# daemon is restarted. ExecReload just re-runs nft -f on our config.
 - name: Reload nftables
   ansible.builtin.service:
     name: nftables
-    state: restarted
+    state: reloaded
 
 - name: Restart fail2ban
   ansible.builtin.service:

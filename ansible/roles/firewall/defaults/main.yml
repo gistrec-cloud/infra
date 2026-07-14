@@ -2,6 +2,10 @@
 # Extra inbound TCP ports to open (besides SSH, 80, 443).
 firewall_extra_open_tcp_ports: []
 
+# Inbound TCP ports open only to specific source IPs — e.g. netdata streaming
+# (19999) from child hosts to the parent. Entries: {port: 19999, from: 203.0.113.7}
+firewall_allow_tcp: []
+
 # fail2ban tuning
 firewall_fail2ban_bantime: "1h"
 firewall_fail2ban_findtime: "10m"

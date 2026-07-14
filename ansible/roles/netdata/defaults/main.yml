@@ -18,3 +18,28 @@ netdata_pm2_apps: []
 # dashboard-only). Real values come from the vault via group_vars/all.yml.
 netdata_telegram_bot_token: ""
 netdata_telegram_chat_id: ""
+
+# go.d httpcheck jobs (empty list = file untouched). When set, the role OWNS
+# /etc/netdata/go.d/httpcheck.conf: add new probes here / in host_vars, never
+# by editing the file on the host — a manual copy over that file is exactly
+# how the ClearTranscriptBot job vanished and the 2026-07-14 outage went
+# unalerted. Health templates bind to jobs via the _collect_job chart label.
+#   name:            collector job name (referenced by health.d alarms)
+#   url:             endpoint to probe
+#   timeout:         seconds, default 2
+#   status_accepted: list of healthy HTTP codes, default [200]
+netdata_httpcheck_jobs: []
+
+# Custom health.d alarm files (empty list = nothing copied). Paths relative to
+# the playbook dir; each file lands in /etc/netdata/health.d/<basename>.
+netdata_health_files: []
+
+# Metrics streaming (parent/child). The shared API key (a UUID) comes from the
+# vault via group_vars/all.yml. A host is a child when
+# netdata_stream_destination is set (push everything to the parent), a parent
+# when netdata_stream_accept is true (accept children; also needs
+# netdata_bind_to reachable by them + a source-restricted firewall_allow_tcp
+# rule for 19999). Neither set = stream.conf untouched.
+netdata_stream_api_key: ""
+netdata_stream_destination: ""
+netdata_stream_accept: false

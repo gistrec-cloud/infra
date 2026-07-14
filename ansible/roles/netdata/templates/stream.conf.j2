@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Streaming topology: children push all metrics to the parent, which keeps
+# them queryable on its dashboard as if they were local.
+
+[stream]
+    enabled = {{ 'yes' if netdata_stream_destination | length > 0 else 'no' }}
+{% if netdata_stream_destination | length > 0 %}
+    destination = {{ netdata_stream_destination }}
+    api key = {{ netdata_stream_api_key }}
+{% endif %}
+{% if netdata_stream_accept %}
+
+# Parent side: children authenticate with the shared key.
+[{{ netdata_stream_api_key }}]
+    enabled = yes
+{% endif %}
