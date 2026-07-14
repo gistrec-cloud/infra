@@ -1,16 +1,32 @@
 ---
 # Master playbook. Run: ansible-playbook site.yml
-- name: Baseline for every host (hardening, firewall, monitoring)
+#
+# group_vars/all.vault.yml does NOT auto-load (group_vars matching is by exact
+# group name, and there is no group "all.vault"), so both plays pull it in via
+# vars_files. First-found list: the real vault, else the example (placeholders)
+# so syntax checks and fresh clones still parse.
+- name: Baseline for every host (monitoring)
   hosts: all
   become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
   roles:
-    - common
-    - firewall
+    # Adopted live servers keep their existing users, sshd and firewall setup.
+    # common (deploy user + sshd hardening) and firewall (nftables default-drop)
+    # are for freshly provisioned hosts — re-enable deliberately, and fill
+    # firewall_extra_open_tcp_ports (game servers etc.) BEFORE the first run.
+    # - common
+    # - firewall
     - netdata
 
 - name: Web servers — nginx reverse proxy + Node/pm2 apps
   hosts: web
   become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
   roles:
     - nginx
-    - nodeapp
+    # No-op until the host declares apps in host_vars — also skips the
+    # NodeSource Node install on hosts that manage their own node/pm2.
+    - role: nodeapp
+      when: nodeapp_node_apps | default([]) | length > 0
