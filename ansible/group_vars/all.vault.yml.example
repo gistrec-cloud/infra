@@ -9,3 +9,8 @@ vault_admin_ssh_keys:
 
 # Optional: Cloudflare token if you drive DNS-01 challenges from a host.
 # vault_cloudflare_api_token: "REPLACE_ME"
+
+# Optional: netdata health alerts → Telegram (bot via @BotFather; chat id of
+# your DM with the bot or a group it is in).
+# vault_netdata_telegram_bot_token: "123456789:REPLACE_ME"
+# vault_netdata_telegram_chat_id: "-1001234567890"

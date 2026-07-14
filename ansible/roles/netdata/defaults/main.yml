@@ -1,3 +1,20 @@
 ---
 # Keep the agent private; expose it through nginx + auth if you need remote access.
 netdata_bind_to: "127.0.0.1"
+
+# pm2 process-down alerting (empty list = feature off, files untouched).
+# One apps.plugin group per app; health.d/pm2.conf fires CRITICAL when a group
+# has had zero processes for 30s+. Entries are DERIVED from nodeapp_node_apps
+# in tasks (pattern `*<cwd>/<script>*`), so every deployed app is monitored
+# automatically. Define entries here / in host_vars only to monitor something
+# extra or to override a derived pattern (same name = manual entry wins).
+#   name:    apps.plugin group becomes `pm2_<name>` (the health template
+#            matches on the pm2_ prefix, so no per-app alert config is needed)
+#   pattern: substring of the process cmdline, wrapped in `*`; anchor it on the
+#            project path so same-named binaries on one box don't collide
+netdata_pm2_apps: []
+
+# Telegram delivery for health alarms (both empty = file untouched, alerts stay
+# dashboard-only). Real values come from the vault via group_vars/all.yml.
+netdata_telegram_bot_token: ""
+netdata_telegram_chat_id: ""

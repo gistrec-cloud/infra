@@ -16,6 +16,51 @@
     mode: "0644"
   notify: Restart netdata
 
+# Monitoring follows the deployed apps: derive one group per nodeapp_node_apps
+# entry so adding an app to host_vars wires its alert automatically. Manual
+# netdata_pm2_apps entries keep priority (same name = derived entry skipped).
+- name: Derive pm2 app groups from nodeapp_node_apps
+  ansible.builtin.set_fact:
+    netdata_pm2_apps: "{{ netdata_pm2_apps + [{'name': item.name, 'pattern': '*' ~ item.cwd ~ '/' ~ item.script ~ '*'}] }}"
+  loop: "{{ nodeapp_node_apps | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.name not in (netdata_pm2_apps | map(attribute='name') | list)
+
+# apps.plugin re-reads its groups only at startup, so both tasks below notify a
+# full restart (reloading health alone is not enough).
+- name: Read stock apps_groups.conf (appended after our pm2 groups)
+  ansible.builtin.slurp:
+    src: /usr/lib/netdata/conf.d/apps_groups.conf
+  register: netdata_stock_apps_groups
+  when: netdata_pm2_apps | length > 0
+
+- name: Group pm2 app processes in apps.plugin
+  ansible.builtin.template:
+    src: apps_groups.conf.j2
+    dest: /etc/netdata/apps_groups.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_pm2_apps | length > 0
+
+- name: Alert when a pm2 app has no processes
+  ansible.builtin.copy:
+    src: pm2_health.conf
+    dest: /etc/netdata/health.d/pm2.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_pm2_apps | length > 0
+
+# alarm-notify.sh re-reads this file on every notification — no restart needed.
+- name: Send health alerts to Telegram
+  ansible.builtin.template:
+    src: health_alarm_notify.conf.j2
+    dest: /etc/netdata/health_alarm_notify.conf
+    owner: root
+    group: netdata
+    mode: "0640"
+  when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
+
 - name: Enable and start netdata
   ansible.builtin.service:
     name: netdata

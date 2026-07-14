@@ -1,0 +1,8 @@
+# Managed by Ansible (netdata role) — local edits will be overwritten.
+# pm2 app groups go first: apps.plugin matching is first-match-wins. The stock
+# file is appended below so the default groups keep working (a user config
+# REPLACES the stock one entirely, netdata does not merge them).
+{% for app in netdata_pm2_apps %}
+pm2_{{ app.name }}: "{{ app.pattern }}"
+{% endfor %}
+{{ netdata_stock_apps_groups.content | b64decode }}
