@@ -59,7 +59,7 @@ infra/
 | `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth)  |
 | `nginx`    | Install nginx, deploy vhosts, obtain TLS certs via certbot              |
 | `nodeapp`  | Node.js (NodeSource) + pm2, deploy apps, persist across reboot          |
-| `netdata`  | Install netdata, bind to localhost (expose via nginx if needed)         |
+| `netdata`  | Install netdata, bind to localhost, Telegram alert when a pm2 app dies  |
 
 ## Quickstart
 

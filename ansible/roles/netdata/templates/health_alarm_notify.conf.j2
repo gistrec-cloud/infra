@@ -1,0 +1,7 @@
+# Managed by Ansible (netdata role) — local edits will be overwritten.
+# alarm-notify.sh sources the stock health_alarm_notify.conf first and this
+# override second, so only the Telegram bits need to live here. The file is
+# read on every notification; changes apply without restarting netdata.
+SEND_TELEGRAM="YES"
+TELEGRAM_BOT_TOKEN="{{ netdata_telegram_bot_token }}"
+DEFAULT_RECIPIENT_TELEGRAM="{{ netdata_telegram_chat_id }}"
