@@ -23,10 +23,12 @@
     mode: "0644"
     force: false
 
+# present, not latest: the edge channel updates daily and every run would
+# upgrade-and-restart the agent. Upgrades are deliberate: apt on the host.
 - name: Install netdata
   ansible.builtin.apt:
     name: netdata
-    state: latest
+    state: present
     update_cache: true
 
 - name: Bind netdata to localhost only
