@@ -1,0 +1,19 @@
+---
+# Private WireGuard mesh between fleet hosts. Every node gets a stable private IP
+# on wg0 (10.10.0.0/24 by convention) so services — MySQL replication first —
+# ride an encrypted tunnel instead of the public internet. Peers are every OTHER
+# host in the `wireguard` inventory group; each carries wireguard_ip +
+# wireguard_pubkey in its (gitignored) host_vars, and its public endpoint is its
+# inventory ansible_host.
+wireguard_interface: wg0
+wireguard_subnet_cidr: 24
+wireguard_port: 51820
+
+# This host's private key — from the vault, keyed by host: vault_wg_privkey_<host>
+# with dashes as underscores (e.g. vault_wg_privkey_russia_01). Generate a pair
+# with: wg genkey | tee privatekey | wg pubkey > publickey
+wireguard_private_key: "{{ lookup('vars', 'vault_wg_privkey_' ~ (inventory_hostname | replace('-', '_')), default='') }}"
+
+# NAT keepalive (seconds): the russia hosts sit behind Yandex 1:1 NAT, so both
+# ends must send keepalives to keep the mapping open and stay mutually reachable.
+wireguard_keepalive: 25
