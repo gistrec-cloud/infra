@@ -22,6 +22,9 @@ table inet filter {
 {% for rule in firewall_allow_tcp %}
         ip saddr {{ rule.from }} tcp dport {{ rule.port }} accept
 {% endfor %}
+{% for rule in firewall_allow_udp %}
+        ip saddr {{ rule.from }} udp dport {{ rule.port }} accept
+{% endfor %}
     }
 
     chain forward {
@@ -32,6 +35,9 @@ table inet filter {
         # Docker maintains its own accept rules in the ip filter table.
         ct state established,related accept
         iifname "docker0" accept
+{% for rule in firewall_docker_allow_tcp %}
+        ip saddr {{ rule.from }} tcp dport {{ rule.port }} ct state new accept
+{% endfor %}
     }
 
     chain output {

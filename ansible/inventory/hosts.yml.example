@@ -12,4 +12,20 @@ all:
           ansible_host: 203.0.113.10
         web-02:
           ansible_host: 203.0.113.11
+    # WireGuard mesh members. EVERY host listed here must define wireguard_ip +
+    # wireguard_pubkey in its host_vars and vault_wg_privkey_<host> in the vault
+    # (a member missing these breaks peer config rendering). A host's public
+    # endpoint is its ansible_host above.
+    wireguard:
+      hosts:
+        db-01:
+        db-02:
+    # Self-hosted MySQL (Docker). db-01 = primary, db-02 = replica; a host can be
+    # in web and db both. mysql_role / mysql_managed live in host_vars.
+    db:
+      hosts:
+        db-01:
+          ansible_host: 203.0.113.12
+        db-02:
+          ansible_host: 203.0.113.13
     # netdata + baseline apply to `all`; add non-web hosts here as needed.

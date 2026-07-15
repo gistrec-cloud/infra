@@ -6,6 +6,16 @@ firewall_extra_open_tcp_ports: []
 # (19999) from child hosts to the parent. Entries: {port: 19999, from: 203.0.113.7}
 firewall_allow_tcp: []
 
+# Inbound UDP ports open only to specific source IPs — e.g. WireGuard (51820)
+# from mesh peers. Entries: {port: 51820, from: 203.0.113.7}
+firewall_allow_udp: []
+
+# TCP ports of Docker-published services, restricted by source IP. External
+# traffic to a published port is DNAT'ed before routing and traverses the
+# *forward* chain (never input), so it needs its own accept there.
+# Entries: {port: 8123, from: 203.0.113.7}
+firewall_docker_allow_tcp: []
+
 # fail2ban tuning
 firewall_fail2ban_bantime: "1h"
 firewall_fail2ban_findtime: "10m"
