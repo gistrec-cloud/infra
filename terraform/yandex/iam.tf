@@ -12,9 +12,6 @@ locals {
     "storage.editor|clear-transcript-bot"        = { role = "storage.editor", sa = "clear-transcript-bot" }
     "ai.speechkit-stt.user|clear-transcript-bot" = { role = "ai.speechkit-stt.user", sa = "clear-transcript-bot" }
     "storage.admin|recepter-s3"                  = { role = "storage.admin", sa = "recepter-s3" }
-    "storage.viewer|linkgrow"                    = { role = "storage.viewer", sa = "linkgrow" }
-    "storage.editor|linkgrow"                    = { role = "storage.editor", sa = "linkgrow" }
-    "storage.uploader|linkgrow"                  = { role = "storage.uploader", sa = "linkgrow" }
     "storage.editor|aleksandravoo"               = { role = "storage.editor", sa = "aleksandravoo" }
     "admin|gistrec"                              = { role = "admin", sa = "gistrec" }
     "monitoring.editor|gistrec"                  = { role = "monitoring.editor", sa = "gistrec" }
