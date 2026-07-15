@@ -13,4 +13,5 @@
 # Parent side: children authenticate with the shared key.
 [{{ netdata_stream_api_key }}]
     enabled = yes
+    allow from = {{ netdata_stream_allow_from }}
 {% endif %}

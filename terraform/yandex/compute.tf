@@ -5,17 +5,21 @@
 
 locals {
   instances = {
-    "projects" = {
+    # hostname / disk_name keep their pre-rename values: changing either forces
+    # VM recreation (hostname) or touches immutable initialize_params (disk).
+    "russia-01" = {
       memory    = 4
       image_id  = "fd8n7dushkonnbvt3lpc"
       disk_size = 65
       disk_name = "projects"
+      hostname  = "projects"
     }
-    "vk-ads-tool" = {
+    "russia-02" = {
       memory    = 2
       image_id  = "fd8chrq89mmk8tqm85r8"
       disk_size = 20
       disk_name = "disk-ubuntu-24-04-lts-1734197525817"
+      hostname  = "vk-ads-tool"
     }
   }
 }
@@ -24,7 +28,7 @@ resource "yandex_compute_instance" "this" {
   for_each = local.instances
 
   name                      = each.key
-  hostname                  = each.key
+  hostname                  = each.value.hostname
   platform_id               = "standard-v3"
   zone                      = var.zone
   service_account_id        = yandex_iam_service_account.this["gistrec"].id
