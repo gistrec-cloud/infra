@@ -1,0 +1,36 @@
+---
+# Point the replica at the primary (over WireGuard) and start it.
+#
+# PREREQUISITE — bootstrap first: an empty server cannot catch up via
+# AUTO_POSITION once the primary has purged the required GTIDs. Load a primary
+# dump (mysqldump --set-gtid-purged=ON) BEFORE this runs. See the role README.
+#
+# Idempotent: we only (re)configure when replication is not already running, so
+# a normal converge is a no-op. GET_SOURCE_PUBLIC_KEY=1 lets caching_sha2 auth
+# succeed without TLS — the tunnel is the encryption.
+- name: Read current replication status
+  ansible.builtin.command:
+    cmd: docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -e "SHOW REPLICA STATUS\G"'
+  register: mysql_replica_status
+  changed_when: false
+  no_log: true
+
+- name: Configure and start replication
+  ansible.builtin.command:
+    cmd: docker exec -i {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot'
+    stdin: |
+      STOP REPLICA;
+      CHANGE REPLICATION SOURCE TO
+        SOURCE_HOST='{{ mysql_replication_source_host }}',
+        SOURCE_PORT={{ mysql_replication_source_port }},
+        SOURCE_USER='{{ mysql_replication_user }}',
+        SOURCE_PASSWORD='{{ mysql_replication_password }}',
+        SOURCE_AUTO_POSITION=1,
+        GET_SOURCE_PUBLIC_KEY=1;
+      START REPLICA;
+  no_log: true
+  changed_when: true
+  when:
+    - mysql_replication_source_host | length > 0
+    - mysql_replication_password | length > 0
+    - "'Replica_IO_Running: Yes' not in mysql_replica_status.stdout"

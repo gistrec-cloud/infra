@@ -1,0 +1,87 @@
+---
+# ─── Docker Engine ───
+# Installed from Docker's official apt repo (the distro docker.io lags). Upgrades
+# stay deliberate: state is present, not latest — same policy as netdata/node.
+mysql_docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+
+# ─── MySQL container ───
+# Floating 8.0 tag is fine for test databases; pin an exact patch
+# (e.g. mysql:8.0.40) in host_vars for reproducible, deliberate upgrades. 8.0
+# matches the managed cluster so test behaves like prod.
+mysql_image: "mysql:8.0"
+mysql_container_name: mysql
+
+# Host layout. Data lives on a bind mount — the russia-01 boot disk is
+# auto_delete (see terraform/yandex/compute.tf), so treat this directory as
+# disposable and lean on the nightly backup below. A dedicated persistent disk
+# is a Phase 2 concern once prod databases move here.
+mysql_base_dir: /opt/mysql
+mysql_data_dir: "{{ mysql_base_dir }}/data"
+mysql_conf_dir: "{{ mysql_base_dir }}/conf.d"
+
+# Published port and bind address. Docker DNATs published ports *before* the
+# nftables forward chain, so a 0.0.0.0 publish is gated only by
+# firewall_docker_allow_tcp (fleet source IPs) — never the input chain. The
+# assert in tasks/main.yml refuses to run this combination without a managed
+# firewall. Bind to 127.0.0.1 / a private IP instead if the host has none.
+mysql_publish_address: "0.0.0.0"
+mysql_port: 3306
+
+# root password — must come from the vault (group_vars/all.vault.yml).
+# `mandatory` fails fast with a clear error if the key is missing.
+mysql_root_password: "{{ vault_mysql_root_password | mandatory }}"
+
+# InnoDB buffer pool. Default is small; the fleet's whole dataset is <1 GB, so
+# host_vars sets 1G on the primary/replica to cache everything in RAM.
+mysql_innodb_buffer_pool_size: "256M"
+mysql_max_connections: 100
+
+# ─── Replication role ───
+# standalone (default) | primary | replica.
+#   primary — binlog + GTID on, creates the replication user.
+#   replica — super_read_only, pulls from the source over the WireGuard tunnel.
+# See README for the bootstrap (initial dump) and promotion runbooks.
+mysql_role: standalone
+# Must be unique across the topology (e.g. primary=1, replica=2). Required for
+# primary/replica; ignored for standalone.
+mysql_server_id: 1
+# GTID binlog retention on the primary — 3 days is plenty for a WAN replica to
+# recover from a transient disconnect without a re-dump.
+mysql_binlog_expire_seconds: 259200
+
+# Replica → source connection (only used when mysql_role == replica). Point
+# mysql_replication_source_host at the primary's WireGuard IP (e.g. 10.10.0.1)
+# so replication rides the encrypted tunnel, not the public internet.
+mysql_replication_user: repl
+mysql_replication_password: "{{ vault_mysql_replication_password | default('') }}"
+mysql_replication_source_host: ""
+mysql_replication_source_port: 3306
+
+# ─── Databases & users ───
+# Idempotently created each run via `CREATE ... IF NOT EXISTS` (see
+# templates/provision.sql.j2). Because IF NOT EXISTS skips existing users, this
+# never rotates a live password — mirrors the terraform ignore_changes[password]
+# on the managed cluster. Rotate manually with ALTER USER (see README).
+#
+#   mysql_databases:
+#     - clear-transcript-bot-test
+#   mysql_users:
+#     - { name: app,    password: "{{ vault_... }}", database: app, privileges: "ALL" }
+#     - { name: app-ro, password: "{{ vault_... }}", database: app, privileges: "SELECT" }
+mysql_databases: []
+mysql_users: []
+
+# ─── Backups ───
+# Nightly per-database mysqldump → local gzip under mysql_backup_dir, rotated
+# after mysql_backup_retention_days, driven by a systemd timer. Off-site upload
+# to Yandex Object Storage is a documented Phase 2 toggle (see README) — this
+# proves the dump/restore path first, cheaply, on disposable test data.
+mysql_backup_enabled: true
+mysql_backup_dir: /var/backups/mysql
+mysql_backup_retention_days: 14
+mysql_backup_hour: 3
+mysql_backup_minute: 30

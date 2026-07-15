@@ -1,0 +1,29 @@
+---
+# Copy to db-02.yml (gitignored). db-02 = MySQL REPLICA / promotable standby
+# (e.g. germany-01). It pulls all data from the primary over WireGuard.
+
+# ─── WireGuard mesh ───
+wireguard_ip: 10.10.0.2
+wireguard_pubkey: "REPLACE_WITH_db-02_PUBLIC_KEY"   # private key → vault_wg_privkey_db_02
+
+# ─── Firewall ───
+# An external VPS with no default-drop firewall today, so WireGuard's UDP 51820
+# is already open. Turn firewall_managed on only after listing everything the
+# host serves (nginx/apps/netdata) — otherwise default-drop cuts them off.
+# firewall_managed: true
+# firewall_allow_udp:
+#   - { port: 51820, from: 203.0.113.12 }  # db-01 (primary)
+
+# ─── MySQL: replica ───
+mysql_managed: true
+mysql_role: replica
+mysql_server_id: 2
+mysql_innodb_buffer_pool_size: "1G"
+# Publish on loopback only: a standby takes no inbound app traffic and connects
+# OUT to the primary. Being non-0.0.0.0 also satisfies the role's firewall
+# assert without firewall_managed. Promotion changes this — see the role README.
+mysql_publish_address: "127.0.0.1"
+# Source = the primary's WireGuard IP, so replication rides the tunnel.
+mysql_replication_source_host: "10.10.0.1"
+mysql_replication_password: "{{ vault_mysql_replication_password }}"
+# No mysql_databases / mysql_users here — schema and users arrive via replication.

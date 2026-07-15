@@ -1,0 +1,53 @@
+---
+# Copy to db-01.yml (gitignored). db-01 = MySQL PRIMARY (e.g. russia-01).
+# Merge with any web/nodeapp vars if the host also serves apps.
+
+# ─── WireGuard mesh ───
+wireguard_ip: 10.10.0.1
+wireguard_pubkey: "REPLACE_WITH_db-01_PUBLIC_KEY"   # private key → vault_wg_privkey_db_01
+
+# ─── Firewall ───
+firewall_managed: true
+# WireGuard UDP, only from the other mesh peers' public IPs.
+firewall_allow_udp:
+  - { port: 51820, from: 203.0.113.13 }    # db-02 (replica)
+# MySQL 3306 is published on 0.0.0.0 but reachable only from:
+firewall_docker_allow_tcp:
+  - { port: 3306, from: 10.10.0.2 }        # replica, over the WireGuard tunnel
+  - { port: 3306, from: 198.19.0.0/16 }    # Yandex Cloud Functions (VPC-attached)
+
+# ─── MySQL: primary ───
+mysql_managed: true
+mysql_role: primary
+mysql_server_id: 1
+mysql_innodb_buffer_pool_size: "1G"        # whole fleet dataset is <1 GB → all cached
+mysql_replication_password: "{{ vault_mysql_replication_password }}"
+
+# All 16 databases from terraform/yandex/mysql.tf (the managed cluster we replace).
+mysql_databases:
+  - askads
+  - budget-explorer
+  - clear-transcript-bot
+  - clear-transcript-bot-test
+  - dnd-crime
+  - dnd-crime-staging
+  - eve-contracts
+  - food-scraper
+  - libre
+  - linkreach
+  - loquia
+  - realmctl
+  - recepter
+  - vk-ads-tool
+  - vk-ads-tool-test
+  - wordpress
+
+# One entry per app user (mirror the grants in mysql.tf). Passwords from the
+# vault. Shown abbreviated — add the rest the same way (incl. the -ro / -test
+# users and the netdata `stats` user with its global permissions).
+mysql_users:
+  - { name: askads,               password: "{{ vault_mysql_askads }}",    database: askads,               privileges: "ALL" }
+  - { name: clear-transcript-bot, password: "{{ vault_mysql_ctb }}",       database: clear-transcript-bot, privileges: "ALL" }
+  - { name: wordpress,            password: "{{ vault_mysql_wordpress }}", database: wordpress,            privileges: "ALL" }
+  # ... budget-explorer, dnd-crime(+staging), eve-contracts, food-scraper,
+  #     libre, linkreach, loquia(+ro), realmctl, recepter, vk-ads-tool(+test).

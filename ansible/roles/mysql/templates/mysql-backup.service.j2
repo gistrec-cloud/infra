@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=MySQL (Docker) nightly backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mysql-backup.sh

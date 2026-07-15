@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Per-database mysqldump → gzip under the backup dir, then prune old dumps.
+# Runs mysqldump *inside* the container; MYSQL_PWD is read from the container env
+# so the root password never appears on any process list.
+set -euo pipefail
+
+BACKUP_DIR="{{ mysql_backup_dir }}"
+CONTAINER="{{ mysql_container_name }}"
+RETENTION={{ mysql_backup_retention_days }}
+STAMP="$(date +%Y%m%d-%H%M%S)"
+
+mkdir -p "$BACKUP_DIR"
+{% for db in mysql_databases %}
+docker exec "$CONTAINER" sh -c \
+  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --single-transaction --routines --triggers --databases -uroot "{{ db }}"' \
+  | gzip > "$BACKUP_DIR/{{ db }}-$STAMP.sql.gz"
+{% endfor %}
+
+# Rotation: drop dumps older than the retention window.
+find "$BACKUP_DIR" -maxdepth 1 -name '*.sql.gz' -type f -mtime +"$RETENTION" -delete

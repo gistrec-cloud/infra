@@ -1,0 +1,13 @@
+---
+# --force-recreate so a changed server.cnf (bind-mounted, read only at startup)
+# or env file is actually picked up — a plain `up -d` is a no-op when the compose
+# spec is unchanged. --wait keeps the run blocked until MySQL is healthy again.
+- name: Recreate mysql container
+  ansible.builtin.command:
+    cmd: docker compose up -d --force-recreate --wait --wait-timeout 180
+    chdir: "{{ mysql_base_dir }}"
+  changed_when: true
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
