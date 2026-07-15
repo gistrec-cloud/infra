@@ -2,6 +2,10 @@
 # Keep the agent private; expose it through nginx + auth if you need remote access.
 netdata_bind_to: "127.0.0.1"
 
+# Display name of the node on dashboards / the streaming parent (netdata.conf
+# [global] hostname). Empty = keep the machine hostname.
+netdata_hostname: ""
+
 # pm2 process-down alerting (empty list = feature off, files untouched).
 # One apps.plugin group per app; health.d/pm2.conf fires CRITICAL when a group
 # has had zero processes for 30s+. Entries are DERIVED from nodeapp_node_apps
@@ -39,7 +43,14 @@ netdata_health_files: []
 # netdata_stream_destination is set (push everything to the parent), a parent
 # when netdata_stream_accept is true (accept children; also needs
 # netdata_bind_to reachable by them + a source-restricted firewall_allow_tcp
-# rule for 19999). Neither set = stream.conf untouched.
+# rule for 19999). Neither set = stream.conf untouched. A host with both set
+# is a proxy: it forwards its children upstream along with its own metrics.
 netdata_stream_api_key: ""
 netdata_stream_destination: ""
 netdata_stream_accept: false
+
+# Source filters for hosts that must bind beyond localhost but have no managed
+# firewall (netdata-level gating, netdata.conf [web] / stream.conf allow from).
+# Space-separated netdata simple patterns; "*" keeps the netdata defaults.
+netdata_web_allow_from: "*"
+netdata_stream_allow_from: "*"

@@ -1,10 +1,32 @@
 ---
-# Debian/Ubuntu ship a netdata package. For the newest version you can swap
-# this for the official kickstart script; the package keeps the role simple.
+# The distro netdata package is ancient (v1.33 on Ubuntu 22.04, below the
+# streaming-recommended v2.9) — use the official netdata repo, edge channel,
+# matching the kickstart-installed parents. force: false keeps the files that
+# the netdata-repo-edge package already manages on those parents.
+- name: Install the official netdata repository key
+  ansible.builtin.get_url:
+    url: https://repo.netdata.cloud/netdatabot.gpg.key
+    dest: /usr/share/keyrings/netdata-archive-keyring.asc
+    mode: "0644"
+    force: false
+
+- name: Add the official netdata repository (edge channel)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/netdata-edge.sources
+    content: |
+      Types: deb
+      URIs: http://repository.netdata.cloud/repos/edge/{{ ansible_distribution | lower }}/
+      Suites: {{ ansible_distribution_release }}/
+      Signed-By: /usr/share/keyrings/netdata-archive-keyring.asc
+      By-Hash: Yes
+      Enabled: Yes
+    mode: "0644"
+    force: false
+
 - name: Install netdata
   ansible.builtin.apt:
     name: netdata
-    state: present
+    state: latest
     update_cache: true
 
 - name: Bind netdata to localhost only
@@ -15,6 +37,25 @@
     value: "{{ netdata_bind_to }}"
     mode: "0644"
   notify: Restart netdata
+
+- name: Restrict web connections by source
+  community.general.ini_file:
+    path: /etc/netdata/netdata.conf
+    section: web
+    option: "allow connections from"
+    value: "{{ netdata_web_allow_from }}"
+    mode: "0644"
+  notify: Restart netdata
+
+- name: Name the node after the inventory host
+  community.general.ini_file:
+    path: /etc/netdata/netdata.conf
+    section: global
+    option: hostname
+    value: "{{ netdata_hostname }}"
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_hostname | length > 0
 
 - name: Configure metrics streaming (parent/child)
   ansible.builtin.template:

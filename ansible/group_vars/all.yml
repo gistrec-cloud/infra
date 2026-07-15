@@ -17,3 +17,6 @@ netdata_telegram_bot_token: "{{ vault_netdata_telegram_bot_token | default('') }
 netdata_telegram_chat_id: "{{ vault_netdata_telegram_chat_id | default('') }}"
 # Streaming: shared parent/child API key (per-host role set in host_vars).
 netdata_stream_api_key: "{{ vault_netdata_stream_api_key | default('') }}"
+# Dashboard node names follow the inventory (fleet names), not the machine
+# hostnames — those keep pre-rename values (see terraform/yandex/compute.tf).
+netdata_hostname: "{{ inventory_hostname }}"
