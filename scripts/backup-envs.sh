@@ -66,7 +66,9 @@ app_alias() { # <host> <app>
 # shellcheck disable=SC2016
 FIND_CMD='
 { pm2 jlist 2>/dev/null | python3 -c "import json,sys; [print(p[\"pm2_env\"][\"pm_cwd\"] + \"/.env\") for p in json.load(sys.stdin)]" 2>/dev/null || true
-  find "$HOME" -maxdepth 3 -name ".env" 2>/dev/null || true
+  find "$HOME" -maxdepth 3 \( -name ".env" -o -name ".env.*" -o -name "*.env" \) \
+    -not -name "*.example" -not -name "*.bak" -not -name "*.save" \
+    -not -name "*.backup-*" -not -path "*/node_modules/*" 2>/dev/null || true
 } | sort -u | while read -r f; do [ -f "$f" ] && echo "$f"; done'
 
 fail=0
@@ -81,15 +83,19 @@ for h in "${hosts[@]}"; do
   sshc=(ssh -n -o IdentitiesOnly=yes -o ConnectTimeout=15 -i "$key" "$user@$ip")
 
   while IFS= read -r f; do
-    # /home/u/DndCrime/backend/.env -> app "DndCrime-backend"; a bare
+    # /home/u/DndCrime/backend/.env -> "DndCrime-backend"; Loquia/.env.en ->
+    # "Loquia-en"; trade-lab/paper.env -> "trade-lab-paper"; a bare
     # /home/<user>/.env is named after the user (e.g. vk-ads-tool).
     rel="${f#/home/*/}"
-    if [ "$rel" = ".env" ]; then
-      app=$(basename "$(dirname "$f")")
-    else
-      app="${rel%/.env}"
-      app="${app//\//-}"
-    fi
+    base="${rel##*/}"
+    dir="${rel%"$base"}"; dir="${dir%/}"
+    [ -z "$dir" ] && dir=$(basename "$(dirname "$f")")
+    case "$base" in
+      .env)   app="$dir" ;;
+      .env.*) app="$dir-${base#.env.}" ;;
+      *)      app="$dir-${base%.env}" ;;
+    esac
+    app="${app//\//-}"
     app=$(app_alias "$h" "$app")
     title="dotenv $app"
 
