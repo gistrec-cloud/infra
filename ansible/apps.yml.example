@@ -12,6 +12,10 @@
 #   notes: <free text>
 #   cron: [cron jobs the app needs — installed by the appcron role, keyed
 #          "<app>: <name>"; minute/hour/day/month/weekday default to "*"]
+#   port: <the app's loopback port — GLOBALLY unique across the fleet, so any
+#          set of apps can co-locate on any host without collisions>
+#   vhosts: [verbatim nginx server-block files the app needs, by name:
+#            files/vhosts/<name>.conf (gitignored) — deployed by the nginx role]
 
 apps:
   my-api:
