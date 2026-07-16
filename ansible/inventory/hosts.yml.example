@@ -3,15 +3,18 @@
 # Example IPs are from the RFC 5737 documentation range — not real.
 all:
   vars:
-    ansible_user: deploy
+    # ansible_user is set per host: the actual SSH login user. admin_user in
+    # group_vars/all.yml follows it — there is no shared service account.
     ansible_python_interpreter: /usr/bin/python3
   children:
     web:
       hosts:
         web-01:
           ansible_host: 203.0.113.10
+          ansible_user: your-login-user
         web-02:
           ansible_host: 203.0.113.11
+          ansible_user: your-login-user
     # WireGuard mesh members. EVERY host listed here must define wireguard_ip +
     # wireguard_pubkey in its host_vars and vault_wg_privkey_<host> in the vault
     # (a member missing these breaks peer config rendering). A host's public
