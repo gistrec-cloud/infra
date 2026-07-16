@@ -5,6 +5,9 @@
 # group name, and there is no group "all.vault"), so both plays pull it in via
 # vars_files. First-found list: the real vault, else the example (placeholders)
 # so syntax checks and fresh clones still parse.
+#
+# Play order is dependency order: baseline (network, firewall) → databases →
+# app dependencies (docker) → apps → web layer on top.
 - name: Baseline for every host (monitoring)
   hosts: all
   become: true
@@ -38,6 +41,37 @@
     - role: appcron
       tags: [appcron]
 
+- name: Database servers — self-hosted MySQL (Docker), primary/replica
+  hosts: db
+  become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+  roles:
+    # Opt-in per host: set mysql_managed: true in host_vars. The role asserts a
+    # managed firewall before publishing 3306 (Docker DNAT bypasses the input
+    # chain). Replication (primary → replica) rides the WireGuard tunnel, so the
+    # baseline play above must have brought wg0 up first. Databases start
+    # before the apps that need them.
+    - role: mysql
+      when: mysql_managed | default(false)
+
+- name: Applications — docker dependencies, pm2 apps, static bundles
+  hosts: all
+  become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+    - ["apps.yml", "apps.yml.example"]
+  roles:
+    # Everything below is driven by the apps registry and is a no-op on hosts
+    # with no matching apps (germany-02 stays untouched). appdocker runs first:
+    # app containers (tg-bot-api, ...) are dependencies of the apps.
+    - role: appdocker
+      tags: [appdocker]
+    - role: apppm2
+      tags: [apppm2]
+    - role: appstatic
+      tags: [appstatic]
+
 - name: Web servers — nginx reverse proxy + Node/pm2 apps
   hosts: web
   become: true
@@ -51,16 +85,3 @@
     # NodeSource Node install on hosts that manage their own node/pm2.
     - role: nodeapp
       when: nodeapp_node_apps | default([]) | length > 0
-
-- name: Database servers — self-hosted MySQL (Docker), primary/replica
-  hosts: db
-  become: true
-  vars_files:
-    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
-  roles:
-    # Opt-in per host: set mysql_managed: true in host_vars. The role asserts a
-    # managed firewall before publishing 3306 (Docker DNAT bypasses the input
-    # chain). Replication (primary → replica) rides the WireGuard tunnel, so the
-    # baseline play above must have brought wg0 up first.
-    - role: mysql
-      when: mysql_managed | default(false)

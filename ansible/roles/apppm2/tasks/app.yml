@@ -1,0 +1,144 @@
+---
+- name: Derive paths — {{ apppm2_app.key }}
+  ansible.builtin.set_fact:
+    apppm2_home: "/home/{{ admin_user }}"
+    apppm2_dir: >-
+      {{ '/home/' ~ admin_user ~ ('' if apppm2_app.value.dir | default('.') == '.'
+         else '/' ~ apppm2_app.value.dir) }}
+
+# ── code ──
+# repo_dir: clone destination when the repo root is ABOVE the app cwd
+# (recepter: repo at ~/backend, cwd backend/back). No version pin on purpose:
+# we clone the default branch tip once; updates are owned by CI / manual flows.
+- name: Clone the repository, only if absent — {{ apppm2_app.key }} # noqa: latest
+  ansible.builtin.git:
+    repo: "git@github.com:{{ apppm2_app.value.repo }}.git"
+    dest: "{{ apppm2_home }}/{{ apppm2_app.value.process.repo_dir | default(apppm2_app.value.dir) }}"
+    update: false
+    accept_newhostkey: true
+  become: true
+  become_user: "{{ admin_user }}"
+  when:
+    - apppm2_app.value.process.type == 'clone'
+    - apppm2_app.value.repo is defined
+
+- name: Application directory for CI artifacts — {{ apppm2_app.key }}
+  ansible.builtin.file:
+    path: "{{ apppm2_dir }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: apppm2_app.value.process.type == 'artifact'
+
+# ── runtime ──
+- name: Python venv — {{ apppm2_app.key }}
+  ansible.builtin.command:
+    cmd: "python3 -m venv {{ apppm2_app.value.process.venv | default('.venv') }}"
+    chdir: "{{ apppm2_dir }}"
+    creates: "{{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  register: apppm2_venv
+  when: apppm2_app.value.process.runtime | default('') == 'python'
+
+- name: Pip install requirements — {{ apppm2_app.key }}
+  ansible.builtin.command:
+    cmd: "{{ apppm2_app.value.process.venv | default('.venv') }}/bin/pip install -r requirements.txt"
+    chdir: "{{ apppm2_dir }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: true
+  when:
+    - apppm2_app.value.process.runtime | default('') == 'python'
+    - apppm2_venv is changed
+
+- name: Npm ci — {{ apppm2_app.key }}
+  ansible.builtin.command:
+    cmd: npm ci
+    chdir: "{{ apppm2_dir }}"
+    creates: "{{ apppm2_dir }}/node_modules"
+  become: true
+  become_user: "{{ admin_user }}"
+  when: apppm2_app.value.process.runtime | default('') == 'node'
+
+# ── env files from the 1Password dotenv backups ──
+# .env -> "dotenv <app>"; .env.en -> "dotenv <app>-en"; prod.env -> "dotenv <app>-prod"
+- name: Env files from 1Password — {{ apppm2_app.key }}
+  ansible.builtin.copy:
+    content: >-
+      {{ lookup('ansible.builtin.pipe',
+                'op document get ' ~
+                ('dotenv ' ~ apppm2_app.key ~
+                 ('' if item == '.env' else '-' ~
+                  (item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
+                | quote ~ ' --vault "Gistrec Cloud"') }}
+    dest: "{{ apppm2_dir }}/{{ item }}"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
+  no_log: true
+
+# ── CI deploy keys (artifact apps): rrsync jails and forced commands ──
+- name: CI deploy keys — {{ apppm2_app.key }}
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ item.key }}"
+    key_options: "command=\"{{ item.command }}\",restrict"
+  loop: "{{ apppm2_app.value.deploy_keys | default([]) }}"
+  loop_control:
+    label: "{{ item.key.split() | last }}"
+
+- name: Bin directory for control scripts — {{ apppm2_app.key }}
+  ansible.builtin.file:
+    path: "{{ apppm2_home }}/bin"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  when: apppm2_app.value.control_scripts | default([]) | length > 0
+
+- name: Control scripts for forced commands — {{ apppm2_app.key }}
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/bin/{{ item }}"
+    dest: "{{ apppm2_home }}/bin/{{ item }}"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  loop: "{{ apppm2_app.value.control_scripts | default([]) }}"
+
+# ── pm2 ──
+- name: Check the ecosystem file — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_dir }}/{{ apppm2_app.value.process.ecosystem | default('ecosystem.config.js') }}"
+  register: apppm2_eco
+  when: apppm2_app.value.process.pm2 | default([]) | length > 0
+
+- name: Start missing pm2 processes — {{ apppm2_app.key }}
+  ansible.builtin.command:
+    cmd: >-
+      pm2 startOrReload {{ apppm2_app.value.process.ecosystem | default('ecosystem.config.js') }}
+      --only {{ apppm2_missing | join(',') }}
+    chdir: "{{ apppm2_dir }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: true
+  vars:
+    apppm2_running: "{{ (apppm2_jlist.stdout | default('[]')) | from_json | map(attribute='name') | list }}"
+    apppm2_missing: "{{ apppm2_app.value.process.pm2 | default([]) | difference(apppm2_running) }}"
+  when:
+    - apppm2_app.value.process.pm2 | default([]) | length > 0
+    - apppm2_eco.stat.exists | default(false)
+    - apppm2_missing | length > 0
+  notify: Save pm2 process list
+
+- name: Warn when pm2 apps are declared without an ecosystem file — {{ apppm2_app.key }}
+  ansible.builtin.debug:
+    msg: >-
+      {{ apppm2_app.key }}: pm2 processes {{ apppm2_app.value.process.pm2 }} declared but
+      {{ apppm2_app.value.process.ecosystem | default('ecosystem.config.js') }} is
+      missing in {{ apppm2_dir }} — add one to the app repo.
+  when:
+    - apppm2_app.value.process.pm2 | default([]) | length > 0
+    - not (apppm2_eco.stat.exists | default(false))

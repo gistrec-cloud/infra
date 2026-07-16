@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Copy to <name> (gitignored) and reference it from the app's
+# `control_scripts: [<name>]` in apps.yml — apppm2 installs it into ~/bin.
+# Pair it with a deploy_keys entry whose command points at this script:
+# the CI key can then do exactly one thing.
+set -euo pipefail
+
+if [[ "${SSH_ORIGINAL_COMMAND:-}" != "deploy" ]]; then
+  echo "Only the deploy command is allowed" >&2
+  exit 64
+fi
+
+pm2 restart my-app --update-env

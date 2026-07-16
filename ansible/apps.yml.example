@@ -21,6 +21,22 @@
 #            api-example-com); a separate domain = a separate file, even for
 #            redirects and staging; www/aliases live in the primary's file;
 #            domainless internal stubs are named by purpose (stub-status)]
+#   process:                   # apppm2 role — the app's processes exist on the host
+#     type: clone | artifact   # clone: git + runtime bootstrap; artifact: CI rsyncs builds
+#     runtime: python | node   # venv + pip requirements / npm ci (clone type)
+#     venv: .venv              # python venv dir, relative to dir
+#     repo_dir: <path>         # clone destination when the repo root is above dir
+#     ecosystem: <file>        # pm2 file, relative to dir (default ecosystem.config.js)
+#     pm2: [names]             # pm2 process names to ensure exist (env from 1P first)
+#   static:                    # appstatic role — built bundle the vhost serves
+#     build: <shell>           # runs in dir when root is missing (fresh host / DR)
+#     root: <path under dir>
+#   docker:                    # appdocker role — dependencies, started before apps
+#     containers: [{name, image, command, network_mode, volumes, env, restart_policy}]
+#     compose: <dir>           # docker compose project dir (relative to home; "." = home)
+#   deploy_keys:               # CI keys, installed with command=...,restrict
+#     - {key: "ssh-ed25519 AAA... comment", command: "/usr/bin/rrsync -wo <dir>"}
+#   control_scripts: [names]   # forced-command scripts: files/bin/<name> (gitignored) -> ~/bin
 
 apps:
   my-api:

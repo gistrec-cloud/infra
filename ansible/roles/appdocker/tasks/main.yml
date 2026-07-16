@@ -1,0 +1,44 @@
+---
+# Docker containers and compose projects the apps depend on (tg-bot-api,
+# vkadstool, ...). Runs BEFORE apppm2/appstatic in site.yml — dependencies
+# (docker, mysql) come up first.
+- name: Select this host's docker workloads
+  ansible.builtin.set_fact:
+    appdocker_containers: >-
+      {{ apps | default({}) | dict2items
+         | selectattr('value.host', 'equalto', inventory_hostname)
+         | selectattr('value.docker.containers', 'defined')
+         | map(attribute='value.docker.containers') | flatten }}
+    appdocker_compose: >-
+      {{ apps | default({}) | dict2items
+         | selectattr('value.host', 'equalto', inventory_hostname)
+         | selectattr('value.docker.compose', 'defined') | list }}
+
+- name: Docker SDK for the ansible docker modules
+  ansible.builtin.apt:
+    name: python3-docker
+    state: present
+  when: appdocker_containers | length > 0
+
+- name: App containers
+  community.docker.docker_container:
+    name: "{{ item.name }}"
+    image: "{{ item.image }}"
+    command: "{{ item.command | default(omit) }}"
+    network_mode: "{{ item.network_mode | default(omit) }}"
+    volumes: "{{ item.volumes | default(omit) }}"
+    env: "{{ item.env | default(omit) }}"
+    restart_policy: "{{ item.restart_policy | default('unless-stopped') }}"
+    state: started
+  loop: "{{ appdocker_containers }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Compose projects
+  community.docker.docker_compose_v2:
+    project_src: "/home/{{ admin_user }}/{{ item.value.docker.compose if item.value.docker.compose != '.' else '' }}"
+    state: present
+  loop: "{{ appdocker_compose }}"
+  loop_control:
+    label: "{{ item.key }}"
