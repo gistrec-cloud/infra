@@ -5,6 +5,9 @@ ansible/inventory/hosts.yml
 # Real per-host vars (keep only *.example)
 ansible/host_vars/*.yml
 
+# Deployed-apps registry — real app/host/repo layout (keep only *.example)
+ansible/apps.yml
+
 # Vault / secret var files (keep only *.example)
 *.vault.yml
 .vault_pass
