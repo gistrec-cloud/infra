@@ -9,8 +9,10 @@ resource "hcloud_server" "finland_01" {
   firewall_ids       = []
   labels             = {}
   placement_group_id = 0
-  delete_protection  = false
-  rebuild_protection = false
+  # The hcloud API only accepts these two flipped together. Provider-side
+  # guard against console/API deletion; prevent_destroy below only stops TF.
+  delete_protection  = true
+  rebuild_protection = true
 
   lifecycle {
     # The SSH key and cloud-init payload were used only to bootstrap the server.
