@@ -10,7 +10,7 @@ ansible/host_vars/*.yml
 .vault_pass
 .vault-password
 
-# Per-directory env (direnv) — pulls secrets from the macOS Keychain
+# Per-directory env (direnv) — pulls secrets from 1Password via the op CLI
 .envrc
 
 # Raw key / certificate material (defense-in-depth alongside gitleaks)
