@@ -31,7 +31,7 @@
     group: root
     mode: "0440"
     validate: /usr/sbin/visudo -cf %s
-  when: admin_passwordless_sudo
+  when: common_admin_passwordless_sudo
 
 - name: Install authorized SSH keys for the admin user
   ansible.posix.authorized_key:
