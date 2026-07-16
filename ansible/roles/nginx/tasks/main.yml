@@ -12,14 +12,14 @@
       - python3-certbot-nginx
     state: present
 
-- name: Install shared nginx snippets (honeypot, deny-dotfiles)
+- name: Install shared nginx snippets (honeypot, deny-dotfiles, security headers)
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: "/etc/nginx/snippets/{{ item }}"
     owner: root
     group: root
     mode: "0644"
-  loop: [honeypot.conf, deny-dotfiles.conf]
+  loop: [honeypot.conf, deny-dotfiles.conf, security-headers.conf]
   notify: Reload nginx
 
 - name: Install the honeypot log_format (http scope, via conf.d)

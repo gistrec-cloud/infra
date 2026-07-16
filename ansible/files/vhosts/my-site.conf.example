@@ -29,6 +29,7 @@ server {
     include             /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
 
+    include /etc/nginx/snippets/security-headers.conf;
     include /etc/nginx/snippets/honeypot.conf;
     include /etc/nginx/snippets/deny-dotfiles.conf;
 
