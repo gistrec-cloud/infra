@@ -75,6 +75,8 @@
 
 # ── env files from the 1Password dotenv backups ──
 # .env -> "dotenv <app>"; .env.en -> "dotenv <app>-en"; prod.env -> "dotenv <app>-prod"
+# The pipe lookup strips trailing newlines — put exactly one back, or every
+# host file (ending with \n, as text files do) reports a permanent diff.
 - name: Env files from 1Password — {{ apppm2_app.key }}
   ansible.builtin.copy:
     content: >-
@@ -83,7 +85,7 @@
                 ('dotenv ' ~ apppm2_app.key ~
                  ('' if item == '.env' else '-' ~
                   (item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
-                | quote ~ ' --vault "Gistrec Cloud"') }}
+                | quote ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
     dest: "{{ apppm2_dir }}/{{ item }}"
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
