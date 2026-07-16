@@ -51,6 +51,16 @@ hostvar() {
     "$1" "$2" <<<"$INV"
 }
 
+# Same directory name, genuinely different apps per host — alias them apart
+# so the divergence warning stays reserved for real drift.
+app_alias() { # <host> <app>
+  case "$1/$2" in
+    russia-01/askads)  echo "askads-ru" ;;
+    germany-01/askads) echo "askads-cloud" ;;
+    *) echo "$2" ;;
+  esac
+}
+
 # .env candidates: pm2 app working dirs plus a shallow sweep of $HOME
 # (single-quoted on purpose — $HOME and the pipeline expand on the remote host).
 # shellcheck disable=SC2016
@@ -80,6 +90,7 @@ for h in "${hosts[@]}"; do
       app="${rel%/.env}"
       app="${app//\//-}"
     fi
+    app=$(app_alias "$h" "$app")
     title="dotenv $app"
 
     if $list_only; then
