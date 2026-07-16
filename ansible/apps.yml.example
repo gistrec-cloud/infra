@@ -10,12 +10,19 @@
 #   env:  [env files in dir]          # default: [.env]
 #   repo: <github repo — documentation>
 #   notes: <free text>
+#   cron: [cron jobs the app needs — installed by the appcron role, keyed
+#          "<app>: <name>"; minute/hour/day/month/weekday default to "*"]
 
 apps:
   my-api:
     host: web-01
     dir: my-api
     repo: you/my-api
+    cron:
+      - name: nightly cleanup
+        minute: "0"
+        hour: "3"
+        job: "curl -fsS -H 'Authorization: Bearer {{ vault_my_api_cron_token }}' https://my-api.example.com/api/cron/cleanup >/dev/null 2>&1"
   my-bot:
     host: web-01
     dir: bots/my-bot
