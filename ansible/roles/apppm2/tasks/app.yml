@@ -8,8 +8,18 @@
 
 # ── code ──
 # repo_dir: clone destination when the repo root is ABOVE the app cwd
-# (recepter: repo at ~/backend, cwd backend/back). No version pin on purpose:
-# we clone the default branch tip once; updates are owned by CI / manual flows.
+# (recepter: repo at ~/backend, cwd backend/back).
+- name: Check the code directory — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_home }}/{{ apppm2_app.value.process.repo_dir | default(apppm2_app.value.dir) }}"
+  register: apppm2_code
+  when: apppm2_app.value.process.type == 'clone'
+
+# Clone ONLY into a missing directory: several live deployments are rsync
+# copies without .git (aleksandravoo, budget-explorer) — the git module would
+# fail on them, and they already carry the running code. Adopt, don't touch.
+# No version pin on purpose: we clone the default branch tip once; updates
+# are owned by CI / manual flows.
 - name: Clone the repository, only if absent — {{ apppm2_app.key }} # noqa: latest
   ansible.builtin.git:
     repo: "git@github.com:{{ apppm2_app.value.repo }}.git"
@@ -21,6 +31,7 @@
   when:
     - apppm2_app.value.process.type == 'clone'
     - apppm2_app.value.repo is defined
+    - not (apppm2_code.stat.exists | default(true))
 
 - name: Application directory for CI artifacts — {{ apppm2_app.key }}
   ansible.builtin.file:
