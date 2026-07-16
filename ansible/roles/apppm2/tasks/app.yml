@@ -136,7 +136,7 @@
   become_user: "{{ admin_user }}"
   changed_when: true
   vars:
-    apppm2_running: "{{ (apppm2_jlist.stdout | default('[]')) | from_json | map(attribute='name') | list }}"
+    apppm2_running: "{{ (apppm2_jlist.stdout | default('[]', true)) | from_json | map(attribute='name') | list }}"
     apppm2_missing: "{{ apppm2_app.value.process.pm2 | default([]) | difference(apppm2_running) }}"
   when:
     - apppm2_app.value.process.pm2 | default([]) | length > 0
