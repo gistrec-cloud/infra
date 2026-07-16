@@ -1,0 +1,23 @@
+---
+# Cron jobs declared per app in the apps registry (apps.yml, loaded via
+# vars_files in site.yml). Entries are keyed "<app>: <name>" — ansible's
+# cron marker comment — so manually added crontab lines are never touched;
+# adopting an existing manual line = let this role add the managed copy,
+# then delete the manual one.
+- name: Install app cron jobs
+  ansible.builtin.cron:
+    name: "{{ item.0.key }}: {{ item.1.name }}"
+    minute: "{{ item.1.minute | default('*') }}"
+    hour: "{{ item.1.hour | default('*') }}"
+    day: "{{ item.1.day | default('*') }}"
+    month: "{{ item.1.month | default('*') }}"
+    weekday: "{{ item.1.weekday | default('*') }}"
+    job: "{{ item.1.job }}"
+    user: "{{ admin_user }}"
+  loop: >-
+    {{ apps | default({}) | dict2items
+       | selectattr('value.host', 'equalto', inventory_hostname)
+       | selectattr('value.cron', 'defined')
+       | list | subelements('value.cron') }}
+  loop_control:
+    label: "{{ item.0.key }}: {{ item.1.name }}"

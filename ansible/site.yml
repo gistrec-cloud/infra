@@ -10,6 +10,8 @@
   become: true
   vars_files:
     - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+    # Deployed-apps registry (gitignored; the example keeps parsing alive).
+    - ["apps.yml", "apps.yml.example"]
   roles:
     # Adopted live servers keep their existing users and sshd setup. common
     # (admin user + sshd hardening) is opt-in for freshly provisioned hosts.
@@ -31,6 +33,10 @@
       when: wireguard_ip is defined
       tags: [wireguard]
     - netdata
+    # App cron jobs come from the apps registry — per app, so a job moves
+    # hosts together with its app (edit apps.yml, re-run).
+    - role: appcron
+      tags: [appcron]
 
 - name: Web servers — nginx reverse proxy + Node/pm2 apps
   hosts: web
