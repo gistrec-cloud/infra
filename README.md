@@ -58,6 +58,7 @@ infra/
 └── terraform/                    # cloud resources as code (one root module per provider)
     ├── dns/                      # Cloudflare DNS records
     ├── aws/                      # Lambda functions + Function URLs
+    ├── hetzner/                  # Hetzner Cloud server (finland-01)
     └── yandex/                   # Object Storage, Managed MySQL, Compute, Cloud Function
 ```
 
