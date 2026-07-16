@@ -21,11 +21,19 @@ The repository is deliberately split into **code** (public, here) and **live dat
                     ▼                           ▼                             ▼
               ┌───────────┐               ┌───────────┐                 ┌───────────┐
               │  web-01   │               │  web-02   │                 │    ...    │
-              │  nginx    │               │  nginx    │                 │           │   Ansible-managed
+              │  nginx    │◄──── wg0 ────►│  nginx    │                 │           │   Ansible-managed
               │  pm2/node │               │  pm2/node │                 │           │   (ansible/)
               │  netdata  │               │  netdata  │                 │           │
               │  nft+f2b  │               │  nft+f2b  │                 │           │
-              └───────────┘               └───────────┘                 └───────────┘
+              └─────┬─────┘               └─────┬─────┘                 └───────────┘
+                    │                           │        wg0 = WireGuard mesh (10.10.0.0/24) —
+                    └─────────────┬─────────────┘        encrypted host↔host traffic, opt-in per host
+                                  │  app SQL
+                                  ▼
+                        ┌───────────────────┐
+                        │   Managed MySQL   │   Yandex Cloud (terraform/yandex) — planned move
+                        │  (Yandex Cloud)   │   to the self-hosted mysql role (Docker,
+                        └───────────────────┘   GTID primary/replica over the wg0 mesh)
 ```
 
 ## Layout
@@ -98,7 +106,7 @@ See the `Makefile` for the full list of targets (`make help`).
 ## Security model
 
 - **No secrets in git.** Tokens, keys and real inventory are `.gitignore`d; only `*.example` templates are tracked.
-- **Secrets at rest** are encrypted with `ansible-vault` (or SOPS). Even encrypted, the real vault stays private in this setup.
+- **Secrets at rest** are encrypted with `ansible-vault`. Even encrypted, the real vault stays private in this setup.
 - **`gitleaks`** runs as a pre-commit hook so nothing sensitive slips into history.
 - **SSH is key-only** and root login is disabled by the `common` role. A pre-flight `assert` refuses to disable password auth unless at least one key is present in `vault_admin_ssh_keys`, so the playbook fails fast instead of locking you out.
 - **Firewall is default-drop** (nftables); only SSH / 80 / 443 and explicitly listed ports are open, and fail2ban bans via nftables to match.
