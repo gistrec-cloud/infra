@@ -1,0 +1,6 @@
+---
+- name: Save pm2 process list
+  ansible.builtin.command: pm2 save
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: true

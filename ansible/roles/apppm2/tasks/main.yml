@@ -1,0 +1,28 @@
+---
+# Ensures the pm2-run apps declared for this host in the apps registry EXIST:
+# code, runtime, env files (from the 1Password dotenv backups), CI deploy keys
+# and the pm2 processes themselves. It does not redeploy running apps — CI and
+# manual flows own updates; this role owns existence (fresh host, DR,
+# migration: flip `host:` in apps.yml and re-run).
+- name: Select this host's pm2 apps
+  ansible.builtin.set_fact:
+    apppm2_apps: >-
+      {{ apps | default({}) | dict2items
+         | selectattr('value.host', 'equalto', inventory_hostname)
+         | selectattr('value.process', 'defined') | list }}
+
+- name: Snapshot current pm2 process names
+  ansible.builtin.command: pm2 jlist
+  become: true
+  become_user: "{{ admin_user }}"
+  register: apppm2_jlist
+  changed_when: false
+  failed_when: false
+  when: apppm2_apps | length > 0
+
+- name: Deploy each app
+  ansible.builtin.include_tasks: app.yml
+  loop: "{{ apppm2_apps }}"
+  loop_control:
+    loop_var: app
+    label: "{{ app.key }}"

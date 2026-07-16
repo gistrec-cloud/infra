@@ -11,6 +11,10 @@ ansible/apps.yml
 # Real nginx vhosts (verbatim server blocks with real domains; keep only *.example)
 ansible/files/vhosts/*.conf
 
+# Forced-command control scripts for CI deploy keys (real paths; keep only *.example)
+ansible/files/bin/*
+!ansible/files/bin/*.example
+
 # Vault / secret var files (keep only *.example)
 *.vault.yml
 .vault_pass

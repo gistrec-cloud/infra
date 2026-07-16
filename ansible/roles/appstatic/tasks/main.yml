@@ -1,0 +1,17 @@
+---
+# Builds static bundles declared in the apps registry (static: {build, root})
+# when the built root is missing — fresh host / DR / migration. Rebuilding a
+# live site is owned by the app's own flow (CI, manual), not by this role.
+- name: Build missing static bundles
+  ansible.builtin.shell:
+    cmd: "{{ item.value.static.build }}"
+    chdir: "/home/{{ admin_user }}/{{ item.value.dir }}"
+    creates: "/home/{{ admin_user }}/{{ item.value.dir }}/{{ item.value.static.root }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  loop: >-
+    {{ apps | default({}) | dict2items
+       | selectattr('value.host', 'equalto', inventory_hostname)
+       | selectattr('value.static', 'defined') | list }}
+  loop_control:
+    label: "{{ item.key }}"
