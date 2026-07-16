@@ -4,3 +4,8 @@
 2bb222e34a02089f0d3aad92f881f92fd387ede4:terraform/yandex/mysql.tf:hashicorp-tf-password:117
 # Same line in the pre-squash commit of the terraform/yandex-import branch
 767583fa76360a5ba96881a88e3d0639428a3ffc:terraform/yandex/mysql.tf:hashicorp-tf-password:117
+# Fake WireGuard example placeholders ("REPLACE_WITH_db-0N_PRIVATE_KEY") that
+# tripped the entropy check; later lowered to REPLACE_ME. Safe to drop once
+# the fleet/rename-and-netdata branch is deleted after merge.
+f9f0911bc5ce5aabf338fc3135a4617ddb3d69cb:ansible/group_vars/all.vault.yml.example:generic-api-key:24
+f9f0911bc5ce5aabf338fc3135a4617ddb3d69cb:ansible/group_vars/all.vault.yml.example:generic-api-key:25

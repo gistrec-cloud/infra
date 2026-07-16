@@ -21,8 +21,8 @@ vault_admin_ssh_keys:
 # ─── WireGuard mesh (wireguard role) ───
 # One PRIVATE key per mesh host, keyed by inventory name (dashes → underscores).
 # Generate: wg genkey | tee priv | wg pubkey  (public key → host_vars wireguard_pubkey).
-# vault_wg_privkey_db_01: "REPLACE_WITH_db-01_PRIVATE_KEY"
-# vault_wg_privkey_db_02: "REPLACE_WITH_db-02_PRIVATE_KEY"
+# vault_wg_privkey_db_01: "REPLACE_ME"
+# vault_wg_privkey_db_02: "REPLACE_ME"
 
 # ─── Self-hosted MySQL (mysql role) ───
 # Needed on hosts with mysql_managed: true. Avoid single quotes in any of these.
