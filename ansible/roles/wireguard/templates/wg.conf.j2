@@ -3,7 +3,7 @@
 Address = {{ wireguard_ip }}/{{ wireguard_subnet_cidr }}
 ListenPort = {{ wireguard_port }}
 PrivateKey = {{ wireguard_private_key }}
-{% for peer in groups['wireguard'] | difference([inventory_hostname]) %}
+{% for peer in groups['wireguard'] | difference([inventory_hostname]) | sort %}
 
 # {{ peer }}
 [Peer]

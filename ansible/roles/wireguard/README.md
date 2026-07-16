@@ -12,11 +12,12 @@ Full mesh: each host peers with every OTHER host in the `wireguard` inventory
 group. A peer's public endpoint is its inventory `ansible_host`; its tunnel IP
 and public key live in its (gitignored) host_vars.
 
-| host | wireguard_ip |
-|---|---|
-| russia-01 | 10.10.0.1 |
-| germany-01 | 10.10.0.2 |
-| russia-02 | 10.10.0.3 |
+| host       | wireguard_ip |
+|------------|--------------|
+| russia-01  | 10.10.0.1    |
+| russia-02  | 10.10.0.2    |
+| germany-01 | 10.10.0.3    |
+| finland-01 | 10.10.0.4    |
 
 ## One-time key generation (per host)
 

@@ -43,7 +43,7 @@ jobs:
         run: terraform fmt -check -recursive
       - name: Validate each module
         run: |
-          for d in dns aws yandex; do
+          for d in dns aws hetzner yandex; do
             echo "== $d =="
             terraform -chdir="$d" init -backend=false
             terraform -chdir="$d" validate

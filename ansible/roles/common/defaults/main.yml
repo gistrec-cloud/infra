@@ -2,3 +2,7 @@
 # Shared configuration (admin_user, ssh_*, timezone, vault_admin_ssh_keys)
 # lives in group_vars/all.yml so it can be reused across roles.
 # Tasks reference vault_admin_ssh_keys with a `| default([])` guard.
+
+# Fresh hosts get a usable automation account before root SSH is disabled.
+# Existing adopted hosts leave common_managed unset and are unaffected.
+admin_passwordless_sudo: true
