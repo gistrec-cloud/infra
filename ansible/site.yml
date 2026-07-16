@@ -43,6 +43,8 @@
   become: true
   vars_files:
     - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+    # Deployed-apps registry: nginx takes per-app vhost file lists from it.
+    - ["apps.yml", "apps.yml.example"]
   roles:
     - nginx
     # No-op until the host declares apps in host_vars — also skips the

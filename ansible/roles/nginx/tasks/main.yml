@@ -12,6 +12,62 @@
       - python3-certbot-nginx
     state: present
 
+- name: Install shared nginx snippets (honeypot, deny-dotfiles, security headers)
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/nginx/snippets/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [honeypot.conf, deny-dotfiles.conf, security-headers.conf]
+  notify: Reload nginx
+
+- name: Install the honeypot log_format (http scope, via conf.d)
+  ansible.builtin.copy:
+    src: honeypot-logformat.conf
+    dest: /etc/nginx/conf.d/honeypot-logformat.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+# Verbatim vhost files declared per app in the apps registry (vhosts: [...]),
+# stored in files/vhosts/<name>.conf (gitignored — real domains). No
+# templating: what you saved is what runs. NOTE: the files reference
+# /etc/letsencrypt/live/<cert>/ paths — on a fresh host issue the
+# certificates BEFORE enabling these vhosts, or nginx -t below fails.
+- name: Collect vhost files for this host from the apps registry
+  ansible.builtin.set_fact:
+    nginx_vhost_files: >-
+      {{ apps | default({}) | dict2items
+         | selectattr('value.host', 'equalto', inventory_hostname)
+         | selectattr('value.vhosts', 'defined')
+         | map(attribute='value.vhosts') | flatten }}
+
+# Deployed without the .conf suffix — matching the hand-made files already
+# on the hosts, so adopting an existing vhost overwrites it in place instead
+# of leaving a duplicate server block behind.
+- name: Deploy vhost files (verbatim)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/vhosts/{{ item }}.conf"
+    dest: "/etc/nginx/sites-available/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ nginx_vhost_files }}"
+  notify: Reload nginx
+
+- name: Enable vhost files
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item }}"
+    dest: "/etc/nginx/sites-enabled/{{ item }}"
+    state: link
+    # Adoption: hand-made vhosts live in sites-enabled as REGULAR files under
+    # the same names — replace them with the symlink.
+    force: true
+  loop: "{{ nginx_vhost_files }}"
+  notify: Reload nginx
+
 - name: Deploy vhost config
   ansible.builtin.template:
     src: vhost.conf.j2

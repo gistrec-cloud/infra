@@ -60,7 +60,9 @@ import sys, yaml
 apps = (yaml.safe_load(open(sys.argv[1])) or {}).get("apps") or {}
 for name, a in apps.items():
     d = a.get("dir", ".")
-    for e in a.get("env") or [".env"]:
+    # env defaults to [.env]; an EXPLICIT `env: []` means "no env files"
+    # (static sites and system endpoints).
+    for e in (a.get("env") if "env" in a else [".env"]):
         rel = e if d == "." else f"{d}/{e}"
         print(f"{name}\t{a['host']}\t{rel}")
 PY
