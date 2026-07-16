@@ -55,8 +55,12 @@ hostvar() {
 # so the divergence warning stays reserved for real drift.
 app_alias() { # <host> <app>
   case "$1/$2" in
-    russia-01/askads)  echo "askads-ru" ;;
-    germany-01/askads) echo "askads-cloud" ;;
+    russia-01/askads)    echo "askads-ru" ;;
+    germany-01/askads)   echo "askads-cloud" ;;
+    # Two Loquia deployments in one dir (.env.en / .env.sr) — match the pm2
+    # app names loquia-en / loquia-sr.
+    russia-01/Loquia-en) echo "loquia-en" ;;
+    russia-01/Loquia-sr) echo "loquia-sr" ;;
     *) echo "$2" ;;
   esac
 }
