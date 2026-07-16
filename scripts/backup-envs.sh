@@ -50,21 +50,6 @@ hostvar() {
   python3 -c 'import json,sys; print(json.load(sys.stdin)["_meta"]["hostvars"][sys.argv[1]].get(sys.argv[2],""))' \
     "$1" "$2" <<<"$INV"
 }
-
-# Same directory name, genuinely different apps per host — alias them apart
-# so the divergence warning stays reserved for real drift.
-app_alias() { # <host> <app>
-  case "$1/$2" in
-    russia-01/askads)    echo "askads-ru" ;;
-    germany-01/askads)   echo "askads-cloud" ;;
-    # Two Loquia deployments in one dir (.env.en / .env.sr) — match the pm2
-    # app names loquia-en / loquia-sr.
-    russia-01/Loquia-en) echo "loquia-en" ;;
-    russia-01/Loquia-sr) echo "loquia-sr" ;;
-    *) echo "$2" ;;
-  esac
-}
-
 # .env candidates: pm2 app working dirs plus a shallow sweep of $HOME
 # (single-quoted on purpose — $HOME and the pipeline expand on the remote host).
 # shellcheck disable=SC2016
@@ -73,7 +58,12 @@ FIND_CMD='
   find "$HOME" -maxdepth 3 \( -name ".env" -o -name ".env.*" -o -name "*.env" \) \
     -not -name "*.example" -not -name "*.bak" -not -name "*.save" \
     -not -name "*.backup-*" -not -path "*/node_modules/*" 2>/dev/null || true
-} | sort -u | while read -r f; do [ -f "$f" ] && echo "$f"; done'
+} | sort -u | while read -r f; do
+  [ -f "$f" ] || continue
+  d=${f%/*}; n=""
+  [ -f "$d/.backup-name" ] && n=$(head -1 "$d/.backup-name" | tr -cd "A-Za-z0-9_-")
+  echo "$f|$n"
+done'
 
 fail=0
 seen=""   # one line per app already backed up this run: "<app> <sha256> <host>"
@@ -86,21 +76,24 @@ for h in "${hosts[@]}"; do
   # cannot swallow the loop's own input (the file list).
   sshc=(ssh -n -o IdentitiesOnly=yes -o ConnectTimeout=15 -i "$key" "$user@$ip")
 
-  while IFS= read -r f; do
+  while IFS='|' read -r f mark; do
     # /home/u/DndCrime/backend/.env -> "DndCrime-backend"; Loquia/.env.en ->
     # "Loquia-en"; trade-lab/paper.env -> "trade-lab-paper"; a bare
     # /home/<user>/.env is named after the user (e.g. vk-ads-tool).
+    # A .backup-name file in the app dir overrides the directory-derived part:
+    # identity travels with the deployment when an app moves hosts (the askads
+    # dirs on different hosts are different apps — askads-ru / askads-cloud).
     rel="${f#/home/*/}"
     base="${rel##*/}"
     dir="${rel%"$base"}"; dir="${dir%/}"
     [ -z "$dir" ] && dir=$(basename "$(dirname "$f")")
+    dir="${dir//\//-}"
+    [ -n "$mark" ] && dir="$mark"
     case "$base" in
       .env)   app="$dir" ;;
       .env.*) app="$dir-${base#.env.}" ;;
       *)      app="$dir-${base%.env}" ;;
     esac
-    app="${app//\//-}"
-    app=$(app_alias "$h" "$app")
     title="dotenv $app"
 
     if $list_only; then
