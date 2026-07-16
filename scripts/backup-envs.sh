@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Back up every .env on the fleet into 1Password (one Document item per file),
-# so a dead host never takes app secrets with it. Idempotent: re-run after any
-# secret change — existing items are updated in place, keeping item history.
+# Back up every .env on the fleet into 1Password (one Document item per APP —
+# secrets belong to the app, not the host), so a dead host never takes app
+# secrets with it. Idempotent: re-run after any secret change — items are
+# updated in place, keeping item history. If the same app carries different
+# .env content on two hosts, the divergent copy is stored as
+# "dotenv <app> (<host>)" with a warning: unify it.
 #
 # Usage:
 #   scripts/backup-envs.sh            # every fleet host from the ansible inventory
@@ -27,10 +30,14 @@ for arg in "$@"; do
     *) hosts+=("$arg") ;;
   esac
 done
-# One inventory read for the whole run. The empty vault password keeps ansible
-# from invoking .vault_pass (= an `op read` network round-trip per call — a
-# single 1Password hiccup would kill the run; nothing in host vars is encrypted).
-INV=$(ANSIBLE_VAULT_PASSWORD_FILE=/dev/null ansible-inventory --list 2>/dev/null)
+# One inventory read for the whole run, with a dummy vault password so ansible
+# never invokes .vault_pass (= an `op read` network round-trip — a 1Password
+# hiccup would kill the run; nothing in host vars is encrypted). The dummy must
+# be non-empty: ansible rejects an empty vault password as invalid.
+vpf=$(mktemp)
+echo dotenv-backup-dummy > "$vpf"
+trap 'rm -f "$vpf"' EXIT
+INV=$(ANSIBLE_VAULT_PASSWORD_FILE="$vpf" ansible-inventory --list)
 
 if [ ${#hosts[@]} -eq 0 ]; then
   while IFS= read -r h; do
@@ -53,6 +60,7 @@ FIND_CMD='
 } | sort -u | while read -r f; do [ -f "$f" ] && echo "$f"; done'
 
 fail=0
+seen=""   # one line per app already backed up this run: "<app> <sha256> <host>"
 for h in "${hosts[@]}"; do
   ip=$(hostvar "$h" ansible_host)
   user=$(hostvar "$h" ansible_user)
@@ -63,16 +71,35 @@ for h in "${hosts[@]}"; do
   sshc=(ssh -n -o IdentitiesOnly=yes -o ConnectTimeout=15 -i "$key" "$user@$ip")
 
   while IFS= read -r f; do
-    # /home/u/DndCrime/backend/.env -> item "dotenv <host> DndCrime-backend"
+    # /home/u/DndCrime/backend/.env -> app "DndCrime-backend"; a bare
+    # /home/<user>/.env is named after the user (e.g. vk-ads-tool).
     rel="${f#/home/*/}"
-    rel="${rel%/.env}"
-    rel="${rel//\//-}"
-    [ "$rel" = ".env" ] && rel="home"   # .env sitting directly in $HOME
-    title="dotenv $h $rel"
+    if [ "$rel" = ".env" ]; then
+      app=$(basename "$(dirname "$f")")
+    else
+      app="${rel%/.env}"
+      app="${app//\//-}"
+    fi
+    title="dotenv $app"
 
     if $list_only; then
       echo "$h: $f -> \"$title\""
       continue
+    fi
+
+    want=$("${sshc[@]}" "sha256sum < '$f'" | cut -d' ' -f1)
+
+    # Same app seen on an earlier host this run?
+    prev=$(printf '%s' "$seen" | awk -v a="$app" '$1==a {print $2, $3; exit}')
+    if [ -n "$prev" ]; then
+      if [ "${prev% *}" = "$want" ]; then
+        echo "SKIP $title — $h copy identical to ${prev#* }"
+        continue
+      fi
+      title="dotenv $app ($h)"
+      echo "WARN $app: .env on $h differs from ${prev#* } — saved as \"$title\"; unify the app's env" >&2
+    else
+      seen="${seen}${app} ${want} ${h}"$'\n'
     fi
 
     if op item get "$title" --vault "$VAULT" >/dev/null 2>&1; then
@@ -80,11 +107,10 @@ for h in "${hosts[@]}"; do
       action="updated"
     else
       "${sshc[@]}" "cat '$f'" | op document create - --vault "$VAULT" \
-        --title "$title" --file-name "$rel.env" --tags "$TAG" >/dev/null
+        --title "$title" --file-name "$app.env" --tags "$TAG" >/dev/null
       action="created"
     fi
 
-    want=$("${sshc[@]}" "sha256sum < '$f'" | cut -d' ' -f1)
     got=$(op document get "$title" --vault "$VAULT" | shasum -a 256 | cut -d' ' -f1)
     if [ "$want" = "$got" ]; then
       echo "OK   $title ($action, sha256 verified)"
