@@ -1,0 +1,23 @@
+---
+# Copy to apps.yml (gitignored) and describe your real deployments.
+# The registry is the single place that answers "what runs where" — it must
+# survive any single host, which is why it lives here and not on the hosts.
+# Consumed by scripts/backup-envs.sh (env backups + drift audit).
+#
+# <name>:                  # canonical app name; 1P items: "dotenv <name>[-<suffix>]"
+#   host: <inventory hostname>
+#   dir:  <path under the login user's home; "." = home itself>
+#   env:  [env files in dir]          # default: [.env]
+#   repo: <github repo — documentation>
+#   notes: <free text>
+
+apps:
+  my-api:
+    host: web-01
+    dir: my-api
+    repo: you/my-api
+  my-bot:
+    host: web-01
+    dir: bots/my-bot
+    env: [.env.prod, .env.staging]    # items: dotenv my-bot-prod / -staging
+    notes: also needs redis on the same host
