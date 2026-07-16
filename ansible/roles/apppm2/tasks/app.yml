@@ -8,8 +8,18 @@
 
 # ── code ──
 # repo_dir: clone destination when the repo root is ABOVE the app cwd
-# (recepter: repo at ~/backend, cwd backend/back). No version pin on purpose:
-# we clone the default branch tip once; updates are owned by CI / manual flows.
+# (recepter: repo at ~/backend, cwd backend/back).
+- name: Check the code directory — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_home }}/{{ apppm2_app.value.process.repo_dir | default(apppm2_app.value.dir) }}"
+  register: apppm2_code
+  when: apppm2_app.value.process.type == 'clone'
+
+# Clone ONLY into a missing directory: several live deployments are rsync
+# copies without .git (aleksandravoo, budget-explorer) — the git module would
+# fail on them, and they already carry the running code. Adopt, don't touch.
+# No version pin on purpose: we clone the default branch tip once; updates
+# are owned by CI / manual flows.
 - name: Clone the repository, only if absent — {{ apppm2_app.key }} # noqa: latest
   ansible.builtin.git:
     repo: "git@github.com:{{ apppm2_app.value.repo }}.git"
@@ -21,6 +31,7 @@
   when:
     - apppm2_app.value.process.type == 'clone'
     - apppm2_app.value.repo is defined
+    - not (apppm2_code.stat.exists | default(true))
 
 - name: Application directory for CI artifacts — {{ apppm2_app.key }}
   ansible.builtin.file:
@@ -64,6 +75,8 @@
 
 # ── env files from the 1Password dotenv backups ──
 # .env -> "dotenv <app>"; .env.en -> "dotenv <app>-en"; prod.env -> "dotenv <app>-prod"
+# The pipe lookup strips trailing newlines — put exactly one back, or every
+# host file (ending with \n, as text files do) reports a permanent diff.
 - name: Env files from 1Password — {{ apppm2_app.key }}
   ansible.builtin.copy:
     content: >-
@@ -72,7 +85,7 @@
                 ('dotenv ' ~ apppm2_app.key ~
                  ('' if item == '.env' else '-' ~
                   (item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
-                | quote ~ ' --vault "Gistrec Cloud"') }}
+                | quote ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
     dest: "{{ apppm2_dir }}/{{ item }}"
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
@@ -125,7 +138,7 @@
   become_user: "{{ admin_user }}"
   changed_when: true
   vars:
-    apppm2_running: "{{ (apppm2_jlist.stdout | default('[]')) | from_json | map(attribute='name') | list }}"
+    apppm2_running: "{{ (apppm2_jlist.stdout | default('[]', true)) | from_json | map(attribute='name') | list }}"
     apppm2_missing: "{{ apppm2_app.value.process.pm2 | default([]) | difference(apppm2_running) }}"
   when:
     - apppm2_app.value.process.pm2 | default([]) | length > 0

@@ -18,6 +18,8 @@
   register: apppm2_jlist
   changed_when: false
   failed_when: false
+  # Read-only — run it in check mode too, so previews see the real state.
+  check_mode: false
   when: apppm2_apps | length > 0
 
 - name: Deploy each app
