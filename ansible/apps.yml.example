@@ -22,7 +22,7 @@ apps:
       - name: nightly cleanup
         minute: "0"
         hour: "3"
-        job: curl -fsS -H 'Authorization: Bearer {{ vault_my_api_cron_token }}' https://my-api.example.com/api/cron/cleanup >/dev/null 2>&1
+        job: "curl -fsS -H 'Authorization: Bearer {{ vault_my_api_cron_token }}' https://my-api.example.com/api/cron/cleanup >/dev/null 2>&1"
   my-bot:
     host: web-01
     dir: bots/my-bot
