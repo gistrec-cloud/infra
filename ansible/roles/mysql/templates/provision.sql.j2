@@ -1,0 +1,14 @@
+-- {{ ansible_managed }}
+-- Piped into the container over stdin; never written to disk. All statements are
+-- idempotent. CREATE USER IF NOT EXISTS deliberately does NOT rotate an existing
+-- user's password (mirrors terraform ignore_changes[password] on the managed
+-- cluster) — rotate with ALTER USER by hand. Passwords must not contain a single
+-- quote (they are single-quoted below).
+{% for db in mysql_databases %}
+CREATE DATABASE IF NOT EXISTS `{{ db }}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+{% endfor %}
+{% for user in mysql_users %}
+CREATE USER IF NOT EXISTS '{{ user.name }}'@'%' IDENTIFIED BY '{{ user.password }}';
+GRANT {{ user.privileges | default('ALL') }} ON `{{ user.database }}`.* TO '{{ user.name }}'@'%';
+{% endfor %}
+FLUSH PRIVILEGES;

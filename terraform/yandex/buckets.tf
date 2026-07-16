@@ -8,7 +8,6 @@ locals {
     "aleksandravoo"        = { max_size = 53687091200, anonymous_read = true, tags = { project = "aleksandravoo" } }
     "clear-transcript-bot" = { max_size = 0, anonymous_read = false, tags = { project = "clear-transcript-bot" } }
     "dnd-crime"            = { max_size = 53687091200, anonymous_read = true, tags = {} }
-    "linkgrow"             = { max_size = 0, anonymous_read = true, tags = { project = "linkgrow" } }
     "recepter"             = { max_size = 0, anonymous_read = true, tags = { project = "recepter" } }
   }
 }

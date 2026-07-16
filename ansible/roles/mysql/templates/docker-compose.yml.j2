@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+services:
+  mysql:
+    image: {{ mysql_image }}
+    container_name: {{ mysql_container_name }}
+    restart: unless-stopped
+    # env_file keeps MYSQL_ROOT_PASSWORD out of this (world-readable) compose file.
+    env_file:
+      - mysql.env
+    ports:
+      # Gated by firewall_docker_allow_tcp (fleet source IPs) — see the assert in
+      # tasks/main.yml. $$ is compose-escaped so nothing interpolates here.
+      - "{{ mysql_publish_address }}:{{ mysql_port }}:3306"
+    volumes:
+      - {{ mysql_data_dir }}:/var/lib/mysql
+      - {{ mysql_conf_dir }}:/etc/mysql/conf.d:ro
+    healthcheck:
+      # MYSQL_PWD (not -p) keeps the password off the container process list.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h127.0.0.1 -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

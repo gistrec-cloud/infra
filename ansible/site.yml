@@ -20,6 +20,12 @@
     # - common
     - role: firewall
       when: firewall_managed | default(false)
+    # WireGuard mesh: opt-in per host by defining wireguard_ip in host_vars (and
+    # adding the host to the `wireguard` group). Runs after firewall so the UDP
+    # port is open before the tunnel comes up. germany-02 (not ours) has no
+    # wireguard_ip and is skipped.
+    - role: wireguard
+      when: wireguard_ip is defined
     - netdata
 
 - name: Web servers — nginx reverse proxy + Node/pm2 apps
@@ -33,3 +39,16 @@
     # NodeSource Node install on hosts that manage their own node/pm2.
     - role: nodeapp
       when: nodeapp_node_apps | default([]) | length > 0
+
+- name: Database servers — self-hosted MySQL (Docker), primary/replica
+  hosts: db
+  become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+  roles:
+    # Opt-in per host: set mysql_managed: true in host_vars. The role asserts a
+    # managed firewall before publishing 3306 (Docker DNAT bypasses the input
+    # chain). Replication (primary → replica) rides the WireGuard tunnel, so the
+    # baseline play above must have brought wg0 up first.
+    - role: mysql
+      when: mysql_managed | default(false)

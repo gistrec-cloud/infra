@@ -44,7 +44,9 @@ infra/
 │       ├── firewall/             # nftables + fail2ban
 │       ├── nginx/                # reverse proxy + Let's Encrypt
 │       ├── nodeapp/              # Node.js + pm2 deploy
-│       └── netdata/              # monitoring agent
+│       ├── netdata/              # monitoring agent
+│       ├── wireguard/            # private encrypted mesh between fleet hosts
+│       └── mysql/                # self-hosted MySQL (Docker), primary/replica
 └── terraform/                    # cloud resources as code (one root module per provider)
     ├── dns/                      # Cloudflare DNS records
     ├── aws/                      # Lambda functions + Function URLs
@@ -60,6 +62,8 @@ infra/
 | `nginx`    | Install nginx, deploy vhosts, obtain TLS certs via certbot              |
 | `nodeapp`  | Node.js (NodeSource) + pm2, deploy apps, persist across reboot          |
 | `netdata`  | Install netdata, bind to localhost, Telegram alert when a pm2 app dies  |
+| `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
+| `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
 
 ## Quickstart
 

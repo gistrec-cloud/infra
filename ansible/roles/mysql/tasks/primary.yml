@@ -1,0 +1,16 @@
+---
+# Replication account for replicas to connect with. Created idempotently; it
+# replicates to replicas as an ordinary mysql.user change. The transport is the
+# WireGuard tunnel (already encrypted) and the firewall restricts 3306 to the
+# replica's tunnel IP, so no REQUIRE SSL. IF NOT EXISTS never rotates the
+# password — change it by hand with ALTER USER (see README).
+- name: Create the replication user
+  ansible.builtin.command:
+    cmd: docker exec -i {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot'
+    stdin: |
+      CREATE USER IF NOT EXISTS '{{ mysql_replication_user }}'@'%' IDENTIFIED BY '{{ mysql_replication_password }}';
+      GRANT REPLICATION SLAVE ON *.* TO '{{ mysql_replication_user }}'@'%';
+      FLUSH PRIVILEGES;
+  no_log: true
+  changed_when: false
+  when: mysql_replication_password | length > 0

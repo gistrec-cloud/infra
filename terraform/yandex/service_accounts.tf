@@ -12,7 +12,6 @@ locals {
     "clear-transcript-bot" = { description = "Storage + SpeechKit", labels = null }
     "dnd-crime"            = { description = null, labels = null }
     "wordstat"             = { description = null, labels = null }
-    "linkgrow"             = { description = null, labels = { project = "linkgrow" } }
     "recepter"             = { description = null, labels = null }
   }
 }

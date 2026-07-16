@@ -31,8 +31,16 @@ resource "yandex_compute_instance" "this" {
   hostname                  = each.value.hostname
   platform_id               = "standard-v3"
   zone                      = var.zone
-  service_account_id        = yandex_iam_service_account.this["gistrec"].id
   network_acceleration_type = "standard"
+
+  # No service account is attached, deliberately. With one attached, the metadata
+  # IAM-token endpoint (169.254.169.254/.../service-accounts/default/token) mints a
+  # token for that SA to ANY process on the VM — for the SA that used to be here
+  # that was an admin-on-the-folder token. Nothing on these boxes needs cloud API
+  # access: app secrets live in .env and monitoring is netdata, not Yandex
+  # Monitoring. Re-attaching an SA later also means flipping gce_http_token back on
+  # below. Attaching/detaching an SA forces an instance stop, hence:
+  allow_stopping_for_update = true
 
   resources {
     cores         = 2
@@ -65,8 +73,8 @@ resource "yandex_compute_instance" "this" {
     aws_v1_http_token    = 2
     aws_v2_http_endpoint = 2
     aws_v2_http_token    = 2
-    gce_http_endpoint    = 1
-    gce_http_token       = 1
+    gce_http_endpoint    = 1 # metadata endpoint (ssh-keys, user-data) — required
+    gce_http_token       = 2 # IAM-token issuance OFF (no SA attached to mint for)
   }
 
   scheduling_policy {

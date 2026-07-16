@@ -1,0 +1,31 @@
+# {{ ansible_managed }}
+[mysqld]
+innodb_buffer_pool_size = {{ mysql_innodb_buffer_pool_size }}
+max_connections         = {{ mysql_max_connections }}
+
+# Match the managed cluster (terraform/yandex/mysql.tf) so behaviour is identical
+# — same strict sql_mode, same utf8mb4 defaults.
+sql_mode = ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+character-set-server = utf8mb4
+collation-server     = utf8mb4_unicode_ci
+{% if mysql_role in ['primary', 'replica'] %}
+
+# ─── Replication (GTID) ───
+server_id                  = {{ mysql_server_id }}
+gtid_mode                  = ON
+enforce_gtid_consistency   = ON
+log_bin                    = mysql-bin
+binlog_format              = ROW
+# log_replica_updates lets a promoted replica act as a source for others and
+# keeps its own binlog consistent — required for clean failover/failback.
+log_replica_updates        = ON
+binlog_expire_logs_seconds = {{ mysql_binlog_expire_seconds }}
+{% endif %}
+{% if mysql_role == 'replica' %}
+relay_log                  = relay-bin
+# Standby: block ALL writes (including from privileged users) so nothing diverges
+# from the source. The replication applier thread is exempt. Promotion flips this
+# off — see the role README.
+read_only                  = ON
+super_read_only            = ON
+{% endif %}

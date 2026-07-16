@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Interface]
+Address = {{ wireguard_ip }}/{{ wireguard_subnet_cidr }}
+ListenPort = {{ wireguard_port }}
+PrivateKey = {{ wireguard_private_key }}
+{% for peer in groups['wireguard'] | difference([inventory_hostname]) %}
+
+# {{ peer }}
+[Peer]
+PublicKey = {{ hostvars[peer].wireguard_pubkey }}
+Endpoint = {{ hostvars[peer].ansible_host }}:{{ hostvars[peer].wireguard_port | default(wireguard_port) }}
+AllowedIPs = {{ hostvars[peer].wireguard_ip }}/32
+PersistentKeepalive = {{ wireguard_keepalive }}
+{% endfor %}

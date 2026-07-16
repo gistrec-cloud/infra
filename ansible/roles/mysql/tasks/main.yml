@@ -1,0 +1,177 @@
+---
+# Docker DNATs published ports before the nftables *forward* chain, so a
+# 0.0.0.0 publish sails past the default-drop input chain — only
+# firewall_docker_allow_tcp gates it. Refuse that combination without a managed
+# firewall rather than silently exposing 3306 to the internet. Mirrors the
+# common role's "Refuse to lock ourselves out" guard.
+- name: Refuse to expose MySQL without a managed firewall
+  ansible.builtin.assert:
+    that:
+      - (firewall_managed | default(false)) or (mysql_publish_address != '0.0.0.0')
+    fail_msg: >-
+      Publishing MySQL on 0.0.0.0 without firewall_managed exposes port
+      {{ mysql_port }} to the internet (Docker DNAT bypasses the input chain).
+      Set firewall_managed: true with a firewall_docker_allow_tcp entry for
+      {{ mysql_port }}, or bind mysql_publish_address to a private IP / 127.0.0.1.
+    quiet: true
+
+# ─── Docker Engine (official apt repo, same keyring pattern as nodeapp) ───
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Add Docker's official GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Add Docker apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+    filename: docker
+    state: present
+
+# present, not latest: engine upgrades stay deliberate (apt on the host).
+- name: Install Docker Engine and the compose plugin
+  ansible.builtin.apt:
+    name: "{{ mysql_docker_packages }}"
+    state: present
+    update_cache: true
+
+- name: Enable and start Docker
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+
+# ─── Layout ───
+- name: Create MySQL directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ mysql_base_dir }}"
+    - "{{ mysql_data_dir }}"
+    - "{{ mysql_conf_dir }}"
+
+# Mirrors the managed cluster's strict sql_mode + utf8mb4 so a test DB behaves
+# like prod. Bind-mounted read-only; a change requires a container restart to
+# reload, hence the handler force-recreates.
+- name: Render MySQL server config
+  ansible.builtin.template:
+    src: server.cnf.j2
+    dest: "{{ mysql_conf_dir }}/server.cnf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recreate mysql container
+
+# ─── Container ───
+# The root password reaches the container via a 0600 env file, never the command
+# line / process list. MYSQL_ROOT_PASSWORD only applies on the FIRST init (empty
+# data dir); rotating it afterwards is a manual ALTER USER — see README.
+- name: Render the compose env file (root password)
+  ansible.builtin.template:
+    src: mysql.env.j2
+    dest: "{{ mysql_base_dir }}/mysql.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Recreate mysql container
+
+- name: Render the docker compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ mysql_base_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recreate mysql container
+
+# --wait blocks until the compose healthcheck reports healthy, so the provision
+# step below never races the first-boot init (which can take 30-40s).
+- name: Start the MySQL container
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans --wait --wait-timeout 180
+    chdir: "{{ mysql_base_dir }}"
+  register: mysql_compose_up
+  changed_when: >-
+    'Started' in mysql_compose_up.stderr or
+    'Created' in mysql_compose_up.stderr or
+    'Recreated' in mysql_compose_up.stderr
+
+# Flush the handler now: if config changed the container must be recreated and
+# healthy BEFORE we apply databases/users below.
+- name: Apply pending container recreation
+  ansible.builtin.meta: flush_handlers
+
+# Databases and users, idempotently. The SQL (with app passwords) is piped via
+# stdin and never written to disk; MYSQL_PWD is expanded inside the container so
+# the root password stays off the host process list. changed_when: false — the
+# script is all IF NOT EXISTS / idempotent GRANTs. Skipped on a replica: it is
+# super_read_only and receives its schema/users via replication.
+- name: Apply databases and users
+  ansible.builtin.command:
+    cmd: docker exec -i {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot'
+    stdin: "{{ lookup('template', 'provision.sql.j2') }}"
+  no_log: true
+  changed_when: false
+  when:
+    - mysql_role != 'replica'
+    - mysql_databases | length > 0 or mysql_users | length > 0
+
+# Replication wiring: primary creates the replication account; replica points at
+# the source (over WireGuard) and starts pulling. See tasks/{primary,replica}.yml.
+- name: Configure the replication role
+  ansible.builtin.include_tasks: "{{ mysql_role }}.yml"
+  when: mysql_role in ['primary', 'replica']
+
+# ─── Backups (systemd timer) ───
+- name: Create the backup directory
+  ansible.builtin.file:
+    path: "{{ mysql_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: mysql_backup_enabled
+
+- name: Install the backup script
+  ansible.builtin.template:
+    src: backup.sh.j2
+    dest: /usr/local/bin/mysql-backup.sh
+    owner: root
+    group: root
+    mode: "0750"
+  when: mysql_backup_enabled
+
+- name: Install the backup systemd unit and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - mysql-backup.service
+    - mysql-backup.timer
+  when: mysql_backup_enabled
+  notify: Reload systemd
+
+- name: Enable and start the backup timer
+  ansible.builtin.systemd:
+    name: mysql-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: mysql_backup_enabled
