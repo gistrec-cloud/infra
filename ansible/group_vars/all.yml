@@ -5,7 +5,12 @@
 timezone: Etc/UTC
 
 # --- common role ---
-admin_user: deploy
+# Admin/app user = the actual SSH login user per host (gistrec / vk-ads-tool),
+# retiring the separate "deploy" service account (Phase 2). nodeapp_node_apps is
+# empty so the nodeapp role is skipped; the real apps run under the login user
+# (managed outside this repo). The leftover deploy user still lingers on the hosts
+# until removed there — see the userdel/pm2-deploy cleanup step.
+admin_user: "{{ ansible_user }}"
 ssh_port: 22
 ssh_permit_root_login: "no"
 ssh_password_authentication: "no"
