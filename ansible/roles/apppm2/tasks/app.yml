@@ -8,8 +8,9 @@
 
 # ── code ──
 # repo_dir: clone destination when the repo root is ABOVE the app cwd
-# (recepter: repo at ~/backend, cwd backend/back).
-- name: Clone the repository, only if absent — {{ apppm2_app.key }}
+# (recepter: repo at ~/backend, cwd backend/back). No version pin on purpose:
+# we clone the default branch tip once; updates are owned by CI / manual flows.
+- name: Clone the repository, only if absent — {{ apppm2_app.key }} # noqa: latest
   ansible.builtin.git:
     repo: "git@github.com:{{ apppm2_app.value.repo }}.git"
     dest: "{{ apppm2_home }}/{{ apppm2_app.value.process.repo_dir | default(apppm2_app.value.dir) }}"
