@@ -62,6 +62,9 @@
     src: "/etc/nginx/sites-available/{{ item }}"
     dest: "/etc/nginx/sites-enabled/{{ item }}"
     state: link
+    # Adoption: hand-made vhosts live in sites-enabled as REGULAR files under
+    # the same names — replace them with the symlink.
+    force: true
   loop: "{{ nginx_vhost_files }}"
   notify: Reload nginx
 
