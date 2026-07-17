@@ -13,6 +13,7 @@ locals {
     "dnd-crime"            = { description = null, labels = null }
     "wordstat"             = { description = null, labels = null }
     "recepter"             = { description = null, labels = null }
+    "realm-status"         = { description = "realm-status fn: Lockbox read + self-invoke", labels = { project = "realm-status" } }
   }
 }
 
