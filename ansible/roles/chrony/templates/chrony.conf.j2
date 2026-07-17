@@ -1,0 +1,12 @@
+# Managed by ansible (roles/chrony). Local edits will be overwritten.
+{% for source in chrony_sources %}
+{{ source }}
+{% endfor %}
+
+driftfile /var/lib/chrony/chrony.drift
+logdir /var/log/chrony
+maxupdateskew 100.0
+# Keep the RTC disciplined so post-reboot offsets start small.
+rtcsync
+makestep {{ chrony_makestep }}
+leapsectz right/UTC
