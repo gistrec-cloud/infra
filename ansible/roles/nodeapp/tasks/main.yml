@@ -29,6 +29,16 @@
     global: true
     state: present
 
+# Boot resurrection: the same pm2-<user>.service every adopted host runs.
+# `pm2 startup` is idempotent only by the unit file it writes, hence the
+# creates guard; `pm2 save` is owned by the app roles (they save after
+# starting processes).
+- name: Enable pm2 resurrection at boot for the admin user
+  ansible.builtin.command:
+    cmd: >-
+      pm2 startup systemd -u {{ admin_user }} --hp /home/{{ admin_user }}
+    creates: "/etc/systemd/system/pm2-{{ admin_user }}.service"
+
 - name: Create application directories
   ansible.builtin.file:
     path: "{{ item.cwd }}"
