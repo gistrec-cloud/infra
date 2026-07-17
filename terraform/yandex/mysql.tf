@@ -57,6 +57,8 @@ resource "yandex_mdb_mysql_cluster" "projects" {
 # ─── Databases ───
 locals {
   mysql_databases = toset([
+    "aleksandravoo",
+    "aleksandravoo-staging",
     "askads",
     "budget-explorer",
     "clear-transcript-bot",
@@ -70,6 +72,7 @@ locals {
     "loquia",
     "realmctl",
     "recepter",
+    "trade-lab",
     "vk-ads-tool",
     "vk-ads-tool-test",
     "wordpress",
@@ -89,6 +92,8 @@ resource "yandex_mdb_mysql_database" "this" {
 # would rotate every production user's password to the placeholder.
 locals {
   mysql_users = {
+    "aleksandravoo"             = { global_permissions = [], permissions = [{ database_name = "aleksandravoo", roles = ["ALL"] }] }
+    "aleksandravoo-staging"     = { global_permissions = [], permissions = [{ database_name = "aleksandravoo-staging", roles = ["ALL"] }] }
     "askads"                    = { global_permissions = [], permissions = [{ database_name = "askads", roles = ["ALL"] }] }
     "budget-explorer"           = { global_permissions = [], permissions = [{ database_name = "budget-explorer", roles = ["ALL"] }] }
     "clear-transcript-bot"      = { global_permissions = [], permissions = [{ database_name = "clear-transcript-bot", roles = ["ALL"] }] }
@@ -105,6 +110,7 @@ locals {
     "realmctl"                  = { global_permissions = [], permissions = [{ database_name = "realmctl", roles = ["ALL"] }] }
     "recepter"                  = { global_permissions = [], permissions = [{ database_name = "recepter", roles = ["ALL"] }] }
     "stats"                     = { global_permissions = ["PROCESS", "REPLICATION_CLIENT", "SHOW_ROUTINE"], permissions = [] }
+    "trade-lab"                 = { global_permissions = [], permissions = [{ database_name = "trade-lab", roles = ["ALL"] }] }
     "vk-ads-tool"               = { global_permissions = [], permissions = [{ database_name = "vk-ads-tool", roles = ["ALL"] }] }
     "vk-ads-tool-test"          = { global_permissions = [], permissions = [{ database_name = "vk-ads-tool-test", roles = ["ALL"] }] }
     "wordpress"                 = { global_permissions = [], permissions = [{ database_name = "wordpress", roles = ["ALL"] }] }
