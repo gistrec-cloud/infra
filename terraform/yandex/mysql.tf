@@ -72,6 +72,7 @@ locals {
     "loquia",
     "realmctl",
     "recepter",
+    "trade-lab",
     "vk-ads-tool",
     "vk-ads-tool-test",
     "wordpress",
@@ -109,6 +110,7 @@ locals {
     "realmctl"                  = { global_permissions = [], permissions = [{ database_name = "realmctl", roles = ["ALL"] }] }
     "recepter"                  = { global_permissions = [], permissions = [{ database_name = "recepter", roles = ["ALL"] }] }
     "stats"                     = { global_permissions = ["PROCESS", "REPLICATION_CLIENT", "SHOW_ROUTINE"], permissions = [] }
+    "trade-lab"                 = { global_permissions = [], permissions = [{ database_name = "trade-lab", roles = ["ALL"] }] }
     "vk-ads-tool"               = { global_permissions = [], permissions = [{ database_name = "vk-ads-tool", roles = ["ALL"] }] }
     "vk-ads-tool-test"          = { global_permissions = [], permissions = [{ database_name = "vk-ads-tool-test", roles = ["ALL"] }] }
     "wordpress"                 = { global_permissions = [], permissions = [{ database_name = "wordpress", roles = ["ALL"] }] }
