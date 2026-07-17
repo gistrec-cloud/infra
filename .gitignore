@@ -63,3 +63,6 @@ override.tf.json
 *.retry
 *.log
 .DS_Store
+
+# scratch file backup-repo-files.sh drops at the repo root while archiving
+.backup-manifest.sha256
