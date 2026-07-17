@@ -13,3 +13,17 @@ monitoring_viewer_user_ids = []
 # Local path to the realm-status function source (zip is built from it).
 # Empty string = don't manage the function.
 realm_status_source_dir = ""
+
+# MySQL inventory. Names are usernames on a publicly reachable cluster —
+# they stay out of git. One entry per app; "-ro" users get SELECT only.
+mysql_databases = [
+  "my-app",
+  "my-app-staging",
+]
+
+mysql_users = {
+  "my-app"    = { permissions = [{ database_name = "my-app", roles = ["ALL"] }] }
+  "my-app-ro" = { permissions = [{ database_name = "my-app", roles = ["SELECT"] }] }
+  # Monitoring-style user with global grants and no per-database rows:
+  "stats" = { global_permissions = ["PROCESS", "REPLICATION_CLIENT", "SHOW_ROUTINE"] }
+}
