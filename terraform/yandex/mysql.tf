@@ -57,6 +57,8 @@ resource "yandex_mdb_mysql_cluster" "projects" {
 # ─── Databases ───
 locals {
   mysql_databases = toset([
+    "aleksandravoo",
+    "aleksandravoo-staging",
     "askads",
     "budget-explorer",
     "clear-transcript-bot",
@@ -89,6 +91,8 @@ resource "yandex_mdb_mysql_database" "this" {
 # would rotate every production user's password to the placeholder.
 locals {
   mysql_users = {
+    "aleksandravoo"             = { global_permissions = [], permissions = [{ database_name = "aleksandravoo", roles = ["ALL"] }] }
+    "aleksandravoo-staging"     = { global_permissions = [], permissions = [{ database_name = "aleksandravoo-staging", roles = ["ALL"] }] }
     "askads"                    = { global_permissions = [], permissions = [{ database_name = "askads", roles = ["ALL"] }] }
     "budget-explorer"           = { global_permissions = [], permissions = [{ database_name = "budget-explorer", roles = ["ALL"] }] }
     "clear-transcript-bot"      = { global_permissions = [], permissions = [{ database_name = "clear-transcript-bot", roles = ["ALL"] }] }
