@@ -18,3 +18,14 @@ resource "yandex_lockbox_secret" "this" {
   deletion_protection = each.value.deletion_protection
   labels              = each.value.labels
 }
+
+# The realm-status function's SA reads every secret in this file (all of them are
+# its own realmctl-* secrets). Grant payloadViewer per-secret rather than granting
+# lockbox.payloadViewer folder-wide, so the SA can decrypt only these payloads.
+resource "yandex_lockbox_secret_iam_member" "realm_status" {
+  for_each = yandex_lockbox_secret.this
+
+  secret_id = each.value.id
+  role      = "lockbox.payloadViewer"
+  member    = "serviceAccount:${yandex_iam_service_account.this["realm-status"].id}"
+}

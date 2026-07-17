@@ -30,7 +30,11 @@ resource "yandex_function" "realm_status" {
   entrypoint         = "main.handler"
   memory             = 128
   execution_timeout  = "30"
-  service_account_id = yandex_iam_service_account.this["gistrec"].id
+  service_account_id = yandex_iam_service_account.this["realm-status"].id
+
+  # The runtime SA must already be able to read the referenced Lockbox secrets when
+  # this version is published, so the payloadViewer grants have to land first.
+  depends_on = [yandex_lockbox_secret_iam_member.realm_status]
 
   user_hash = data.archive_file.realm_status.output_base64sha256
   content {
@@ -64,6 +68,14 @@ resource "yandex_function" "realm_status" {
     key                  = "stardew-api-token"
     environment_variable = "STARDEW_API_TOKEN"
   }
+}
+
+# The timer trigger invokes this function as the realm-status SA. Authoritative
+# binding: that SA is the only member allowed to invoke — nothing else should.
+resource "yandex_function_iam_binding" "realm_status_invoker" {
+  function_id = yandex_function.realm_status.id
+  role        = "functions.functionInvoker"
+  members     = ["serviceAccount:${yandex_iam_service_account.this["realm-status"].id}"]
 }
 
 # ─── upload-photo-to-recepter-s3 — still DEFERRED ───

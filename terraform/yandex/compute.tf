@@ -38,9 +38,9 @@ resource "yandex_compute_instance" "this" {
   # token for that SA to ANY process on the VM — for the SA that used to be here
   # that was an admin-on-the-folder token. Nothing on these boxes needs cloud API
   # access: app secrets live in .env and monitoring is netdata, not Yandex
-  # Monitoring. Re-attaching an SA later also means flipping gce_http_token back on
-  # below. Attaching/detaching an SA forces an instance stop, hence:
-  allow_stopping_for_update = true
+  # Monitoring. Re-attaching an SA later means flipping gce_http_token back on below
+  # AND adding allow_stopping_for_update = true: an SA attach/detach forces an
+  # instance stop, which Terraform refuses to do without that flag.
 
   resources {
     cores         = 2

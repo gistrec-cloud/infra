@@ -13,8 +13,6 @@ locals {
     "ai.speechkit-stt.user|clear-transcript-bot" = { role = "ai.speechkit-stt.user", sa = "clear-transcript-bot" }
     "storage.admin|recepter-s3"                  = { role = "storage.admin", sa = "recepter-s3" }
     "storage.editor|aleksandravoo"               = { role = "storage.editor", sa = "aleksandravoo" }
-    "admin|gistrec"                              = { role = "admin", sa = "gistrec" }
-    "monitoring.editor|gistrec"                  = { role = "monitoring.editor", sa = "gistrec" }
     "monitoring.admin|recepter-monitoring"       = { role = "monitoring.admin", sa = "recepter-monitoring" }
     "monitoring.admin|recepter"                  = { role = "monitoring.admin", sa = "recepter" }
     "admin|recepter"                             = { role = "admin", sa = "recepter" }
