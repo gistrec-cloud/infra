@@ -55,32 +55,12 @@ resource "yandex_mdb_mysql_cluster" "projects" {
 }
 
 # ─── Databases ───
-locals {
-  mysql_databases = toset([
-    "aleksandravoo",
-    "aleksandravoo-staging",
-    "askads",
-    "budget-explorer",
-    "clear-transcript-bot",
-    "clear-transcript-bot-test",
-    "dnd-crime",
-    "dnd-crime-staging",
-    "eve-contracts",
-    "food-scraper",
-    "libre",
-    "linkreach",
-    "loquia",
-    "realmctl",
-    "recepter",
-    "trade-lab",
-    "vk-ads-tool",
-    "vk-ads-tool-test",
-    "wordpress",
-  ])
-}
-
+# Real names live in the gitignored terraform.tfvars: database names double
+# as MySQL usernames, and a username is half of a login pair to a cluster
+# that listens on a public IP — same "code is public, live data is
+# gitignored" rule as the ansible inventory and vhosts.
 resource "yandex_mdb_mysql_database" "this" {
-  for_each = local.mysql_databases
+  for_each = var.mysql_databases
 
   cluster_id = yandex_mdb_mysql_cluster.projects.id
   name       = each.value
@@ -90,35 +70,8 @@ resource "yandex_mdb_mysql_database" "this" {
 # password is a required field but cannot be read back from MySQL, so every user
 # carries a placeholder and `ignore_changes = [password]` — without this an apply
 # would rotate every production user's password to the placeholder.
-locals {
-  mysql_users = {
-    "aleksandravoo"             = { global_permissions = [], permissions = [{ database_name = "aleksandravoo", roles = ["ALL"] }] }
-    "aleksandravoo-staging"     = { global_permissions = [], permissions = [{ database_name = "aleksandravoo-staging", roles = ["ALL"] }] }
-    "askads"                    = { global_permissions = [], permissions = [{ database_name = "askads", roles = ["ALL"] }] }
-    "budget-explorer"           = { global_permissions = [], permissions = [{ database_name = "budget-explorer", roles = ["ALL"] }] }
-    "clear-transcript-bot"      = { global_permissions = [], permissions = [{ database_name = "clear-transcript-bot", roles = ["ALL"] }] }
-    "clear-transcript-bot-ro"   = { global_permissions = [], permissions = [{ database_name = "clear-transcript-bot", roles = ["SELECT"] }] }
-    "clear-transcript-bot-test" = { global_permissions = [], permissions = [{ database_name = "clear-transcript-bot-test", roles = ["ALL"] }] }
-    "dnd-crime"                 = { global_permissions = [], permissions = [{ database_name = "dnd-crime", roles = ["ALL"] }] }
-    "dnd-crime-staging"         = { global_permissions = [], permissions = [{ database_name = "dnd-crime-staging", roles = ["ALL"] }] }
-    "eve-contracts"             = { global_permissions = [], permissions = [{ database_name = "eve-contracts", roles = ["ALL"] }] }
-    "food-scraper"              = { global_permissions = [], permissions = [{ database_name = "food-scraper", roles = ["ALL"] }] }
-    "libre"                     = { global_permissions = [], permissions = [{ database_name = "libre", roles = ["ALL"] }] }
-    "linkreach"                 = { global_permissions = [], permissions = [{ database_name = "linkreach", roles = ["ALL"] }] }
-    "loquia"                    = { global_permissions = [], permissions = [{ database_name = "loquia", roles = ["ALL"] }] }
-    "loquia-ro"                 = { global_permissions = [], permissions = [{ database_name = "loquia", roles = ["SELECT"] }] }
-    "realmctl"                  = { global_permissions = [], permissions = [{ database_name = "realmctl", roles = ["ALL"] }] }
-    "recepter"                  = { global_permissions = [], permissions = [{ database_name = "recepter", roles = ["ALL"] }] }
-    "stats"                     = { global_permissions = ["PROCESS", "REPLICATION_CLIENT", "SHOW_ROUTINE"], permissions = [] }
-    "trade-lab"                 = { global_permissions = [], permissions = [{ database_name = "trade-lab", roles = ["ALL"] }] }
-    "vk-ads-tool"               = { global_permissions = [], permissions = [{ database_name = "vk-ads-tool", roles = ["ALL"] }] }
-    "vk-ads-tool-test"          = { global_permissions = [], permissions = [{ database_name = "vk-ads-tool-test", roles = ["ALL"] }] }
-    "wordpress"                 = { global_permissions = [], permissions = [{ database_name = "wordpress", roles = ["ALL"] }] }
-  }
-}
-
 resource "yandex_mdb_mysql_user" "this" {
-  for_each = local.mysql_users
+  for_each = var.mysql_users
 
   cluster_id         = yandex_mdb_mysql_cluster.projects.id
   name               = each.key
