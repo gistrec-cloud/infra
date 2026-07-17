@@ -35,6 +35,13 @@
     - role: wireguard
       when: wireguard_ip is defined
       tags: [wireguard]
+    # Time sync is opt-in: chrony replaces systemd-timesyncd (apt removes it in
+    # the same transaction). germany-02 runs it as the one agreed exception to
+    # its "netdata only" rule — after its 2026-07-17 reboot the hypervisor
+    # steps the guest clock and timesyncd can't slew it back fast enough.
+    - role: chrony
+      when: chrony_managed | default(false)
+      tags: [chrony]
     - netdata
     # App cron jobs come from the apps registry — per app, so a job moves
     # hosts together with its app (edit apps.yml, re-run).

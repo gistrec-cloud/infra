@@ -1,0 +1,13 @@
+---
+# NTP source lines, written verbatim into chrony.conf (Ubuntu's stock set).
+chrony_sources:
+  - "pool ntp.ubuntu.com        iburst maxsources 4"
+  - "pool 0.ubuntu.pool.ntp.org iburst maxsources 1"
+  - "pool 1.ubuntu.pool.ntp.org iburst maxsources 1"
+  - "pool 2.ubuntu.pool.ntp.org iburst maxsources 2"
+
+# makestep <threshold> <limit>: the Ubuntu default steps only during the first
+# 3 updates and slews the rest. Hosts whose clock gets stepped externally
+# (hypervisor via qemu-guest-agent) want "0.5 -1" — always step offsets over
+# 0.5 s instead of dragging them out.
+chrony_makestep: "1 3"
