@@ -1,0 +1,8 @@
+---
+# Break-glass rescue access. Opt-in per host: breakglass_managed in host_vars.
+breakglass_user: rescue
+
+# Hardware-backed public keys (sk-ssh-ed25519, resident on a YubiKey). Public
+# halves only — non-secret, but live data: real values belong in the gitignored
+# inventory (all: vars:), see hosts.yml.example.
+breakglass_ssh_keys: []

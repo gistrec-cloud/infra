@@ -1,0 +1,7 @@
+---
+# Reload, not restart: existing sessions (including the Ansible control
+# connection) stay up even if something goes sideways.
+- name: Reload sshd
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
