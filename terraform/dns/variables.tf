@@ -72,7 +72,7 @@ variable "dns_records" {
     condition = length(distinct([
       for r in var.dns_records : "${r.zone}:${r.type}:${r.name}"
       if contains(["A", "AAAA", "CNAME"], r.type)
-    ])) == length([
+      ])) == length([
       for r in var.dns_records : r
       if contains(["A", "AAAA", "CNAME"], r.type)
     ])
