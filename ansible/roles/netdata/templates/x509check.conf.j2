@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+# go.d x509check: watches the Let's Encrypt lineages ON DISK (file://), not
+# over the network — proxied domains would show Cloudflare's edge cert, not
+# ours. Jobs = tls_zones (fleet-wide) + tls_extra_lineages (host_vars, e.g.
+# legacy lineages pending migration). certbot renews at 30 days left, so the
+# 14/7-day thresholds mean "renewal has been broken for two weeks".
+jobs:
+{% for lineage in (tls_zones | default({}) | list) + (tls_extra_lineages | default([])) %}
+  - name: {{ lineage | replace('.', '_') | replace('-', '_') }}
+    source: file:///etc/letsencrypt/live/{{ lineage }}/fullchain.pem
+    update_every: 600
+    days_until_expiration_warning: 14
+    days_until_expiration_critical: 7
+{% endfor %}

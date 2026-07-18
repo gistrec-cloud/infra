@@ -1,0 +1,110 @@
+---
+# Per-zone wildcard certificates via Let's Encrypt DNS-01 (Cloudflare).
+# Every TLS-managed host issues and renews its OWN lineages for every zone —
+# TLS is fleet material: any web host can serve any domain the moment DNS
+# points at it, and moving an app needs no certificate step at all (no
+# lineage copying between hosts, unlike HTTP-01 which only works on the host
+# DNS currently points to). Apps live on FIRST-level names only: *.vps.<zone>
+# is the infra namespace (SSH host FQDNs), nothing serves HTTPS there.
+#
+# Renewal is certbot's stock systemd timer, local to each host. The LE
+# duplicate-certificate limit is 5/week per identical SAN set — fine for a
+# handful of web hosts, just don't bootstrap six new ones in one week.
+
+# The 1Password lookup behind tls_cf_api_token would otherwise re-run `op`
+# for EVERY task and host that templates the var — one desktop-app approval
+# popup each. Pin the resolved value as a fact: one lookup per host per run.
+- name: Resolve the Cloudflare token once
+  ansible.builtin.set_fact:
+    tls_cf_api_token: "{{ tls_cf_api_token }}"
+  no_log: true
+
+- name: Refuse to run half-configured
+  ansible.builtin.assert:
+    that:
+      - tls_zones | length > 0
+      - tls_acme_email | length > 0
+      - tls_cf_api_token | length > 0
+    fail_msg: >-
+      tls_managed is true but tls_zones / tls_acme_email (inventory, all:
+      vars:) or tls_cf_api_token (a Cloudflare token with DNS:Edit on the
+      tls_zones zones — vault or a 1Password lookup) is missing.
+    quiet: true
+
+- name: Install certbot + Cloudflare DNS plugin
+  ansible.builtin.apt:
+    name:
+      - certbot
+      - python3-certbot-dns-cloudflare
+      - acl # setfacl — netdata traverse grants below
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install Cloudflare API credentials for DNS-01
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/dns-cloudflare.ini
+    content: |
+      # ANSIBLE MANAGED (tls role). Token scope: DNS:Edit on the tls_zones
+      # zones only — it cannot touch other zones or account settings.
+      dns_cloudflare_api_token = {{ tls_cf_api_token }}
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Ensure the renewal deploy-hook directory exists
+  ansible.builtin.file:
+    path: /etc/letsencrypt/renewal-hooks/deploy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Reload nginx whenever any certificate renews
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/reload-nginx
+    content: |
+      #!/bin/sh
+      # Deploy hooks only run after a successful renewal, so nginx (if
+      # present) picks the fresh certificate up within the same minute.
+      command -v nginx >/dev/null && nginx -t >/dev/null 2>&1 && systemctl reload nginx
+      exit 0
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Issue per-zone wildcard certificates (first run only; the timer renews)
+  ansible.builtin.command:
+    cmd: >-
+      certbot certonly --non-interactive --agree-tos
+      --email {{ tls_acme_email }}
+      --dns-cloudflare
+      --dns-cloudflare-credentials /etc/letsencrypt/dns-cloudflare.ini
+      --dns-cloudflare-propagation-seconds {{ tls_dns_propagation_seconds }}
+      --cert-name {{ item.key }}
+      -d {{ ([item.key] + item.value) | join(' -d ') }}
+    creates: "/etc/letsencrypt/live/{{ item.key }}/fullchain.pem"
+  loop: "{{ tls_zones | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+# Netdata's x509check reads the public fullchain files straight off the disk.
+# certbot keeps live/ and archive/ at 0700 — grant the netdata user TRAVERSE
+# only (x) on the directories: fullchain.pem is 0644 and becomes readable,
+# privkey.pem stays 0600 root — never exposed. tls_extra_lineages (host_vars)
+# covers legacy lineages outside tls_zones (e.g. edalle/recepter pending
+# migration).
+- name: Let netdata traverse the certificate directories
+  ansible.posix.acl:
+    path: "{{ item }}"
+    entity: netdata
+    etype: user
+    permissions: x
+    state: present
+  vars:
+    tls_all_lineages: "{{ (tls_zones | list) + (tls_extra_lineages | default([])) }}"
+  loop: >-
+    {{ ['/etc/letsencrypt/live', '/etc/letsencrypt/archive']
+       + (tls_all_lineages | map('regex_replace', '^', '/etc/letsencrypt/live/') | list)
+       + (tls_all_lineages | map('regex_replace', '^', '/etc/letsencrypt/archive/') | list) }}

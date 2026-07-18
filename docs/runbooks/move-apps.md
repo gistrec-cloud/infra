@@ -37,20 +37,12 @@ on $SRC), `repo:`/`notes:` (where external deploy pointers live).
    cd ansible && ansible-playbook site.yml -l $DST
    ```
 
-4. **TLS certs** — copy the Let's Encrypt lineages for the moving
-   apps' domains from $SRC, so nginx serves them the moment vhosts
-   land (renewal continues on $DST after the DNS flip; $SRC's copies
-   just expire). Via the laptop, preserving ownership:
-
-   ```sh
-   for d in live archive renewal; do
-     ssh gistrec@$SRC.vps.gistrec.cloud "sudo tar czf - -C /etc/letsencrypt $d" \
-       | ssh gistrec@$DST.vps.gistrec.cloud "sudo tar xzf - -C /etc/letsencrypt"
-   done
-   ```
-
-   This step dies once the wildcard-per-zone / DNS-01 scheme lands —
-   TLS becomes fleet material deployed by ansible, host-independent.
+4. **TLS certs** — nothing to do: the `tls` role (runs in the baseline
+   above for `tls_managed` hosts) issues per-zone wildcard certs via
+   DNS-01 on every web host, and renewal is local — it doesn't care
+   where DNS points. Exception: a domain outside the Cloudflare zones
+   (edalle.ru) keeps its own lineage — move it the old way (tar the
+   lineage over ssh) if its app ever moves.
 5. **Fresh env backups** — the registry deploys env files from 1P, so
    they must be current: `scripts/backup-envs.sh $SRC`.
 

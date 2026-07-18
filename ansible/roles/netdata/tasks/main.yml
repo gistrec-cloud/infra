@@ -115,6 +115,18 @@
   notify: Restart netdata
   when: netdata_httpcheck_jobs | length > 0
 
+# Cert-expiry watchdog for tls-role hosts: reads lineages ON DISK (network
+# checks through the Cloudflare proxy would show the edge cert, not ours).
+# The tls role grants netdata traverse-only ACLs on the lineage dirs; the
+# stock x509check health template alerts at the per-job thresholds.
+- name: Configure go.d x509check (certificate expiry on disk)
+  ansible.builtin.template:
+    src: x509check.conf.j2
+    dest: /etc/netdata/go.d/x509check.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: tls_managed | default(false)
+
 - name: Install custom health alarm files
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/{{ item }}"

@@ -51,7 +51,8 @@ infra/
 │   └── roles/
 │       ├── common/               # users, SSH hardening, base packages
 │       ├── firewall/             # nftables + fail2ban
-│       ├── nginx/                # reverse proxy + Let's Encrypt
+│       ├── nginx/                # reverse proxy, vhosts from the registry
+│       ├── tls/                  # per-zone wildcard certs (DNS-01) — fleet material
 │       ├── nodeapp/              # Node.js + pm2 runtime
 │       ├── apppm2/               # registry-driven pm2 apps (clone or CI artifact)
 │       ├── appstatic/            # registry-driven static bundles
@@ -76,7 +77,8 @@ infra/
 |------------|-------------------------------------------------------------------------|
 | `common`   | Admin user, SSH key auth + sshd hardening, base packages, timezone      |
 | `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth)  |
-| `nginx`    | Install nginx, deploy vhosts, obtain TLS certs via certbot              |
+| `nginx`    | Install nginx, deploy vhosts from the apps registry                     |
+| `tls`      | Per-zone wildcard Let's Encrypt certs via DNS-01 (Cloudflare) — any host can serve any domain |
 | `nodeapp`  | Node.js (NodeSource) + pm2 runtime + boot resurrection                  |
 | `apppm2`   | Registry-driven pm2 apps: git clone + runtime bootstrap or CI artifacts, env files from 1Password |
 | `appstatic`| Registry-driven static bundles — built on fresh hosts, served by vhosts |

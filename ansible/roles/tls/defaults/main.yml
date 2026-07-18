@@ -1,0 +1,19 @@
+---
+# Per-zone wildcard TLS. Opt-in per host: tls_managed in host_vars.
+
+# zone => extra SANs beyond the apex. Wildcards cover ONE label (RFC 9525),
+# so deeper levels are listed explicitly ("*.vps.example.com"). Real values
+# are live data — they belong in the gitignored inventory (all: vars:).
+tls_zones: {}
+
+# ACME account email (expiry mail from Let's Encrypt). Lives in the
+# inventory next to tls_zones.
+tls_acme_email: ""
+
+# Seconds to wait for the DNS-01 TXT record to propagate before validation.
+tls_dns_propagation_seconds: 30
+
+# Cloudflare API token with DNS:Edit on the tls_zones zones. Default: the
+# vault; the real inventory instead points this at the 1Password item the
+# terraform DNS token lives in (single source — one rotation covers both).
+tls_cf_api_token: "{{ vault_cf_acme_token | default('') }}"
