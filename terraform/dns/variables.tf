@@ -31,8 +31,8 @@ variable "dns_records" {
     zone     = string
     name     = string
     type     = string
-    content  = optional(string) # exactly one of content / host
-    host     = optional(string) # A only: content = host_ips[host]
+    content  = optional(string)    # exactly one of content / host
+    host     = optional(string)    # A only: content = host_ips[host]
     ttl      = optional(number, 1) # 1 = automatic (required when proxied = true)
     proxied  = optional(bool, false)
     priority = optional(number) # required for MX; omit for other types
