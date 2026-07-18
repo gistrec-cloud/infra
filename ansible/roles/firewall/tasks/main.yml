@@ -32,6 +32,50 @@
     mode: "0644"
   notify: Restart fail2ban
 
+# ── nginx-honeypot jail (web hosts) ──
+# Deployed under the same jail.d/filter.d names the hand-made setup used, so
+# adoption overwrites in place. The firewall role runs before nginx exists on
+# a fresh host, hence the dir + log pre-touch — fail2ban refuses a jail whose
+# logpath is missing.
+- name: Ensure the nginx log directory exists
+  ansible.builtin.file:
+    path: /var/log/nginx
+    state: directory
+    owner: root
+    group: adm
+    mode: "0750"
+  when: firewall_nginx_honeypot | bool
+
+- name: Ensure the honeypot log exists before fail2ban tails it
+  ansible.builtin.copy:
+    content: ""
+    dest: /var/log/nginx/honeypot.log
+    force: false
+    owner: root
+    group: adm
+    mode: "0640"
+  when: firewall_nginx_honeypot | bool
+
+- name: Install the nginx-honeypot filter
+  ansible.builtin.copy:
+    src: nginx-honeypot-filter.conf
+    dest: /etc/fail2ban/filter.d/nginx-honeypot.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+  when: firewall_nginx_honeypot | bool
+
+- name: Enable the nginx-honeypot jail
+  ansible.builtin.template:
+    src: nginx-honeypot-jail.conf.j2
+    dest: /etc/fail2ban/jail.d/nginx-honeypot.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+  when: firewall_nginx_honeypot | bool
+
 - name: Enable and start fail2ban
   ansible.builtin.service:
     name: fail2ban

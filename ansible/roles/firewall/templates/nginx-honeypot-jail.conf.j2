@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+# One probe of a trap path (nginx snippet honeypot.conf → honeypot.log) is
+# proof of malice: ban everything immediately, escalate for repeat offenders.
+[nginx-honeypot]
+enabled   = true
+filter    = nginx-honeypot
+logpath   = /var/log/nginx/honeypot.log
+# Force a file backend. The distro default is often 'systemd' (it is on
+# Debian/Ubuntu), which makes the jail read the journal and miss this
+# file-based honeypot log entirely — 0 hits, 0 bans. 'auto' picks
+# pyinotify/polling on the file and never resolves to systemd.
+backend   = auto
+maxretry  = 1
+bantime   = 86400
+banaction = nftables-allports
+bantime.increment = true
+bantime.maxtime   = 1w
+ignoreip  = {{ firewall_fail2ban_ignoreip }}
