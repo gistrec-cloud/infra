@@ -210,7 +210,8 @@ def dns():
 
 def smoke_public():
     ip = conn(dst)[0]
-    for attempt in range(12):
+    streak = 0  # a lone lucky 200 can slip between edge-tail 502s
+    for attempt in range(20):
         bad = []
         for a in state["aliases"]:
             got = subprocess.run(["dig", "+short", a], capture_output=True, text=True).stdout.split()
@@ -219,10 +220,14 @@ def smoke_public():
             code = http_code(f"https://{d}/")
             if code == "000" or code.startswith("5"): bad.append(f"{d}: {code}")
         if not bad:
-            print(f"  all green ({', '.join(state['domains'])})"); return
-        note(f"waiting for DNS/edge ({'; '.join(bad)}) — retry {attempt + 1}/12 in 30s")
+            streak += 1
+            if streak >= 2:
+                print(f"  all green twice ({', '.join(state['domains'])})"); return
+            time.sleep(10); continue
+        streak = 0
+        note(f"waiting for DNS/edge ({'; '.join(bad)}) — retry {attempt + 1}/20 in 30s")
         time.sleep(30)
-    die("public smoke did not converge in 6 min — investigate, then re-run")
+    die("public smoke did not converge in ~10 min — investigate, then re-run")
 
 def freeze():
     if not state["pm2"]:
@@ -240,9 +245,13 @@ needs = [f for f, needed in [("nodeapp_install", state["pm2"]), ("tls_managed", 
 if needs:
     die(f"first time on {dst}? set {' + '.join(f + ': true' for f in needs)} in {hv_path}, then re-run")
 
+# smoke-public runs BEFORE freeze (never kill SRC until DST provably
+# serves) and AGAIN after it: the CF edge keeps routing a tail of
+# requests to the old origin for a few minutes, and only a frozen SRC
+# exposes that as 502s — the final pass waits the tail out.
 steps = [("flip", flip), ("prep-dst", prep_dst), ("rsync", rsync), ("deploy", deploy),
          ("smoke-local", smoke_local), ("dns", dns), ("smoke-public", smoke_public),
-         ("freeze", freeze)]
+         ("freeze", freeze), ("smoke-final", smoke_public)]
 
 print(f"move: {', '.join(state['apps'])}  {src} -> {dst}"
       + (f"  (resuming after: {', '.join(state['done'])})" if state["done"] else ""))
