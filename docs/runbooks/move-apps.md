@@ -1,108 +1,39 @@
 # Runbook: move apps to another host
 
-Move any set of registry-managed apps from one fleet host to another
-with **zero user-visible downtime**: the source keeps serving until a
-DNS flip. Hosts are parameters, not part of the procedure — name them
-once and use the variables everywhere below:
+Move any set of registry-managed apps between fleet hosts with **zero
+user-visible downtime** — one command end to end:
 
 ```sh
-SRC=germany-01 DST=finland-01   # the only place hosts are named
+scripts/move-apps.py <SRC> <DST>          # every app hosted on SRC
+scripts/move-apps.py --app <name> <DST>   # one app   (--dry-run to preview)
 ```
 
-Why a move is small: data lives in managed MySQL (nothing on host
-disks), secrets live in 1Password (`dotenv <app>` documents = deploy
-source), "what runs where" is `ansible/apps.yml`, and DNS points at
-hosts by name (`host_ips` in `terraform/dns`). For registry-managed
-apps the move IS `host: $DST` + one playbook run — everything below is
-the checklist around that flip.
+It flips the configs (apps.yml + terraform/dns), rsyncs plain-file
+dirs, deploys $DST twice, smokes it directly, applies DNS (refusing
+any plan that isn't update-only), waits for public convergence and
+freezes $SRC's pm2. CI is not part of a move: workflows target the
+stable `deploy.*` alias and keep working untouched.
 
-**What moves**: the apps in `apps.yml` with `host: $SRC` — all of
-them, or any subset (the registry is per-app). Per moving app, the
-registry answers what else travels: `dir:` (non-git files to rsync),
-`vhosts:` (domains to smoke and flip), `process.pm2:` (what to freeze
-on $SRC), `repo:`/`notes:` (where external deploy pointers live).
+**Failure handling**: every step is idempotent, and completed steps
+are checkpointed in `.move-apps.state.json` — re-running the same
+command resumes at the failed step (`--reset` starts over; the file
+is removed on success). `--dead-src` skips rsync/freeze when $SRC is
+gone: artifact apps come back with their next CI deploy, clone apps
+from git + 1P envs; only plain-file apps (no repo/CI — e.g. recovery)
+die with their host, which is their own DR gap to close.
 
-## Phase 0 — prepare $DST (safe any time, no user impact)
-
-1. **host_vars/$DST.yml** (first-time hosts): `nodeapp_install: true`
-   if it runs pm2 apps, `tls_managed: true` for role-issued certs.
-   `web` membership derives from the registry at the flip; to build
-   nginx/certs/pm2 earlier, list $DST under a static `web:` block in
-   the inventory (drop the entry after).
-2. **Baseline run**:
-
-   ```sh
-   cd ansible && ansible-playbook site.yml -l $DST
-   ```
-
-3. **Fresh env backups** — the registry deploys env files from 1P, so
-   they must be current: `scripts/backup-envs.sh $SRC`.
-
-## Phase 1 — the move (zero downtime)
-
-1. **Non-git dirs** — CI artifacts (`process.type: artifact`) and
-   anything else a clone can't recreate; check each moving app's
-   `dir:`. Copy over the WireGuard mesh (wg IPs: `wireguard_ip` in
-   host_vars):
-
-   ```sh
-   ssh -A gistrec@$SRC.vps.gistrec.cloud \
-     'rsync -a <dirs from the registry> gistrec@<wg-ip of $DST>:~/'
-   ```
-
-   `-A`: fleet hosts hold no keys for each other — the hop uses your
-   forwarded agent. A domain outside the Cloudflare zones (edalle.ru)
-   keeps a hand-managed cert lineage — tar it over too.
-
-2. **Registry flip** (`ansible/apps.yml`): `host: $DST` on every
-   moving app.
-3. **Deploy everything the registry knows**:
-
-   ```sh
-   cd ansible && ansible-playbook site.yml -l $DST
-   ```
-
-   Clones + bootstraps runtimes, writes env files from 1P, installs
-   deploy keys + control scripts, starts pm2 processes, enables
-   vhosts. Run it twice; the second run must be `changed=0` (on a
-   cold $DST the first run skips pm2 apps until the runtime lands).
-4. **Local smoke on $DST** (before any DNS change), for every domain
-   from the moving apps' `vhosts:`:
-
-   ```sh
-   for h in <domains>; do
-     curl -sk --resolve "$h:443:$(dig +short $DST.vps.gistrec.cloud)" \
-       -o /dev/null -w "$h: %{http_code}\n" "https://$h/"
-   done
-   ```
-
-5. **DNS flip** (`terraform/dns/terraform.tfvars`): grep `$SRC`, flip
-   the moving apps' records — A records: `host = "$SRC"` → `"$DST"`;
-   CNAMEs at the host: content `$SRC.vps...` → `$DST.vps...` — then
-   `terraform apply`. Cloudflare-proxied records flip instantly;
-   grey-cloud ones wait out their TTL (auto = 300 s).
-6. **External deploy pointers** — anything outside this repo that
-   names the host (CI variables, deploy scripts — see each app's
-   `repo:`/`notes:`). Flip them, then re-run each CI deploy to prove
-   the path lands on $DST.
-7. **Public smoke**: the domains over real DNS + a click-through of
-   the stateful flows; `pm2 logs` on $DST clean.
-8. **Freeze $SRC** (rollback stays possible; nothing deleted) — stop
-   the moved `process.pm2:` names:
-
-   ```sh
-   ssh gistrec@$SRC.vps.gistrec.cloud 'pm2 stop <pm2 names> && pm2 save --force'
-   ```
-
-9. **Backups**: `scripts/backup-envs.sh` ($DST now carries the env
-   files) and `scripts/backup-repo-files.sh` (apps.yml, hosts.yml,
-   dns tfvars all changed).
+One-off prep for a first-time $DST: `nodeapp_install: true` /
+`tls_managed: true` in its host_vars + a baseline `site.yml -l $DST`
+run (the script checks and tells you). Everything else derives:
+`web` membership from the registry, certs from the tls role, CI
+target from the `deploy.*` alias (trusted via accept-new — no CI
+variables to touch, DndCrime#15).
 
 ## Rollback
 
-Any point before the DNS flip: nothing user-visible happened, just
-stop. After it: revert the tfvars flip + `terraform apply`, unfreeze
-$SRC's pm2. $SRC is untouched until you deliberately retire it.
+Any point before the DNS step: nothing user-visible happened, just
+stop (and `--reset` + re-flip if configs moved). After it: run the
+move in reverse — $SRC is untouched until you deliberately retire it.
 
 ## First use: germany-01 → finland-01 (2026-07)
 

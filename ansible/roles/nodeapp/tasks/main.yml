@@ -11,6 +11,16 @@
     dest: /etc/apt/keyrings/nodesource.asc
     mode: "0644"
 
+# A hand-installed NodeSource source with a different Signed-By makes apt
+# refuse to read sources at all (bit us on germany-01, 2026-07-18).
+- name: Remove legacy hand-installed NodeSource source
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/nodesource.sources
+    - /usr/share/keyrings/nodesource.gpg
+
 - name: Add NodeSource apt repository
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_{{ nodeapp_nodejs_major }}.x nodistro main"

@@ -66,3 +66,4 @@ override.tf.json
 
 # scratch file backup-repo-files.sh drops at the repo root while archiving
 .backup-manifest.sha256
+.move-apps.state.json

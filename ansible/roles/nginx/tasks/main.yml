@@ -115,3 +115,10 @@
     - certbot_email is defined
     - item.tls | default(false)
   notify: Reload nginx
+
+# Handlers normally flush at end of play — but a failure in a LATER role
+# aborts the host and silently drops the pending reload, leaving workers
+# on the old config (bit us twice: finland 2026-07-18, germany reverse
+# move same day). Flush right here instead.
+- name: Apply pending nginx reload now
+  ansible.builtin.meta: flush_handlers

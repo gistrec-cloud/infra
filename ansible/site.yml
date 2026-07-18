@@ -99,6 +99,7 @@
     - name: Join `web` when the registry gives this host a vhost
       ansible.builtin.group_by:
         key: web
+      changed_when: false
       when: >-
         apps | default({}) | dict2items
           | selectattr('value.host', 'equalto', inventory_hostname)
