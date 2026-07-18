@@ -48,7 +48,8 @@ control.
 ## Care
 
 - **Quarterly test**: log in as `rescue` on one host with the YubiKey
-  and run `sudo -i`. Last verified: russia-02, 2026-07-16 (pre-role).
+  and run `sudo -i`. Last verified: 2026-07-18, live login as `rescue`
+  right after the role's first rollout.
 - **Rotate / revoke**: edit `breakglass_ssh_keys` in the inventory,
   re-run `ansible-playbook site.yml --tags breakglass`.
 - **Losing the YubiKey** loses break-glass only — normal 1P-managed
