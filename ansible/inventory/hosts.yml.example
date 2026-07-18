@@ -21,11 +21,8 @@ all:
     #   example.com: ["*.example.com"]
     #   example.org: ["*.example.org", "*.vps.example.org"]
   children:
-    # `web` is DERIVED: site.yml adds every host that the apps registry
-    # (apps.yml) gives a vhost-bearing app — don't hand-list those here.
-    # A static entry (it merges with the derived membership) is only for
-    # warming up a standby BEFORE a registry flip, or for a host whose
-    # vhosts live outside the registry.
+    # `web` is derived by site.yml from the apps registry — list a host
+    # here only to warm up a standby before a registry flip.
     web:
       hosts:
         web-01:

@@ -14,14 +14,11 @@ locals {
 }
 
 resource "cloudflare_dns_record" "this" {
-  # Pointer records (A/AAAA/CNAME) are keyed by identity only, so flipping
-  # `host`/content — THE move operation — plans as an in-place update:
-  # atomic, no destroy+create pair racing the Cloudflare API (error 81053)
-  # and no window where the name doesn't resolve; both bit the 2026-07
-  # germany→finland move. A validation keeps those names unique. Payload
-  # records (TXT/MX/NS) may legally repeat a name, so content/priority
-  # stays in their key — replacing content replaces the record, which is
-  # the right semantics there (they never flip during a move).
+  # A/AAAA/CNAME are keyed by name (kept unique via validation), so a
+  # host/content flip — the move operation — is one atomic in-place
+  # update; a destroy+create pair races the CF API (81053) and briefly
+  # drops the name. TXT/MX/NS may repeat a name, so content/priority
+  # stays in their key.
   for_each = {
     for r in local.dns_records :
     (contains(["A", "AAAA", "CNAME"], r.type)

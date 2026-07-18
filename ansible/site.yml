@@ -7,8 +7,7 @@
 # so syntax checks and fresh clones still parse.
 #
 # Play order is dependency order: baseline (network, firewall) → databases →
-# app dependencies (docker) → apps → web layer on top. `web` membership is
-# derived from the apps registry right before the web play — see there.
+# app dependencies (docker) → apps → web layer on top.
 - name: Baseline for every host (monitoring)
   hosts: all
   become: true
@@ -92,17 +91,13 @@
   gather_facts: false
   become: false
   vars_files:
-    # The vault rides along because evaluating `apps` templates the WHOLE
-    # registry, including nested {{ vault_* }} refs (docker env blocks).
+    # Vault too: evaluating `apps` templates its nested {{ vault_* }} refs.
     - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
     - ["apps.yml", "apps.yml.example"]
   tasks:
-    # A host serves vhosts iff the registry places a vhost-bearing app on
-    # it — so `web` membership is derived, not hand-listed: flipping an
-    # app's `host:` re-homes the whole web stack on the next run. A static
-    # `web:` group in the inventory still works (groups merge) — use it
-    # only to warm up a standby BEFORE a registry flip. group_by runs on
-    # the controller, so this play never touches the hosts.
+    # A vhost-bearing app in the registry puts its host into `web`, so a
+    # `host:` flip re-homes the whole web stack. A static `web:` group
+    # still merges — for warming up a standby before a flip.
     - name: Join `web` when the registry gives this host a vhost
       ansible.builtin.group_by:
         key: web

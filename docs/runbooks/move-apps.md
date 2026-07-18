@@ -24,29 +24,18 @@ on $SRC), `repo:`/`notes:` (where external deploy pointers live).
 
 ## Phase 0 — prepare $DST (safe any time, no user impact)
 
-1. **Inventory** (`ansible/inventory/hosts.yml`, gitignored): nothing
-   to do for `web` — site.yml derives membership from the registry, so
-   $DST joins at the flip. Optional warm standby: list $DST under a
-   static `web:` children block to build nginx/certs/pm2 BEFORE the
-   flip (drop the entry after). Other groups (`wireguard`) stay manual.
-2. **host_vars/$DST.yml** (first-time hosts): `nodeapp_install: true`
+1. **host_vars/$DST.yml** (first-time hosts): `nodeapp_install: true`
    if it runs pm2 apps, `tls_managed: true` for role-issued certs.
-   (80/443 need no firewall change — the firewall role always opens
-   SSH/80/443.)
-3. **Baseline run** — nginx + certbot, snippets, node + pm2 + boot
-   resurrection. No vhosts yet (apps still declare $SRC):
+   `web` membership derives from the registry at the flip; to build
+   nginx/certs/pm2 earlier, list $DST under a static `web:` block in
+   the inventory (drop the entry after).
+2. **Baseline run**:
 
    ```sh
    cd ansible && ansible-playbook site.yml -l $DST
    ```
 
-4. **TLS certs** — nothing to do: the `tls` role (runs in the baseline
-   above for `tls_managed` hosts) issues per-zone wildcard certs via
-   DNS-01 on every web host, and renewal is local — it doesn't care
-   where DNS points. Exception: a domain outside the Cloudflare zones
-   (edalle.ru) keeps its own lineage — move it the old way (tar the
-   lineage over ssh) if its app ever moves.
-5. **Fresh env backups** — the registry deploys env files from 1P, so
+3. **Fresh env backups** — the registry deploys env files from 1P, so
    they must be current: `scripts/backup-envs.sh $SRC`.
 
 ## Phase 1 — the move (zero downtime)
@@ -61,8 +50,9 @@ on $SRC), `repo:`/`notes:` (where external deploy pointers live).
      'rsync -a <dirs from the registry> gistrec@<wg-ip of $DST>:~/'
    ```
 
-   `-A` is required: fleet hosts hold no SSH keys for each other, so
-   the rsync hop authenticates with your forwarded agent.
+   `-A`: fleet hosts hold no keys for each other — the hop uses your
+   forwarded agent. A domain outside the Cloudflare zones (edalle.ru)
+   keeps a hand-managed cert lineage — tar it over too.
 
 2. **Registry flip** (`ansible/apps.yml`): `host: $DST` on every
    moving app.
@@ -74,9 +64,8 @@ on $SRC), `repo:`/`notes:` (where external deploy pointers live).
 
    Clones + bootstraps runtimes, writes env files from 1P, installs
    deploy keys + control scripts, starts pm2 processes, enables
-   vhosts. Run it twice; the second run must be `changed=0`. (On a
-   cold $DST with no warm-up the first run skips pm2 apps until the
-   web play installs the runtime — the second run deploys them.)
+   vhosts. Run it twice; the second run must be `changed=0` (on a
+   cold $DST the first run skips pm2 apps until the runtime lands).
 4. **Local smoke on $DST** (before any DNS change), for every domain
    from the moving apps' `vhosts:`:
 
@@ -140,11 +129,10 @@ DST=finland-01`):
   Cloudflare-proxied, so the DNS flip is instant.
 - **External pointers** (DndCrime):
 
-  DEPLOY_HOST is PERMANENT now: `deploy.dnd-crime.gistrec.cloud`, a
-  grey CNAME in `terraform/dns` — a future move flips only that
-  CNAME's content, never the GH variable. Only the hostkey needs a
-  per-move refresh (pipe WITHOUT `--body`: `--body -` stores a
-  literal dash, gh reads stdin only when the flag is absent):
+  DEPLOY_HOST is permanently `deploy.dnd-crime.gistrec.cloud` (grey
+  CNAME in `terraform/dns`) — a move flips only that CNAME. The
+  hostkey needs a per-move refresh; pipe WITHOUT `--body` (`--body -`
+  stores a literal dash):
 
   ```sh
   ssh-keyscan -t ed25519 deploy.dnd-crime.gistrec.cloud 2>/dev/null \
