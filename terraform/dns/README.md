@@ -32,5 +32,11 @@ terraform apply
   (`host = "russia-01"`) instead of a literal `content` IP. Moving an app to
   another VPS is flipping `host` on its records; replacing a VPS behind the same
   name is editing one `host_ips` entry. Off-fleet targets keep literal `content`.
+- A/AAAA/CNAME records are keyed by `zone:type:name` (content excluded), so a
+  `host`/content flip plans as one in-place update — atomic, no destroy+create
+  racing the Cloudflare API and no resolution gap. The trade-off: no two
+  pointer records may share a name (a validation enforces it). TXT/MX/NS keep
+  content in the key — duplicates of a name are legal there, and replacing
+  content should replace the record.
 - Record `name`s are FQDNs exactly as the Cloudflare API returns them — keeps
   imported state and config identical, so plans stay clean.
