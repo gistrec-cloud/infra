@@ -1,0 +1,57 @@
+---
+# Emergency SSH path that shares fate with nothing: its own user, passwordless
+# sudo via a root-owned drop-in (break-glass must not depend on 1Password),
+# and authorized keys OUTSIDE any home directory — wiping a home dir or
+# compromising a login user cannot sever it. Private keys are YubiKey-resident;
+# only public halves appear on hosts. Procedure: docs/runbooks/break-glass.md.
+
+- name: Refuse to deploy an empty break-glass key set
+  ansible.builtin.assert:
+    that: breakglass_ssh_keys | length > 0
+    fail_msg: >-
+      breakglass_managed is true but breakglass_ssh_keys is empty — that would
+      install an unusable rescue account. Define the sk-* public keys in the
+      inventory (all: vars:), see hosts.yml.example.
+    quiet: true
+
+- name: Ensure the rescue user exists (key-only, locked password)
+  ansible.builtin.user:
+    name: "{{ breakglass_user }}"
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+    state: present
+
+- name: Allow rescue to sudo without a password
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ breakglass_user }}"
+    content: "{{ breakglass_user }} ALL=(ALL:ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Install break-glass public keys outside any home dir
+  ansible.builtin.copy:
+    dest: /etc/ssh/rescue_keys
+    content: "{{ breakglass_ssh_keys | join('\n') }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Point sshd at the root-owned key file for rescue only
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MANAGED — breakglass role"
+    # Appended to the END of the main config on purpose: a trailing Match
+    # block cannot swallow later directives, and unlike sshd_config.d it
+    # behaves identically on any sshd — pre-8.4 versions leak Match blocks
+    # past the end of included files (germany-02's sshd is not ours to know).
+    block: |
+      Match User {{ breakglass_user }}
+          AuthorizedKeysFile /etc/ssh/rescue_keys
+          PasswordAuthentication no
+          AuthenticationMethods publickey
+    validate: /usr/sbin/sshd -t -f %s
+    backup: true
+  notify: Reload sshd

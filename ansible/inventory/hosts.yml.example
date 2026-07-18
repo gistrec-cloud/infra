@@ -6,6 +6,12 @@ all:
     # ansible_user is set per host: the actual SSH login user. admin_user in
     # group_vars/all.yml follows it — there is no shared service account.
     ansible_python_interpreter: /usr/bin/python3
+    # Break-glass public keys (hardware-backed, e.g. YubiKey-resident sk-*):
+    # installed by the breakglass role into root-owned /etc/ssh/rescue_keys on
+    # hosts with breakglass_managed: true. Public halves only — non-secret,
+    # but live data, so real values stay in the gitignored copy.
+    # breakglass_ssh_keys:
+    #   - "sk-ssh-ed25519@openssh.com AAAA... breakglass@fleet"
   children:
     web:
       hosts:

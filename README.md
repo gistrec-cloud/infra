@@ -60,13 +60,14 @@ infra/
 │       ├── netdata/              # monitoring agent
 │       ├── wireguard/            # private encrypted mesh between fleet hosts
 │       ├── chrony/               # opt-in time sync
+│       ├── breakglass/           # emergency rescue user, keys outside home dirs
 │       └── mysql/                # self-hosted MySQL (Docker), primary/replica
 ├── terraform/                    # cloud resources as code (one root module per provider)
 │   ├── dns/                      # Cloudflare DNS records (host_ips: fleet IPs live once)
 │   ├── aws/                      # Lambda functions + Function URLs
 │   ├── hetzner/                  # Hetzner Cloud server (finland-01)
 │   └── yandex/                   # Object Storage, Managed MySQL, Compute, Cloud Function
-└── docs/runbooks/                # operational procedures (move-apps)
+└── docs/runbooks/                # operational procedures (move-apps, break-glass)
 ```
 
 ## Roles
@@ -84,6 +85,7 @@ infra/
 | `netdata`  | Install netdata, bind to localhost, Telegram alert when a pm2 app dies  |
 | `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
 | `chrony`   | Opt-in time sync: chrony replaces systemd-timesyncd (clock-stepping hypervisors) |
+| `breakglass`| Emergency `rescue` user (YubiKey keys in root-owned `/etc/ssh/rescue_keys`) — survives home wipes |
 | `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
 
 ## App registry & moves
