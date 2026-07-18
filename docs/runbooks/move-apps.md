@@ -10,17 +10,17 @@ scripts/move-apps.py --app <name> <DST>   # one app   (--dry-run to preview)
 
 It flips the configs (apps.yml + terraform/dns), rsyncs plain-file
 dirs, deploys $DST twice, smokes it directly, applies DNS (refusing
-any plan that isn't update-only), waits for public convergence,
-re-dispatches the CI workflows of artifact apps (`ci:` in the
-registry) and freezes $SRC's pm2.
+any plan that isn't update-only), waits for public convergence and
+freezes $SRC's pm2. CI is not part of a move: workflows target the
+stable `deploy.*` alias and keep working untouched.
 
 **Failure handling**: every step is idempotent, and completed steps
 are checkpointed in `.move-apps.state.json` — re-running the same
 command resumes at the failed step (`--reset` starts over; the file
 is removed on success). `--dead-src` skips rsync/freeze when $SRC is
-gone: artifact apps rebuild from CI, clone apps from git + 1P envs;
-only plain-file apps (no repo/CI — e.g. recovery) die with their
-host, which is their own DR gap to close.
+gone: artifact apps come back with their next CI deploy, clone apps
+from git + 1P envs; only plain-file apps (no repo/CI — e.g. recovery)
+die with their host, which is their own DR gap to close.
 
 One-off prep for a first-time $DST: `nodeapp_install: true` /
 `tls_managed: true` in its host_vars + a baseline `site.yml -l $DST`

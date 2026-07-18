@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Move registry apps between fleet hosts — END TO END, one command:
 config flip (apps.yml + terraform/dns), rsync of plain-file dirs,
-deploy, smoke, DNS apply, CI re-runs, source freeze.
+deploy, smoke, DNS apply, source freeze.
 
 Usage:
   scripts/move-apps.py <SRC> <DST>           # every app hosted on SRC
   scripts/move-apps.py --app <name> <DST>    # one app
   ... --dry-run    # preview the flip + plan, write nothing
-  ... --dead-src   # SRC is gone: skip rsync/freeze (CI re-runs cover
-                   # artifact apps; plain-file apps are lost with SRC)
+  ... --dead-src   # SRC is gone: skip rsync/freeze (artifact apps come
+                   # back with their next CI deploy; plain-file apps are
+                   # lost with SRC)
   ... --reset      # drop a stale checkpoint and start over
 
 Failure handling: every step is idempotent, and completed steps are
@@ -74,11 +75,7 @@ if state is None:
              # rebuilt by the role — their venvs don't survive an OS change)
              "rsync_dirs": sorted({"~/" + a["dir"].split("/")[0] for a in moving.values()
                                    if a.get("dir") not in (None, ".")
-                                   and (a.get("process") or {}).get("type") != "clone"}),
-             "ci": sorted([a.get("repo"), w] for n, a in moving.items()
-                          for w in a.get("ci", []) if a.get("repo")),
-             "ci_missing": sorted(n for n, a in moving.items()
-                                  if (a.get("process") or {}).get("type") == "artifact" and not a.get("ci"))}
+                                   and (a.get("process") or {}).get("type") != "clone"})}
 
 def save(): json.dump(state, open(STATE, "w"), indent=1)
 
@@ -227,13 +224,6 @@ def smoke_public():
         time.sleep(30)
     die("public smoke did not converge in 6 min — investigate, then re-run")
 
-def ci():
-    for repo, wf in state["ci"]:
-        run(["gh", "workflow", "run", wf, "--repo", repo])
-    for n in state["ci_missing"]:
-        note(f"WARN: artifact app {n} has no ci: field — re-run its deploy workflow manually")
-    if not state["ci"] and not state["ci_missing"]: note("no CI-artifact apps in this move")
-
 def freeze():
     if not state["pm2"]:
         note("no pm2 processes to freeze"); return
@@ -252,7 +242,7 @@ if needs:
 
 steps = [("flip", flip), ("prep-dst", prep_dst), ("rsync", rsync), ("deploy", deploy),
          ("smoke-local", smoke_local), ("dns", dns), ("smoke-public", smoke_public),
-         ("ci", ci), ("freeze", freeze)]
+         ("freeze", freeze)]
 
 print(f"move: {', '.join(state['apps'])}  {src} -> {dst}"
       + (f"  (resuming after: {', '.join(state['done'])})" if state["done"] else ""))
