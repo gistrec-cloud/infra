@@ -143,6 +143,27 @@ def flip():
         print("dry-run: nothing written"); sys.exit(0)
     open(APPS, "w").writelines(lines); open(TFVARS, "w").writelines(tf)
 
+def prep_dst():
+    """A returning DST may hold FROZEN pm2 processes under the moving names —
+    apppm2 would see them as 'already exists' and never start them."""
+    if not state["pm2"]:
+        note("no pm2 apps in this move"); return
+    out = subprocess.run(ssh_argv(dst, "pm2 jlist 2>/dev/null || true"),
+                         capture_output=True, text=True).stdout
+    try:
+        procs = json.loads(out or "[]")
+    except ValueError:
+        note("pm2 absent/unreadable on DST — nothing to clean"); return
+    names = set(state["pm2"])
+    stale = [p["name"] for p in procs if p["name"] in names and p["pm2_env"]["status"] != "online"]
+    online = [p["name"] for p in procs if p["name"] in names and p["pm2_env"]["status"] == "online"]
+    if online:
+        note(f"WARN: already ONLINE on {dst} (left untouched): {', '.join(online)}")
+    if not stale:
+        note("no stale pm2 leftovers on DST"); return
+    note(f"deleting stale pm2 leftovers on {dst}: {', '.join(stale)}")
+    run(ssh_argv(dst, "pm2 delete " + " ".join(map(shlex.quote, stale)) + " && pm2 save --force"))
+
 def rsync():
     if dead_src or not state["rsync_dirs"]:
         note("skipped (dead SRC / nothing to copy)"); return
@@ -223,8 +244,9 @@ needs = [f for f, needed in [("nodeapp_install", state["pm2"]), ("tls_managed", 
 if needs:
     die(f"first time on {dst}? set {' + '.join(f + ': true' for f in needs)} in {hv_path}, then re-run")
 
-steps = [("flip", flip), ("rsync", rsync), ("deploy", deploy), ("smoke-local", smoke_local),
-         ("dns", dns), ("smoke-public", smoke_public), ("ci", ci), ("freeze", freeze)]
+steps = [("flip", flip), ("prep-dst", prep_dst), ("rsync", rsync), ("deploy", deploy),
+         ("smoke-local", smoke_local), ("dns", dns), ("smoke-public", smoke_public),
+         ("ci", ci), ("freeze", freeze)]
 
 print(f"move: {', '.join(state['apps'])}  {src} -> {dst}"
       + (f"  (resuming after: {', '.join(state['done'])})" if state["done"] else ""))
