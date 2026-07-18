@@ -24,12 +24,15 @@ on $SRC), `repo:`/`notes:` (where external deploy pointers live).
 
 ## Phase 0 — prepare $DST (safe any time, no user impact)
 
-1. **Inventory** (`ansible/inventory/hosts.yml`, gitignored): add
-   $DST to the groups matching what it takes on (`web` for
-   nginx + vhosts).
-2. **host_vars/$DST.yml**: `nodeapp_install: true` if it runs pm2
-   apps. (80/443 need no firewall change — the firewall role always
-   opens SSH/80/443.)
+1. **Inventory** (`ansible/inventory/hosts.yml`, gitignored): nothing
+   to do for `web` — site.yml derives membership from the registry, so
+   $DST joins at the flip. Optional warm standby: list $DST under a
+   static `web:` children block to build nginx/certs/pm2 BEFORE the
+   flip (drop the entry after). Other groups (`wireguard`) stay manual.
+2. **host_vars/$DST.yml** (first-time hosts): `nodeapp_install: true`
+   if it runs pm2 apps, `tls_managed: true` for role-issued certs.
+   (80/443 need no firewall change — the firewall role always opens
+   SSH/80/443.)
 3. **Baseline run** — nginx + certbot, snippets, node + pm2 + boot
    resurrection. No vhosts yet (apps still declare $SRC):
 
@@ -71,7 +74,9 @@ on $SRC), `repo:`/`notes:` (where external deploy pointers live).
 
    Clones + bootstraps runtimes, writes env files from 1P, installs
    deploy keys + control scripts, starts pm2 processes, enables
-   vhosts. Run it twice; the second run must be `changed=0`.
+   vhosts. Run it twice; the second run must be `changed=0`. (On a
+   cold $DST with no warm-up the first run skips pm2 apps until the
+   web play installs the runtime — the second run deploys them.)
 4. **Local smoke on $DST** (before any DNS change), for every domain
    from the moving apps' `vhosts:`:
 

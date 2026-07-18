@@ -31,9 +31,40 @@
   check_mode: false
   when: apppm2_apps | length > 0
 
+# pm2 comes from the web play's nodeapp role, which runs AFTER this play on
+# a cold host. Don't let the snapshot's failed_when:false mask a missing
+# runtime as "no processes" (the old behavior — a cryptic Errno 2 at pm2
+# start): skip with a notice when the runtime is coming, refuse when it
+# is not.
+- name: pm2 runtime not up yet — apps wait for the next run
+  ansible.builtin.debug:
+    msg: >-
+      pm2 is not runnable yet (pm2 jlist rc={{ apppm2_jlist.rc }});
+      the web play installs it (nodeapp_install) later in this run —
+      re-run site.yml to deploy this host's pm2 apps (the run-twice
+      convention).
+  when:
+    - apppm2_apps | length > 0
+    - apppm2_jlist.rc | default(1) != 0
+    - nodeapp_install | default(false)
+
+- name: Refuse registry pm2 apps on a host with no pm2 and no nodeapp_install
+  ansible.builtin.fail:
+    msg: >-
+      {{ apppm2_apps | length }} registry pm2 app(s) target
+      {{ inventory_hostname }}, but pm2 is not runnable (pm2 jlist
+      rc={{ apppm2_jlist.rc }}) and nodeapp_install is not set — set it
+      in host_vars (node + pm2 + boot resurrection) or install pm2 by
+      hand on adopted hosts.
+  when:
+    - apppm2_apps | length > 0
+    - apppm2_jlist.rc | default(1) != 0
+    - not (nodeapp_install | default(false))
+
 - name: Deploy each app
   ansible.builtin.include_tasks: app.yml
   loop: "{{ apppm2_apps }}"
   loop_control:
     loop_var: apppm2_app
     label: "{{ apppm2_app.key }}"
+  when: apppm2_jlist.rc | default(1) == 0
