@@ -3,9 +3,11 @@
 # Example IPs are from the RFC 5737 documentation range — not real.
 all:
   vars:
-    # ansible_user is set per host: the actual SSH login user. admin_user in
-    # group_vars/all.yml follows it — there is no shared service account.
     ansible_python_interpreter: /usr/bin/python3
+    # Fleet-wide login user + key naming convention; override per host where
+    # it differs. admin_user in group_vars/all.yml follows ansible_user.
+    ansible_user: your-login-user
+    ansible_ssh_private_key_file: "~/.ssh/vps-{{ inventory_hostname }}.pub"
     # Break-glass public keys (hardware-backed, e.g. YubiKey-resident sk-*):
     # installed by the breakglass role into root-owned /etc/ssh/rescue_keys on
     # hosts with breakglass_managed: true. Public halves only — non-secret,
@@ -20,25 +22,16 @@ all:
     # tls_zones:
     #   example.com: ["*.example.com"]
     #   example.org: ["*.example.org", "*.vps.example.org"]
+  # Groups are derived, not listed: `web` from the apps registry (site.yml;
+  # a temporary static web: block still merges — warm-standby only), the
+  # wireguard mesh from wireguard_ip in host_vars (members also need
+  # wireguard_pubkey there + vault_wg_privkey_<host> in the vault).
   hosts:
     web-01:
       ansible_host: 203.0.113.10
-      ansible_user: your-login-user
     web-02:
       ansible_host: 203.0.113.11
-      ansible_user: your-login-user
   children:
-    # No `web` group here: site.yml derives it from the apps registry.
-    # Add a temporary static web: block only to warm up a standby
-    # before a registry flip.
-    # WireGuard mesh members. EVERY host listed here must define wireguard_ip +
-    # wireguard_pubkey in its host_vars and vault_wg_privkey_<host> in the vault
-    # (a member missing these breaks peer config rendering). A host's public
-    # endpoint is its ansible_host above.
-    wireguard:
-      hosts:
-        db-01:
-        db-02:
     # Self-hosted MySQL (Docker). db-01 = primary, db-02 = replica; a host can be
     # in web and db both. mysql_role / mysql_managed live in host_vars.
     db:
@@ -47,4 +40,3 @@ all:
           ansible_host: 203.0.113.12
         db-02:
           ansible_host: 203.0.113.13
-    # netdata + baseline apply to `all`; add non-web hosts here as needed.

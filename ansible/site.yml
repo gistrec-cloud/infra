@@ -28,10 +28,8 @@
     - role: firewall
       when: firewall_managed | default(false)
       tags: [firewall]
-    # WireGuard mesh: opt-in per host by defining wireguard_ip in host_vars (and
-    # adding the host to the `wireguard` group). Runs after firewall so the UDP
-    # port is open before the tunnel comes up. germany-02 (not ours) has no
-    # wireguard_ip and is skipped.
+    # Mesh membership = wireguard_ip in host_vars (germany-02 has none).
+    # After firewall, so the UDP port is open before the tunnel comes up.
     - role: wireguard
       when: wireguard_ip is defined
       tags: [wireguard]
