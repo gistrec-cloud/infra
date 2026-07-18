@@ -4,8 +4,8 @@ Move any set of registry-managed apps between fleet hosts with **zero
 user-visible downtime** — one command end to end:
 
 ```sh
-scripts/move-apps.sh <SRC> <DST>          # every app hosted on SRC
-scripts/move-apps.sh --app <name> <DST>   # one app   (--dry-run to preview)
+scripts/move-apps.py <SRC> <DST>          # every app hosted on SRC
+scripts/move-apps.py --app <name> <DST>   # one app   (--dry-run to preview)
 ```
 
 It flips the configs (apps.yml + terraform/dns), rsyncs plain-file

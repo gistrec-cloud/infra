@@ -1,25 +1,25 @@
-#!/usr/bin/env bash
-# Move registry apps between fleet hosts — END TO END, one command:
-# config flip (apps.yml + terraform/dns), rsync of plain-file dirs,
-# deploy, smoke, DNS apply, CI re-runs, source freeze.
-#
-# Usage:
-#   scripts/move-apps.sh <SRC> <DST>           # every app hosted on SRC
-#   scripts/move-apps.sh --app <name> <DST>    # one app
-#   ... --dry-run    # preview the flip + plan, write nothing
-#   ... --dead-src   # SRC is gone: skip rsync/freeze (CI re-runs cover
-#                    # artifact apps; plain-file apps are lost with SRC)
-#   ... --reset      # drop a stale checkpoint and start over
-#
-# Failure handling: every step is idempotent, and completed steps are
-# checkpointed in .move-apps.state.json — re-running the SAME command
-# resumes at the failed step. The checkpoint is removed on success.
-set -euo pipefail
-cd "$(dirname "$0")/.."
-exec python3 - "$@" <<'PY'
+#!/usr/bin/env python3
+"""Move registry apps between fleet hosts — END TO END, one command:
+config flip (apps.yml + terraform/dns), rsync of plain-file dirs,
+deploy, smoke, DNS apply, CI re-runs, source freeze.
+
+Usage:
+  scripts/move-apps.py <SRC> <DST>           # every app hosted on SRC
+  scripts/move-apps.py --app <name> <DST>    # one app
+  ... --dry-run    # preview the flip + plan, write nothing
+  ... --dead-src   # SRC is gone: skip rsync/freeze (CI re-runs cover
+                   # artifact apps; plain-file apps are lost with SRC)
+  ... --reset      # drop a stale checkpoint and start over
+
+Failure handling: every step is idempotent, and completed steps are
+checkpointed in .move-apps.state.json — re-running the SAME command
+resumes at the failed step. The checkpoint is removed on success.
+"""
 import json, os, re, shlex, subprocess, sys, tempfile, time
 
 import yaml
+
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 APPS, TFVARS = "ansible/apps.yml", "terraform/dns/terraform.tfvars"
 INV, STATE = "ansible/inventory/hosts.yml", ".move-apps.state.json"
@@ -36,7 +36,7 @@ for a in it:
     else: pos.append(a)
 if app and len(pos) == 1: src, dst = "", pos[0]
 elif not app and len(pos) == 2: src, dst = pos
-else: sys.exit("usage: move-apps.sh [--app NAME] [SRC] DST [--dry-run|--dead-src|--reset]")
+else: sys.exit("usage: move-apps.py [--app NAME] [SRC] DST [--dry-run|--dead-src|--reset]")
 
 def die(msg): sys.exit(f"FAIL: {msg}")
 def note(msg): print(f"     {msg}")
@@ -240,4 +240,3 @@ os.remove(STATE)
 print(f"\nMove complete: {', '.join(state['apps'])} now on {dst}; {src} frozen "
       f"(rollback: re-run the move in reverse). Reminder: repo-private backup "
       f"covers apps.yml/tfvars changes on its usual policy.")
-PY
