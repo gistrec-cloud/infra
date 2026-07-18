@@ -16,11 +16,11 @@
     that:
       - tls_zones | length > 0
       - tls_acme_email | length > 0
-      - vault_cf_acme_token | default('') | length > 0
+      - tls_cf_api_token | length > 0
     fail_msg: >-
       tls_managed is true but tls_zones / tls_acme_email (inventory, all:
-      vars:) or vault_cf_acme_token (vault; Cloudflare token scoped to
-      DNS:Edit on exactly the tls_zones zones) is missing.
+      vars:) or tls_cf_api_token (a Cloudflare token with DNS:Edit on the
+      tls_zones zones — vault or a 1Password lookup) is missing.
     quiet: true
 
 - name: Install certbot + Cloudflare DNS plugin
@@ -38,7 +38,7 @@
     content: |
       # ANSIBLE MANAGED (tls role). Token scope: DNS:Edit on the tls_zones
       # zones only — it cannot touch other zones or account settings.
-      dns_cloudflare_api_token = {{ vault_cf_acme_token }}
+      dns_cloudflare_api_token = {{ tls_cf_api_token }}
     owner: root
     group: root
     mode: "0600"

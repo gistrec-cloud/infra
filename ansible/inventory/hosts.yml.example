@@ -14,7 +14,8 @@ all:
     #   - "sk-ssh-ed25519@openssh.com AAAA... breakglass@fleet"
     # Per-zone wildcard TLS (tls role, DNS-01 via Cloudflare): zone => extra
     # SANs beyond the apex. Wildcards cover ONE label — list deeper levels
-    # explicitly. Token: vault_cf_acme_token (vault), DNS:Edit on these zones.
+    # explicitly. Token (DNS:Edit on these zones): vault_cf_acme_token in the
+    # vault, or override tls_cf_api_token here with a 1Password lookup.
     # tls_acme_email: you@example.com
     # tls_zones:
     #   example.com: ["*.example.com"]
