@@ -18,10 +18,10 @@ host_ips = {
 
 # Record names are FQDNs, exactly as the Cloudflare API returns them.
 # A records set `host` (a host_ips key) OR a literal `content` — never both.
-# Key order: zone, type, host, then the rest — keeps the flip-able columns
-# aligned and scannable.
+# Key order: zone, type, name, then host/content and the rest — records are
+# grouped per zone, so every column aligns within a section.
 dns_records = [
-  { zone = "example.com", type = "A",     host = "web-01", name = "example.com", proxied = true },
+  { zone = "example.com", type = "A",     name = "example.com",     host = "web-01", proxied = true },
   { zone = "example.com", type = "CNAME", name = "www.example.com", content = "example.com", proxied = true },
   { zone = "example.com", type = "MX",    name = "example.com",     content = "mail.example.com", priority = 10 },
   { zone = "example.org", type = "A",     name = "api.example.org", content = "198.51.100.7" }, # off-fleet: literal IP
