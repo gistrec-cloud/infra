@@ -4,7 +4,8 @@
 # TLS is fleet material: any web host can serve any domain the moment DNS
 # points at it, and moving an app needs no certificate step at all (no
 # lineage copying between hosts, unlike HTTP-01 which only works on the host
-# DNS currently points to).
+# DNS currently points to). Apps live on FIRST-level names only: *.vps.<zone>
+# is the infra namespace (SSH host FQDNs), nothing serves HTTPS there.
 #
 # Renewal is certbot's stock systemd timer, local to each host. The LE
 # duplicate-certificate limit is 5/week per identical SAN set — fine for a
