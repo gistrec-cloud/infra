@@ -36,7 +36,7 @@
 # runtime as "no processes" (the old behavior — a cryptic Errno 2 at pm2
 # start): skip with a notice when the runtime is coming, refuse when it
 # is not.
-- name: pm2 runtime not up yet — apps wait for the next run
+- name: Skip apps until the web play installs the pm2 runtime
   ansible.builtin.debug:
     msg: >-
       pm2 is not runnable yet (pm2 jlist rc={{ apppm2_jlist.rc }});
