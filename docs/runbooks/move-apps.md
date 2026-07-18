@@ -1,139 +1,158 @@
-# Runbook: germany-01 → finland-01
+# Runbook: move apps to another host
 
-Move every app off germany-01 onto finland-01 with **zero user-visible
-downtime**: the old host keeps serving until a DNS flip, and every
-app-facing domain is Cloudflare-proxied, so the flip is instant.
+Move any set of registry-managed apps from one fleet host to another
+with **zero user-visible downtime**: the source keeps serving until a
+DNS flip. Hosts are parameters, not part of the procedure — name them
+once and use the variables everywhere below:
 
-Why this is now a small job: data lives in managed MySQL (no local
-state to move), secrets live in 1Password (`dotenv <app>` documents =
-deploy source), and "what runs where" is `ansible/apps.yml` — for
-registry-managed apps the move IS `host: finland-01` + one playbook
-run. The germany-specific extras are CI artifacts (DndCrime), the
-askads-cloud port flip, TLS certs, and the DNS/GH switches.
+```sh
+SRC=germany-01 DST=finland-01   # the only place hosts are named
+```
 
-**What moves** (from `apps.yml`): `askads-cloud`, `dnd-crime-api`,
-`dnd-crime-api-staging`, `dnd-crime-landing`, `dnd-crime-landing-staging`,
-`recovery`.
+Why a move is small: data lives in managed MySQL (nothing on host
+disks), secrets live in 1Password (`dotenv <app>` documents = deploy
+source), "what runs where" is `ansible/apps.yml`, and DNS points at
+hosts by name (`host_ips` in `terraform/dns`). For registry-managed
+apps the move IS `host: $DST` + one playbook run — everything below is
+the checklist around that flip.
 
-Prerequisite PRs (merge before Phase 0):
-- infra: nodeapp `nodeapp_install` gate + pm2 boot resurrection +
-  apppm2 python3-venv (this PR)
-- gistrec/askads: `askads-cloud` ecosystem app on **8078** + deploy.sh
-  host parametrization
-- katrinaver/DndCrime: `workflow_dispatch` on the deploy workflows
+**What moves**: the apps in `apps.yml` with `host: $SRC` — all of
+them, or any subset (the registry is per-app). Per moving app, the
+registry answers what else travels: `dir:` (non-git files to rsync),
+`vhosts:` (domains to smoke and flip), `process.pm2:` (what to freeze
+on $SRC), `repo:`/`notes:` (where external deploy pointers live).
 
----
-
-## Phase 0 — prepare finland-01 (safe any time, no user impact)
+## Phase 0 — prepare $DST (safe any time, no user impact)
 
 1. **Inventory** (`ansible/inventory/hosts.yml`, gitignored): add
-   `finland-01` to the `web` group.
-2. **host_vars/finland-01.yml**: add `nodeapp_install: true`.
-   (80/443 need no firewall change — the firewall role always opens
-   SSH/80/443.)
-3. **Baseline run** — installs nginx + certbot, snippets, node + pm2 +
-   boot resurrection. No vhosts yet (apps still declare germany-01):
+   $DST to the groups matching what it takes on (`web` for
+   nginx + vhosts).
+2. **host_vars/$DST.yml**: `nodeapp_install: true` if it runs pm2
+   apps. (80/443 need no firewall change — the firewall role always
+   opens SSH/80/443.)
+3. **Baseline run** — nginx + certbot, snippets, node + pm2 + boot
+   resurrection. No vhosts yet (apps still declare $SRC):
 
    ```sh
-   cd ansible && ansible-playbook site.yml -l finland-01
+   cd ansible && ansible-playbook site.yml -l $DST
    ```
 
-4. **TLS certs** — copy the four Let's Encrypt lineages from
-   germany-01 so nginx can start serving them the moment vhosts land
-   (renewal continues on finland after the DNS flip; germany's copies
+4. **TLS certs** — copy the Let's Encrypt lineages for the moving
+   apps' domains from $SRC, so nginx serves them the moment vhosts
+   land (renewal continues on $DST after the DNS flip; $SRC's copies
    just expire). Via the laptop, preserving ownership:
 
    ```sh
    for d in live archive renewal; do
-     ssh gistrec@germany-01.vps.gistrec.cloud "sudo tar czf - -C /etc/letsencrypt $d" \
-       | ssh gistrec@finland-01.vps.gistrec.cloud "sudo tar xzf - -C /etc/letsencrypt"
+     ssh gistrec@$SRC.vps.gistrec.cloud "sudo tar czf - -C /etc/letsencrypt $d" \
+       | ssh gistrec@$DST.vps.gistrec.cloud "sudo tar xzf - -C /etc/letsencrypt"
    done
-   # covers: askads-cloud, mcp-askads-cloud, dnd-crime-gistrec-cloud,
-   #         dnd-crime-staging-gistrec-cloud (+ harmless extras)
    ```
 
+   This step dies once the wildcard-per-zone / DNS-01 scheme lands —
+   TLS becomes fleet material deployed by ansible, host-independent.
 5. **Fresh env backups** — the registry deploys env files from 1P, so
-   they must be current: `scripts/backup-envs.sh germany-01`.
+   they must be current: `scripts/backup-envs.sh $SRC`.
 
-## Phase 1 — the move (~15 min of work, zero downtime)
+## Phase 1 — the move (zero downtime)
 
-1. **CI artifacts + jail dirs** — DndCrime binaries/dists and the
-   recovery dir are not in any git clone; copy them over the WireGuard
-   mesh (germany-01 = 10.10.0.3, finland-01 = 10.10.0.4):
+1. **Non-git dirs** — CI artifacts (`process.type: artifact`) and
+   anything else a clone can't recreate; check each moving app's
+   `dir:`. Copy over the WireGuard mesh (wg IPs: `wireguard_ip` in
+   host_vars):
 
    ```sh
-   ssh gistrec@germany-01.vps.gistrec.cloud \
-     'rsync -a ~/DndCrime ~/DndCrimeStaging ~/DndCrimeLanding ~/DndCrimeLandingStaging ~/recovery \
-        gistrec@10.10.0.4:~/'
+   ssh gistrec@$SRC.vps.gistrec.cloud \
+     'rsync -a <dirs from the registry> gistrec@<wg-ip of $DST>:~/'
    ```
 
-2. **Registry flip** (`ansible/apps.yml`): for the six apps above set
-   `host: finland-01`; on `askads-cloud` also set `pm2: [askads-cloud]`
-   (the new ecosystem app that binds **8078** — the vhost already
-   proxies to 8078).
+2. **Registry flip** (`ansible/apps.yml`): `host: $DST` on every
+   moving app.
 3. **Deploy everything the registry knows**:
 
    ```sh
-   cd ansible && ansible-playbook site.yml -l finland-01
+   cd ansible && ansible-playbook site.yml -l $DST
    ```
 
-   This clones askads, builds its venv + web/out, writes env files
-   from 1P, installs the DndCrime deploy keys + control scripts,
-   starts the pm2 processes (askads-cloud from the repo ecosystem,
-   dnd-crime-* from the rsynced `ecosystem.config.js`), and enables
-   the four vhosts. Run it twice; the second run must be `changed=0`.
-4. **Local smoke on finland-01** (before any DNS change):
+   Clones + bootstraps runtimes, writes env files from 1P, installs
+   deploy keys + control scripts, starts pm2 processes, enables
+   vhosts. Run it twice; the second run must be `changed=0`.
+4. **Local smoke on $DST** (before any DNS change), for every domain
+   from the moving apps' `vhosts:`:
 
    ```sh
-   for h in askads.cloud mcp.askads.cloud dnd-crime.gistrec.cloud dnd-crime-staging.gistrec.cloud; do
-     curl -sk --resolve "$h:443:$(dig +short finland-01.vps.gistrec.cloud)" \
+   for h in <domains>; do
+     curl -sk --resolve "$h:443:$(dig +short $DST.vps.gistrec.cloud)" \
        -o /dev/null -w "$h: %{http_code}\n" "https://$h/"
    done
    ```
 
-5. **DNS flip** (`terraform/dns/terraform.tfvars`):
-   - `askads.cloud` A record: `host = "germany-01"` → `host = "finland-01"`
-     (mcp/www are CNAMEs to the apex — nothing else to touch);
-   - `dnd-crime.gistrec.cloud` + `dnd-crime-staging.gistrec.cloud`
-     CNAME content → `finland-01.vps.gistrec.cloud`;
-   - `terraform apply`. All three are Cloudflare-proxied — the switch
-     is instant, no TTL wait.
-6. **GitHub switches** (DndCrime deploys):
+5. **DNS flip** (`terraform/dns/terraform.tfvars`): grep `$SRC`, flip
+   the moving apps' records — A records: `host = "$SRC"` → `"$DST"`;
+   CNAMEs at the host: content `$SRC.vps...` → `$DST.vps...` — then
+   `terraform apply`. Cloudflare-proxied records flip instantly;
+   grey-cloud ones wait out their TTL (auto = 300 s).
+6. **External deploy pointers** — anything outside this repo that
+   names the host (CI variables, deploy scripts — see each app's
+   `repo:`/`notes:`). Flip them, then re-run each CI deploy to prove
+   the path lands on $DST.
+7. **Public smoke**: the domains over real DNS + a click-through of
+   the stateful flows; `pm2 logs` on $DST clean.
+8. **Freeze $SRC** (rollback stays possible; nothing deleted) — stop
+   the moved `process.pm2:` names:
 
    ```sh
-   gh variable set DEPLOY_HOST --repo katrinaver/DndCrime --body finland-01.vps.gistrec.cloud
-   ssh-keyscan -t ed25519 finland-01.vps.gistrec.cloud 2>/dev/null \
-     | gh variable set DEPLOY_HOSTKEY --repo katrinaver/DndCrime --body -
+   ssh gistrec@$SRC.vps.gistrec.cloud 'pm2 stop <pm2 names> && pm2 save --force'
    ```
 
-   Then run the prod + staging deploy workflows via
-   `gh workflow run` — proves the CI path lands on the new host.
-7. **askads deploy path**: flip the cloud host default in
-   `deploy.sh` (gistrec/askads) to finland-01 — one line.
-8. **Public smoke**: the four domains over real DNS + a booking-style
-   click-through on dnd-crime; `pm2 logs` on finland clean.
-9. **Freeze germany** (rollback stays possible; nothing deleted):
-
-   ```sh
-   ssh gistrec@germany-01.vps.gistrec.cloud 'pm2 stop askads dnd-crime-api dnd-crime-api-staging && pm2 save --force'
-   ```
-
-10. **Backups**: `scripts/backup-envs.sh` (finland now carries the env
-    files) and `scripts/backup-repo-files.sh` (apps.yml, hosts.yml,
-    dns tfvars all changed).
+9. **Backups**: `scripts/backup-envs.sh` ($DST now carries the env
+   files) and `scripts/backup-repo-files.sh` (apps.yml, hosts.yml,
+   dns tfvars all changed).
 
 ## Rollback
 
-Any point before step 5: nothing user-visible happened, just stop.
-After step 5: revert the tfvars change + `terraform apply` (instant,
-CF-proxied), unfreeze germany's pm2. Germany is untouched until you
-deliberately retire it.
+Any point before the DNS flip: nothing user-visible happened, just
+stop. After it: revert the tfvars flip + `terraform apply`, unfreeze
+$SRC's pm2. $SRC is untouched until you deliberately retire it.
 
-## Open questions (decide separately)
+## First use: germany-01 → finland-01 (2026-07)
 
-- **recovery**: two Go binaries + env files, NOT under pm2 anywhere —
-  moved as plain files. Is it still needed at all?
-- **DndCrimeLanding{,Staging}**: CI pushes artifacts, but no vhost
-  serves them (pre-existing question).
-- **germany-01 fate**: after a quiet week — retire (terraform), or
-  keep as a spare. Its legacy DNS aliases die in August either way.
+The specifics on top of the generic procedure (`SRC=germany-01
+DST=finland-01`):
+
+- **Prerequisite PRs** (merge before Phase 0): this repo — nodeapp
+  `nodeapp_install` gate, pm2 boot resurrection, apppm2 python3-venv;
+  gistrec/askads — `askads-cloud` ecosystem app on **8078** +
+  deploy.sh host parametrization; katrinaver/DndCrime —
+  `workflow_dispatch` on the deploy workflows.
+- **Moving apps**: `askads-cloud` (also set `pm2: [askads-cloud]` —
+  the new ecosystem app binds 8078; the vhost already proxies to it),
+  `dnd-crime-api`, `dnd-crime-api-staging`, `dnd-crime-landing`,
+  `dnd-crime-landing-staging`, `recovery`.
+- **Cert lineages**: askads-cloud, mcp-askads-cloud,
+  dnd-crime-gistrec-cloud, dnd-crime-staging-gistrec-cloud
+  (+ harmless extras).
+- **Non-git dirs**: `~/DndCrime ~/DndCrimeStaging ~/DndCrimeLanding
+  ~/DndCrimeLandingStaging ~/recovery`; finland-01's wg IP is
+  10.10.0.4.
+- **Smoke domains**: askads.cloud, mcp.askads.cloud,
+  dnd-crime.gistrec.cloud, dnd-crime-staging.gistrec.cloud — all
+  Cloudflare-proxied, so the DNS flip is instant.
+- **External pointers** (DndCrime):
+
+  ```sh
+  gh variable set DEPLOY_HOST --repo katrinaver/DndCrime --body finland-01.vps.gistrec.cloud
+  ssh-keyscan -t ed25519 finland-01.vps.gistrec.cloud 2>/dev/null \
+    | gh variable set DEPLOY_HOSTKEY --repo katrinaver/DndCrime --body -
+  ```
+
+  then `gh workflow run` prod + staging. askads: flip the cloud host
+  default in `deploy.sh` — one line.
+- **Freeze list** on germany-01: `pm2 stop askads dnd-crime-api
+  dnd-crime-api-staging`.
+- **Open questions** (decide separately): `recovery` — two Go
+  binaries + env files, not under pm2 anywhere, moved as plain
+  files — still needed at all?; `DndCrimeLanding{,Staging}` — CI
+  pushes artifacts but no vhost serves them (pre-existing);
+  germany-01's fate after a quiet week — retire (terraform) or keep
+  as a spare; its legacy DNS aliases die in August either way.
