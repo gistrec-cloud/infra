@@ -109,3 +109,4 @@
       when: >-
         nodeapp_node_apps | default([]) | length > 0
         or nodeapp_install | default(false)
+      tags: [nodeapp]
