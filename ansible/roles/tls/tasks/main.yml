@@ -28,6 +28,7 @@
     name:
       - certbot
       - python3-certbot-dns-cloudflare
+      - acl # setfacl — netdata traverse grants below
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -79,3 +80,23 @@
   loop: "{{ tls_zones | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
+
+# Netdata's x509check reads the public fullchain files straight off the disk.
+# certbot keeps live/ and archive/ at 0700 — grant the netdata user TRAVERSE
+# only (x) on the directories: fullchain.pem is 0644 and becomes readable,
+# privkey.pem stays 0600 root — never exposed. tls_extra_lineages (host_vars)
+# covers legacy lineages outside tls_zones (e.g. edalle/recepter pending
+# migration).
+- name: Let netdata traverse the certificate directories
+  ansible.posix.acl:
+    path: "{{ item }}"
+    entity: netdata
+    etype: user
+    permissions: x
+    state: present
+  vars:
+    tls_all_lineages: "{{ (tls_zones | list) + (tls_extra_lineages | default([])) }}"
+  loop: >-
+    {{ ['/etc/letsencrypt/live', '/etc/letsencrypt/archive']
+       + (tls_all_lineages | map('regex_replace', '^', '/etc/letsencrypt/live/') | list)
+       + (tls_all_lineages | map('regex_replace', '^', '/etc/letsencrypt/archive/') | list) }}
