@@ -63,13 +63,32 @@ if [ -n "$tracked" ]; then
   exit 1
 fi
 
+# ── resolve the 1P item up front, refusing to guess ──
+# `op item get <title>` fails identically for "absent", "ambiguous" and
+# "1Password locked", and reading those as "absent" is how this script
+# once minted three duplicate Documents (2026-07-18). Enumerate instead:
+# abort unless op answers and the title matches at most one item.
+ITEMS=$(op item list --vault "$VAULT" --format json) || {
+  echo "FAIL: op item list failed (1Password locked?) — aborting before any create" >&2
+  exit 1
+}
+IDS=$(python3 -c 'import json,sys
+[print(i["id"]) for i in json.load(sys.stdin) if i.get("title") == sys.argv[1]]' "$TITLE" <<<"$ITEMS")
+if [ "$(printf '%s\n' "$IDS" | sed '/^$/d' | wc -l | tr -d ' ')" -gt 1 ]; then
+  echo "FAIL: several items share the title \"$TITLE\" — keep the newest, archive the rest:" >&2
+  printf '%s\n' "$IDS" | sed 's/^/  op item delete --archive /' >&2
+  exit 1
+fi
+ID="$IDS" # one item id, or empty when the Document doesn't exist yet
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 echo "$FILES" | xargs shasum -a 256 | sort -k2 > "$tmp/$MANIFEST"
 
 # Skip the upload when the last backed-up manifest is identical.
-if op document get "$TITLE" --vault "$VAULT" 2>/dev/null \
+if [ -n "$ID" ] \
+   && op document get "$ID" --vault "$VAULT" 2>/dev/null \
      | tar xzqf - -O "$MANIFEST" > "$tmp/prev" 2>/dev/null \
    && cmp -s "$tmp/$MANIFEST" "$tmp/prev"; then
   echo "OK   $TITLE (unchanged since the last backup — nothing uploaded)"
@@ -83,17 +102,19 @@ rm -f "$MANIFEST"
 
 # op reads stdin only from a PIPE — a plain file redirect dies with
 # "expected data on stdin but none found" (op 2.35).
-if op item get "$TITLE" --vault "$VAULT" >/dev/null 2>&1; then
-  cat "$tmp/backup.tar.gz" | op document edit "$TITLE" --vault "$VAULT" - >/dev/null
+if [ -n "$ID" ]; then
+  cat "$tmp/backup.tar.gz" | op document edit "$ID" --vault "$VAULT" - >/dev/null
   action="updated"
 else
-  cat "$tmp/backup.tar.gz" | op document create - --vault "$VAULT" \
-    --title "$TITLE" --file-name "infra-repo-private.tar.gz" --tags "$TAG" >/dev/null
+  ID=$(cat "$tmp/backup.tar.gz" | op document create - --vault "$VAULT" \
+    --title "$TITLE" --file-name "infra-repo-private.tar.gz" --tags "$TAG" \
+    --format json | python3 -c 'import json,sys
+d=json.load(sys.stdin); print(d.get("uuid") or d.get("id"))')
   action="created"
 fi
 
 want=$(shasum -a 256 < "$tmp/backup.tar.gz" | cut -d' ' -f1)
-got=$(op document get "$TITLE" --vault "$VAULT" | shasum -a 256 | cut -d' ' -f1)
+got=$(op document get "$ID" --vault "$VAULT" | shasum -a 256 | cut -d' ' -f1)
 if [ "$want" = "$got" ]; then
   echo "OK   $TITLE ($action, $(echo "$FILES" | wc -l | tr -d ' ') files, sha256 verified)"
 else
