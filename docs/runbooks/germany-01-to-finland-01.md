@@ -92,8 +92,8 @@ Prerequisite PRs (merge before Phase 0):
    ```
 
 5. **DNS flip** (`terraform/dns/terraform.tfvars`):
-   - `askads.cloud` A record → finland-01's IP (mcp/www are CNAMEs to
-     the apex — nothing else to touch);
+   - `askads.cloud` A record: `host = "germany-01"` → `host = "finland-01"`
+     (mcp/www are CNAMEs to the apex — nothing else to touch);
    - `dnd-crime.gistrec.cloud` + `dnd-crime-staging.gistrec.cloud`
      CNAME content → `finland-01.vps.gistrec.cloud`;
    - `terraform apply`. All three are Cloudflare-proxied — the switch

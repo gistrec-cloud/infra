@@ -28,5 +28,9 @@ terraform apply
   `cloudflare_zone_ids`). A `validation` block rejects `proxied = true` on record
   types Cloudflare cannot proxy, and MX records are supported via the optional
   `priority` field.
+- Fleet IPs live once, in the `host_ips` map; A records point at a host by name
+  (`host = "russia-01"`) instead of a literal `content` IP. Moving an app to
+  another VPS is flipping `host` on its records; replacing a VPS behind the same
+  name is editing one `host_ips` entry. Off-fleet targets keep literal `content`.
 - Record `name`s are FQDNs exactly as the Cloudflare API returns them — keeps
   imported state and config identical, so plans stay clean.

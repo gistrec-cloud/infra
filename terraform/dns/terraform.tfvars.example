@@ -9,10 +9,20 @@ cloudflare_zone_ids = {
   "example.org" = "fedcba9876543210fedcba9876543210"
 }
 
+# Fleet hosts: inventory hostname => public IPv4. A records reference these
+# via `host` so an IP lives in exactly one place.
+host_ips = {
+  "web-01" = "203.0.113.10"
+  "web-02" = "203.0.113.11"
+}
+
 # Record names are FQDNs, exactly as the Cloudflare API returns them.
+# A records set `host` (a host_ips key) OR a literal `content` — never both.
+# Key order: zone, type, host, then the rest — keeps the flip-able columns
+# aligned and scannable.
 dns_records = [
-  { zone = "example.com", name = "example.com", type = "A", content = "203.0.113.10", proxied = true },
-  { zone = "example.com", name = "www.example.com", type = "CNAME", content = "example.com", proxied = true },
-  { zone = "example.com", name = "example.com", type = "MX", content = "mail.example.com", priority = 10 },
-  { zone = "example.org", name = "api.example.org", type = "A", content = "203.0.113.11" },
+  { zone = "example.com", type = "A",     host = "web-01", name = "example.com", proxied = true },
+  { zone = "example.com", type = "CNAME", name = "www.example.com", content = "example.com", proxied = true },
+  { zone = "example.com", type = "MX",    name = "example.com",     content = "mail.example.com", priority = 10 },
+  { zone = "example.org", type = "A",     name = "api.example.org", content = "198.51.100.7" }, # off-fleet: literal IP
 ]
