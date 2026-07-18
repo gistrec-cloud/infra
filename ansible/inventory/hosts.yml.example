@@ -12,6 +12,13 @@ all:
     # but live data, so real values stay in the gitignored copy.
     # breakglass_ssh_keys:
     #   - "sk-ssh-ed25519@openssh.com AAAA... breakglass@fleet"
+    # Per-zone wildcard TLS (tls role, DNS-01 via Cloudflare): zone => extra
+    # SANs beyond the apex. Wildcards cover ONE label — list deeper levels
+    # explicitly. Token: vault_cf_acme_token (vault), DNS:Edit on these zones.
+    # tls_acme_email: you@example.com
+    # tls_zones:
+    #   example.com: ["*.example.com"]
+    #   example.org: ["*.example.org", "*.vps.example.org"]
   children:
     web:
       hosts:

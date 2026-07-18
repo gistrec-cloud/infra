@@ -94,6 +94,12 @@
     # Deployed-apps registry: nginx takes per-app vhost file lists from it.
     - ["apps.yml", "apps.yml.example"]
   roles:
+    # Per-zone wildcard certs (DNS-01) must exist before nginx enables the
+    # vhosts that reference them — tls runs first. Opt-in per host
+    # (tls_managed); zones + email live in the inventory, token in the vault.
+    - role: tls
+      when: tls_managed | default(false)
+      tags: [tls]
     - nginx
     # No-op until the host declares legacy node apps in host_vars OR opts
     # into the runtime alone (nodeapp_install: true — node + pm2 + boot
