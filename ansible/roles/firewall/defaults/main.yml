@@ -20,3 +20,13 @@ firewall_docker_allow_tcp: []
 firewall_fail2ban_bantime: "1h"
 firewall_fail2ban_findtime: "10m"
 firewall_fail2ban_maxretry: 5
+
+# IPs fail2ban must never ban (all jails). Real values (your home IP, …) are
+# live data — override in the gitignored inventory (all: vars:).
+firewall_fail2ban_ignoreip: "127.0.0.1/8 ::1"
+
+# nginx-honeypot jail: the nginx role's honeypot.conf snippet logs scanner
+# probes of trap paths (/.env, /wp-login.php, …) to honeypot.log; one hit =
+# an immediate all-ports ban. Defaults to web hosts — the log only exists
+# where nginx serves the snippet.
+firewall_nginx_honeypot: "{{ 'web' in group_names }}"
