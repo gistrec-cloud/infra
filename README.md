@@ -4,7 +4,7 @@
 
 Infrastructure as code for the **gistrec-cloud** fleet.
 
-- **Ansible** configures what lives *inside* the servers — base hardening, firewall, nginx, Node/pm2 apps, monitoring.
+- **Ansible** configures what lives *inside* the servers — base hardening, firewall, nginx, registry-driven apps (pm2 / static / docker / cron), monitoring.
 - **Terraform** manages cloud resources — DNS (Cloudflare), AWS Lambda, and Yandex Cloud (Object Storage, Managed MySQL, Compute, Cloud Functions).
 
 The repository is deliberately split into **code** (public, here) and **live data** (private, never committed): real inventory, IPs, tokens and state stay out of git. Everything you see here uses placeholders — copy the `*.example` files, fill them locally, and they are already covered by `.gitignore`.
@@ -44,22 +44,29 @@ infra/
 │   ├── ansible.cfg
 │   ├── requirements.yml          # Galaxy collections
 │   ├── site.yml                  # wires roles to host groups
+│   ├── apps.yml                  # (gitignored) deployed-apps registry — what runs where
 │   ├── inventory/hosts.yml       # (gitignored) real hosts — copy from .example
 │   ├── group_vars/               # non-secret defaults + vault for secrets
-│   ├── host_vars/                # per-host: which apps/sites run where
+│   ├── host_vars/                # per-host knobs (opt-in roles, wg IPs, …)
 │   └── roles/
 │       ├── common/               # users, SSH hardening, base packages
 │       ├── firewall/             # nftables + fail2ban
 │       ├── nginx/                # reverse proxy + Let's Encrypt
-│       ├── nodeapp/              # Node.js + pm2 deploy
+│       ├── nodeapp/              # Node.js + pm2 runtime
+│       ├── apppm2/               # registry-driven pm2 apps (clone or CI artifact)
+│       ├── appstatic/            # registry-driven static bundles
+│       ├── appdocker/            # registry-driven docker dependencies
+│       ├── appcron/              # registry-driven cron jobs
 │       ├── netdata/              # monitoring agent
 │       ├── wireguard/            # private encrypted mesh between fleet hosts
+│       ├── chrony/               # opt-in time sync
 │       └── mysql/                # self-hosted MySQL (Docker), primary/replica
-└── terraform/                    # cloud resources as code (one root module per provider)
-    ├── dns/                      # Cloudflare DNS records
-    ├── aws/                      # Lambda functions + Function URLs
-    ├── hetzner/                  # Hetzner Cloud server (finland-01)
-    └── yandex/                   # Object Storage, Managed MySQL, Compute, Cloud Function
+├── terraform/                    # cloud resources as code (one root module per provider)
+│   ├── dns/                      # Cloudflare DNS records (host_ips: fleet IPs live once)
+│   ├── aws/                      # Lambda functions + Function URLs
+│   ├── hetzner/                  # Hetzner Cloud server (finland-01)
+│   └── yandex/                   # Object Storage, Managed MySQL, Compute, Cloud Function
+└── docs/runbooks/                # operational procedures (move-apps)
 ```
 
 ## Roles
@@ -69,10 +76,25 @@ infra/
 | `common`   | Admin user, SSH key auth + sshd hardening, base packages, timezone      |
 | `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth)  |
 | `nginx`    | Install nginx, deploy vhosts, obtain TLS certs via certbot              |
-| `nodeapp`  | Node.js (NodeSource) + pm2, deploy apps, persist across reboot          |
+| `nodeapp`  | Node.js (NodeSource) + pm2 runtime + boot resurrection                  |
+| `apppm2`   | Registry-driven pm2 apps: git clone + runtime bootstrap or CI artifacts, env files from 1Password |
+| `appstatic`| Registry-driven static bundles — built on fresh hosts, served by vhosts |
+| `appdocker`| Registry-driven docker dependencies (containers / compose), started before apps |
+| `appcron`  | Registry-driven cron jobs — a job moves hosts together with its app     |
 | `netdata`  | Install netdata, bind to localhost, Telegram alert when a pm2 app dies  |
 | `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
+| `chrony`   | Opt-in time sync: chrony replaces systemd-timesyncd (clock-stepping hypervisors) |
 | `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
+
+## App registry & moves
+
+"What runs where" lives in one gitignored file — `ansible/apps.yml` (copy from
+`apps.yml.example`): per app it names the host, dirs, env files (deployed from
+1Password), vhosts, processes, cron jobs and CI deploy keys. The app roles are
+driven entirely by this registry, and DNS points at hosts by name too (the
+`host_ips` map in `terraform/dns`), so moving an app to another VPS is flipping
+its `host:`, one playbook run and a one-word DNS change — the full procedure is
+[`docs/runbooks/move-apps.md`](docs/runbooks/move-apps.md).
 
 ## Quickstart
 
