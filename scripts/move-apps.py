@@ -97,11 +97,17 @@ def conn(host):
             out = subprocess.run(
                 ["ansible", host, "-m", "ansible.builtin.debug", "-a",
                  "msg={{ ansible_host }}|{{ ansible_user }}|{{ ansible_ssh_private_key_file }}|{{ wireguard_ip | default('') }}"],
-                cwd="ansible", env={**os.environ, "ANSIBLE_VAULT_PASSWORD_FILE": f.name},
+                cwd="ansible",
+                env={**os.environ, "ANSIBLE_VAULT_PASSWORD_FILE": f.name,
+                     # ansible.cfg renders results as yaml; force json so the
+                     # "host | SUCCESS => {...}" tail parses as data
+                     "ANSIBLE_CALLBACK_RESULT_FORMAT": "json"},
                 capture_output=True, text=True, check=True).stdout
-        m = re.search(r'"msg": "([^"]+)"', out)
-        if not m: die(f"cannot render connection vars for {host}")
-        _conn[host] = m.group(1).split("|")
+        try:
+            msg = json.loads(out[out.index("{"):])["msg"]
+        except (ValueError, LookupError):
+            die(f"cannot render connection vars for {host}: {out[:200]!r}")
+        _conn[host] = msg.split("|")
     return _conn[host]
 
 def ssh_argv(host, remote_cmd, forward_agent=False):
