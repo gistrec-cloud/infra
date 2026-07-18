@@ -32,5 +32,9 @@ terraform apply
   (`host = "russia-01"`) instead of a literal `content` IP. Moving an app to
   another VPS is flipping `host` on its records; replacing a VPS behind the same
   name is editing one `host_ips` entry. Off-fleet targets keep literal `content`.
+- A/AAAA/CNAME records are keyed by `zone:type:name`, so a `host`/content flip
+  is one atomic in-place update (no destroy+create race, no resolution gap);
+  their names must be unique (validated). TXT/MX/NS keep content in the key —
+  name duplicates are legal there.
 - Record `name`s are FQDNs exactly as the Cloudflare API returns them — keeps
   imported state and config identical, so plans stay clean.

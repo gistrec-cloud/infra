@@ -20,15 +20,17 @@ all:
     # tls_zones:
     #   example.com: ["*.example.com"]
     #   example.org: ["*.example.org", "*.vps.example.org"]
+  hosts:
+    web-01:
+      ansible_host: 203.0.113.10
+      ansible_user: your-login-user
+    web-02:
+      ansible_host: 203.0.113.11
+      ansible_user: your-login-user
   children:
-    web:
-      hosts:
-        web-01:
-          ansible_host: 203.0.113.10
-          ansible_user: your-login-user
-        web-02:
-          ansible_host: 203.0.113.11
-          ansible_user: your-login-user
+    # No `web` group here: site.yml derives it from the apps registry.
+    # Add a temporary static web: block only to warm up a standby
+    # before a registry flip.
     # WireGuard mesh members. EVERY host listed here must define wireguard_ip +
     # wireguard_pubkey in its host_vars and vault_wg_privkey_<host> in the vault
     # (a member missing these breaks peer config rendering). A host's public

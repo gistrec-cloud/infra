@@ -67,4 +67,15 @@ variable "dns_records" {
     ])
     error_message = "Every record's `host` must be a key of `host_ips`."
   }
+
+  validation {
+    condition = length(distinct([
+      for r in var.dns_records : "${r.zone}:${r.type}:${r.name}"
+      if contains(["A", "AAAA", "CNAME"], r.type)
+      ])) == length([
+      for r in var.dns_records : r
+      if contains(["A", "AAAA", "CNAME"], r.type)
+    ])
+    error_message = "Duplicate A/AAAA/CNAME (zone, type, name): pointer records are keyed by name only (so moves update in place) — round-robin would need a key extension first."
+  }
 }

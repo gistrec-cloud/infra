@@ -86,6 +86,27 @@
     - role: appstatic
       tags: [appstatic]
 
+- name: Registry-derived groups — apps.yml decides who needs the web stack
+  hosts: all
+  gather_facts: false
+  become: false
+  vars_files:
+    # Vault too: evaluating `apps` templates its nested {{ vault_* }} refs.
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+    - ["apps.yml", "apps.yml.example"]
+  tasks:
+    # A vhost-bearing app in the registry puts its host into `web`, so a
+    # `host:` flip re-homes the whole web stack. A static `web:` group
+    # still merges — for warming up a standby before a flip.
+    - name: Join `web` when the registry gives this host a vhost
+      ansible.builtin.group_by:
+        key: web
+      when: >-
+        apps | default({}) | dict2items
+          | selectattr('value.host', 'equalto', inventory_hostname)
+          | map(attribute='value.vhosts', default=[])
+          | flatten | length > 0
+
 - name: Web servers — nginx reverse proxy + Node/pm2 apps
   hosts: web
   become: true

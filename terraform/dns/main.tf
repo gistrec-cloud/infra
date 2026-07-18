@@ -5,9 +5,7 @@ provider "cloudflare" {
 # DNS records are *data*: the real set lives in terraform.tfvars (gitignored).
 # This manages them as code — see terraform.tfvars.example for the shape.
 #
-# `host` indirection resolves here, BEFORE the for_each keys are built: a key
-# embeds the record's content, so switching a record from a literal IP to the
-# equivalent `host` keeps its key — a pure refactor plans as no changes.
+# `host` indirection resolves here, BEFORE the for_each keys are built.
 locals {
   dns_records = [
     for r in var.dns_records :
@@ -16,9 +14,17 @@ locals {
 }
 
 resource "cloudflare_dns_record" "this" {
+  # A/AAAA/CNAME are keyed by name (kept unique via validation), so a
+  # host/content flip — the move operation — is one atomic in-place
+  # update; a destroy+create pair races the CF API (81053) and briefly
+  # drops the name. TXT/MX/NS may repeat a name, so content/priority
+  # stays in their key.
   for_each = {
     for r in local.dns_records :
-    "${r.zone}:${r.type}:${r.name}:${r.content}:${r.priority == null ? "" : tostring(r.priority)}" => r
+    (contains(["A", "AAAA", "CNAME"], r.type)
+      ? "${r.zone}:${r.type}:${r.name}"
+      : "${r.zone}:${r.type}:${r.name}:${r.content}:${r.priority == null ? "" : tostring(r.priority)}"
+    ) => r
   }
 
   zone_id  = var.cloudflare_zone_ids[each.value.zone]

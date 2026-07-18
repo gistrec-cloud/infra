@@ -68,6 +68,22 @@ for name, a in apps.items():
 PY
 )
 
+# ── one op round-trip for the whole run: title -> item id ──
+# `op item get <title>` fails identically for "absent", "ambiguous" and
+# "1Password locked"; reading those as "absent" mints duplicate Documents
+# (backup-repo-files.sh once made three that way). Refuse to run when op
+# is unreachable; the per-title lookups below are then purely local.
+if ! $list_only; then
+  ITEMS=$(op item list --vault "$VAULT" --format json) || {
+    echo "FAIL: op item list failed (1Password locked?) — aborting before any create" >&2
+    exit 1
+  }
+fi
+ids_for() { # <title> — matching item ids, one per line
+  python3 -c 'import json,sys
+[print(i["id"]) for i in json.load(sys.stdin) if i.get("title") == sys.argv[1]]' "$1" <<<"$ITEMS"
+}
+
 sshc_for() { # <host> — fills the global sshc array
   local ip user key
   ip=$(hostvar "$1" ansible_host)
@@ -107,16 +123,27 @@ while IFS=$'\t' read -r app host rel; do
     continue
   fi
 
-  if op item get "$title" --vault "$VAULT" >/dev/null 2>&1; then
-    "${sshc[@]}" "cat \"\$HOME/$rel\"" | op document edit "$title" --vault "$VAULT" - >/dev/null
+  ids=$(ids_for "$title")
+  if [ "$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')" -gt 1 ]; then
+    echo "FAIL $title — several 1P items share this title; keep the newest, archive the rest:" >&2
+    printf '%s\n' "$ids" | sed 's/^/  op item delete --archive /' >&2
+    fail=1
+    continue
+  fi
+  id="$ids" # one item id, or empty when the Document doesn't exist yet
+
+  if [ -n "$id" ]; then
+    "${sshc[@]}" "cat \"\$HOME/$rel\"" | op document edit "$id" --vault "$VAULT" - >/dev/null
     action="updated"
   else
-    "${sshc[@]}" "cat \"\$HOME/$rel\"" | op document create - --vault "$VAULT" \
-      --title "$title" --file-name "${title#dotenv }.env" --tags "$TAG" >/dev/null
+    id=$("${sshc[@]}" "cat \"\$HOME/$rel\"" | op document create - --vault "$VAULT" \
+      --title "$title" --file-name "${title#dotenv }.env" --tags "$TAG" \
+      --format json | python3 -c 'import json,sys
+d=json.load(sys.stdin); print(d.get("uuid") or d.get("id"))')
     action="created"
   fi
 
-  got=$(op document get "$title" --vault "$VAULT" | shasum -a 256 | cut -d' ' -f1)
+  got=$(op document get "$id" --vault "$VAULT" | shasum -a 256 | cut -d' ' -f1)
   if [ "$want" = "$got" ]; then
     echo "OK   $title ($action, sha256 verified)"
   else
