@@ -10,6 +10,7 @@
 #   env:  [env files in dir]          # default: [.env]; explicit [] = none
 #                                     # (static sites, system endpoints)
 #   repo: <github repo — documentation>
+#   ci:   [workflow names in repo — move-apps.sh re-runs them after a move]
 #   notes: <free text>
 #   cron: [cron jobs the app needs — installed by the appcron role, keyed
 #          "<app>: <name>"; minute/hour/day/month/weekday default to "*"]

@@ -1,71 +1,39 @@
 # Runbook: move apps to another host
 
 Move any set of registry-managed apps between fleet hosts with **zero
-user-visible downtime**: the source keeps serving until a DNS flip.
-The config side is one command:
+user-visible downtime** — one command end to end:
 
 ```sh
 scripts/move-apps.sh <SRC> <DST>          # every app hosted on SRC
 scripts/move-apps.sh --app <name> <DST>   # one app   (--dry-run to preview)
 ```
 
-It flips `host:` in `ansible/apps.yml` and the matching `terraform/dns`
-records, then prints the remaining steps below with the app names,
-domains and pm2 names already filled in.
+It flips the configs (apps.yml + terraform/dns), rsyncs plain-file
+dirs, deploys $DST twice, smokes it directly, applies DNS (refusing
+any plan that isn't update-only), waits for public convergence,
+re-dispatches the CI workflows of artifact apps (`ci:` in the
+registry) and freezes $SRC's pm2.
 
-Why a move is small: data lives in managed MySQL (nothing on host
-disks), secrets live in 1Password (`dotenv <app>` documents = deploy
-source, kept fresh by the after-every-secret-change policy — moves
-don't touch them), "what runs where" is `ansible/apps.yml`, `web`
-membership derives from it, and DNS points at hosts by name. CI
-deploys target the stable `deploy.*` alias and trust it
-(accept-new) — a move needs no CI-side changes at all.
+**Failure handling**: every step is idempotent, and completed steps
+are checkpointed in `.move-apps.state.json` — re-running the same
+command resumes at the failed step (`--reset` starts over; the file
+is removed on success). `--dead-src` skips rsync/freeze when $SRC is
+gone: artifact apps rebuild from CI, clone apps from git + 1P envs;
+only plain-file apps (no repo/CI — e.g. recovery) die with their
+host, which is their own DR gap to close.
 
-## The move
-
-1. **First time on $DST only** — `host_vars/$DST.yml`:
-   `nodeapp_install: true` for pm2 apps, `tls_managed: true` for
-   role-issued certs; then a baseline `ansible-playbook site.yml -l
-   $DST`.
-2. **`scripts/move-apps.sh $SRC $DST`** — registry + DNS tfvars
-   flipped, nothing applied yet.
-3. **Non-git files.** CI-artifact apps (`process.type: artifact`)
-   need nothing here — step 6 repopulates them even if $SRC is dead.
-   Plain-file apps (no `repo:`/CI — e.g. recovery) exist ONLY on
-   $SRC; if it is alive:
-
-   ```sh
-   ssh -A gistrec@$SRC.vps.gistrec.cloud \
-     'rsync -a -e "ssh -o StrictHostKeyChecking=accept-new" \
-        <dirs> gistrec@<wg-ip of $DST>:~/'
-   ```
-
-   (`-A` — hosts hold no keys for each other; `accept-new` — first
-   hop to a wg IP.) A dead $SRC loses these apps — their DR story is
-   their own problem, the registry `notes:` must say which ones they
-   are. edalle.ru's hand-managed cert lineage travels the same way.
-4. **Deploy**: `cd ansible && ansible-playbook site.yml -l $DST`,
-   twice; the second run must be `changed=0` (on a cold $DST the
-   first run skips pm2 apps until the runtime lands).
-5. **Smoke, then DNS**: curl every moving domain with `--resolve
-   "$h:443:<ip of $DST>"`, then `cd terraform/dns && terraform
-   apply` — the plan must be **in-place updates only** (pointer
-   records are keyed by name). Proxied records flip instantly, grey
-   ones within TTL (300 s).
-6. **CI-artifact apps**: re-run their deploy workflows (`gh workflow
-   run ...`) — they land on $DST via the deploy alias and rebuild
-   the artifact dirs.
-7. **Freeze $SRC** (if alive; rollback stays possible):
-
-   ```sh
-   ssh gistrec@$SRC.vps.gistrec.cloud 'pm2 stop <pm2 names> && pm2 save --force'
-   ```
+One-off prep for a first-time $DST: `nodeapp_install: true` /
+`tls_managed: true` in its host_vars + a baseline `site.yml -l $DST`
+run (the script checks and tells you). Everything else derives:
+`web` membership from the registry, certs from the tls role, CI
+target from the `deploy.*` alias (trusted via accept-new — no CI
+variables to touch, DndCrime#15).
 
 ## Rollback
 
-Any point before the DNS flip: nothing user-visible happened, just
-stop. After it: revert the tfvars flip + `terraform apply`, unfreeze
-$SRC's pm2. $SRC is untouched until you deliberately retire it.
+Any point before the DNS step: nothing user-visible happened, just
+stop (and `--reset` + re-flip if configs moved). After it: run the
+move in reverse — $SRC is untouched until you deliberately retire it.
 
 ## First use: germany-01 → finland-01 (2026-07)
 
