@@ -54,9 +54,12 @@ on $SRC), `repo:`/`notes:` (where external deploy pointers live).
    host_vars):
 
    ```sh
-   ssh gistrec@$SRC.vps.gistrec.cloud \
+   ssh -A gistrec@$SRC.vps.gistrec.cloud \
      'rsync -a <dirs from the registry> gistrec@<wg-ip of $DST>:~/'
    ```
+
+   `-A` is required: fleet hosts hold no SSH keys for each other, so
+   the rsync hop authenticates with your forwarded agent.
 
 2. **Registry flip** (`ansible/apps.yml`): `host: $DST` on every
    moving app.
@@ -132,10 +135,15 @@ DST=finland-01`):
   Cloudflare-proxied, so the DNS flip is instant.
 - **External pointers** (DndCrime):
 
+  DEPLOY_HOST is PERMANENT now: `deploy.dnd-crime.gistrec.cloud`, a
+  grey CNAME in `terraform/dns` — a future move flips only that
+  CNAME's content, never the GH variable. Only the hostkey needs a
+  per-move refresh (pipe WITHOUT `--body`: `--body -` stores a
+  literal dash, gh reads stdin only when the flag is absent):
+
   ```sh
-  gh variable set DEPLOY_HOST --repo katrinaver/DndCrime --body finland-01.vps.gistrec.cloud
-  ssh-keyscan -t ed25519 finland-01.vps.gistrec.cloud 2>/dev/null \
-    | gh variable set DEPLOY_HOSTKEY --repo katrinaver/DndCrime --body -
+  ssh-keyscan -t ed25519 deploy.dnd-crime.gistrec.cloud 2>/dev/null \
+    | gh variable set DEPLOY_HOSTKEY --repo katrinaver/DndCrime
   ```
 
   then `gh workflow run` prod + staging. askads: flip the cloud host
