@@ -49,9 +49,18 @@ echo dotenv-backup-dummy > "$vpf"
 trap 'rm -f "$vpf"' EXIT
 INV=$(ANSIBLE_VAULT_PASSWORD_FILE="$vpf" ansible-inventory --list)
 
-hostvar() {
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["_meta"]["hostvars"][sys.argv[1]].get(sys.argv[2],""))' \
-    "$1" "$2" <<<"$INV"
+# ansible-inventory JSON keeps Jinja UNRENDERED (the key file is
+# "~/.ssh/vps-{{ inventory_hostname }}.pub" fleet-wide since 2026-07) —
+# template connection vars through ansible itself (debug runs locally).
+sshc_host="" sshc_line=""
+render_conn() { # <host> — "ip|user|keyfile", cached per host
+  if [ "$1" != "$sshc_host" ]; then
+    sshc_line=$(ANSIBLE_VAULT_PASSWORD_FILE="$vpf" ansible "$1" -m ansible.builtin.debug \
+        -a 'msg={{ ansible_host }}|{{ ansible_user }}|{{ ansible_ssh_private_key_file }}' \
+      | sed -n 's/.*"msg": "\(.*\)".*/\1/p')
+    sshc_host=$1
+  fi
+  printf '%s' "$sshc_line"
 }
 
 # Registry -> one line per env file: "app<TAB>host<TAB>relative-path"
@@ -86,9 +95,9 @@ ids_for() { # <title> — matching item ids, one per line
 
 sshc_for() { # <host> — fills the global sshc array
   local ip user key
-  ip=$(hostvar "$1" ansible_host)
-  user=$(hostvar "$1" ansible_user)
-  key=$(hostvar "$1" ansible_ssh_private_key_file)
+  IFS='|' read -r ip user key <<<"$(render_conn "$1")"
+  [ -n "$ip" ] && [ -n "$user" ] && [ -n "$key" ] \
+    || { echo "FAIL: could not render connection vars for $1" >&2; exit 1; }
   key="${key/#\~/$HOME}"
   # -n: stdin from /dev/null, so ssh calls inside read loops cannot swallow
   # the loop's own input.
@@ -118,7 +127,7 @@ while IFS=$'\t' read -r app host rel; do
 
   sshc_for "$host"
   if ! want=$("${sshc[@]}" "sha256sum < \"\$HOME/$rel\"" 2>/dev/null | cut -d' ' -f1) || [ -z "$want" ]; then
-    echo "FAIL $title — ~/$rel missing on $host (registry drift?)" >&2
+    echo "FAIL $title — cannot read ~/$rel on $host (file missing / registry drift / SSH failure)" >&2
     fail=1
     continue
   fi
