@@ -11,6 +11,15 @@
          | selectattr('value.host', 'equalto', inventory_hostname)
          | selectattr('value.process', 'defined') | list }}
 
+# Fresh hosts (Ubuntu 24.04) ship python3 without the venv module.
+- name: Venv support for python apps
+  ansible.builtin.apt:
+    name: python3-venv
+    state: present
+  when: >-
+    apppm2_apps | map(attribute='value.process.runtime', default='')
+    | select('equalto', 'python') | list | length > 0
+
 - name: Snapshot current pm2 process names
   ansible.builtin.command: pm2 jlist
   become: true

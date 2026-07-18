@@ -1,5 +1,6 @@
 terraform {
-  required_version = ">= 1.5"
+  # 1.9+: dns_records validation references var.host_ips (cross-variable).
+  required_version = ">= 1.9"
 
   required_providers {
     cloudflare = {
