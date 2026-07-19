@@ -90,7 +90,33 @@
   loop: [options-ssl-nginx.conf, ssl-dhparams.pem]
   notify: Reload nginx if present
 
-- name: Issue per-zone wildcard certificates (first run only; the timer renews)
+# The lineage must track tls_zones: a `creates` guard would freeze each
+# zone's SAN set at first issue, silently ignoring later inventory edits.
+- name: Read the SAN set of each existing zone certificate
+  ansible.builtin.shell:
+    cmd: >-
+      test -e /etc/letsencrypt/live/{{ item.key }}/cert.pem || exit 42;
+      openssl x509 -noout -ext subjectAltName
+      -in /etc/letsencrypt/live/{{ item.key }}/cert.pem
+  loop: "{{ tls_zones | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: tls_zone_san_probe
+  # rc 42 = no certificate yet — the "issue it" signal. Any OTHER failure
+  # (openssl < 1.1.1 lacking -ext, unreadable file) must abort instead:
+  # read as "issue it" it would reissue every run and burn the LE
+  # duplicate limit from the header.
+  failed_when: tls_zone_san_probe.rc not in [0, 42]
+  changed_when: false
+  # Read-only; --check must still see the real SAN state.
+  check_mode: false
+
+# Runs when the zone has no certificate or its SAN set differs from the
+# inventory — compared as SETS, order noise must not reissue (the LE
+# duplicate limit in the header is only 5/week). --cert-name pins the
+# lineage, so certbot itself swaps the domain set in place; day-to-day
+# renewals stay with the stock systemd timer.
+- name: Issue per-zone wildcard certificates (new zone or changed SAN set)
   ansible.builtin.command:
     cmd: >-
       certbot certonly --non-interactive --agree-tos
@@ -98,12 +124,17 @@
       --dns-cloudflare
       --dns-cloudflare-credentials /etc/letsencrypt/dns-cloudflare.ini
       --dns-cloudflare-propagation-seconds {{ tls_dns_propagation_seconds }}
-      --cert-name {{ item.key }}
-      -d {{ ([item.key] + item.value) | join(' -d ') }}
-    creates: "/etc/letsencrypt/live/{{ item.key }}/fullchain.pem"
-  loop: "{{ tls_zones | dict2items }}"
+      --cert-name {{ item.item.key }}
+      -d {{ ([item.item.key] + item.item.value) | join(' -d ') }}
+  changed_when: true
+  loop: "{{ tls_zone_san_probe.results }}"
   loop_control:
-    label: "{{ item.key }}"
+    label: "{{ item.item.key }}"
+  when: >-
+    item.rc != 0
+    or (item.stdout | regex_findall('DNS:([^,\s]+)'))
+       | symmetric_difference([item.item.key] + item.item.value)
+       | length > 0
 
 # Netdata's x509check reads the public fullchain files straight off the disk.
 # certbot keeps live/ and archive/ at 0700 — grant the netdata user TRAVERSE

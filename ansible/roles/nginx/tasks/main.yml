@@ -137,6 +137,66 @@
     state: absent
   notify: Reload nginx
 
+# ── 443 catch-all: an unknown SNI must not land on whichever vhost sorts
+# first alphabetically (that block would answer with a real site under a
+# mismatched certificate). ssl_reject_handshake needs nginx >= 1.19.4; older
+# nginx must present a real certificate, so the template borrows the first
+# tls_zones lineage instead.
+- name: Detect the nginx version (picks the 443 catch-all flavour)
+  ansible.builtin.command: nginx -v
+  register: nginx_version_probe
+  changed_when: false
+  # A fresh-host --check has no nginx binary yet (apt won't install in
+  # check mode) — degrade to "catch-all skipped", don't abort the dry run.
+  failed_when: false
+  # nginx prints the version to stderr; run in --check too — the catch-all
+  # template below cannot render without it.
+  check_mode: false
+
+- name: Parse the nginx version
+  ansible.builtin.set_fact:
+    nginx_version: "{{ nginx_version_probe.stderr | regex_search('nginx/([0-9.]+)', '\\1') | first }}"
+  when: nginx_version_probe.rc == 0
+
+# Old nginx needs the borrowed certificate on disk or nginx -t below fails.
+# The tls role runs BEFORE nginx in site.yml's web play, so normally the
+# lineage already exists — but tls is opt-in (tls_managed), so on a fresh
+# host without it: probe, and skip the catch-all rather than break the run.
+- name: Probe the borrowed catch-all certificate (pre-1.19.4 nginx only)
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ tls_zones | list | first }}/fullchain.pem"
+  register: nginx_catchall_cert
+  when:
+    - nginx_version is defined
+    - nginx_version is version('1.19.4', '<')
+    - tls_zones | default({}) | length > 0
+
+- name: Deploy the 443 catch-all vhost
+  ansible.builtin.template:
+    src: catchall-443.conf.j2
+    dest: /etc/nginx/sites-available/catchall-443.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: >-
+    nginx_version is defined
+    and (nginx_version is version('1.19.4', '>=')
+         or nginx_catchall_cert.stat.exists | default(false))
+  notify: Reload nginx
+
+- name: Enable the 443 catch-all vhost
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/catchall-443.conf
+    dest: /etc/nginx/sites-enabled/catchall-443.conf
+    state: link
+    # force: the src doesn't exist yet in --check runs (template not applied).
+    force: true
+  when: >-
+    nginx_version is defined
+    and (nginx_version is version('1.19.4', '>=')
+         or nginx_catchall_cert.stat.exists | default(false))
+  notify: Reload nginx
+
 # Fleet-wide /health (see the template header for the server_name trick).
 - name: Deploy health vhost
   ansible.builtin.template:
