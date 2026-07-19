@@ -59,6 +59,7 @@
   notify: Restart netdata
   when: netdata_hostname | length > 0
 
+# no_log: the rendered config carries the streaming API key.
 - name: Configure metrics streaming (parent/child)
   ansible.builtin.template:
     src: stream.conf.j2
@@ -66,6 +67,7 @@
     owner: root
     group: netdata
     mode: "0640"
+  no_log: true
   notify: Restart netdata
   when: >-
     netdata_stream_api_key | length > 0 and
@@ -136,6 +138,7 @@
   notify: Restart netdata
 
 # alarm-notify.sh re-reads this file on every notification — no restart needed.
+# no_log: the rendered file carries the Telegram token and Pushover keys.
 - name: Send health alerts (Telegram + Pushover escalation)
   ansible.builtin.template:
     src: health_alarm_notify.conf.j2
@@ -143,6 +146,7 @@
     owner: root
     group: netdata
     mode: "0640"
+  no_log: true
   when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
 
 - name: Enable and start netdata

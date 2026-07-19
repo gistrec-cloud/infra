@@ -4,11 +4,15 @@
 # ours. Jobs = tls_zones (fleet-wide) + tls_extra_lineages (host_vars, e.g.
 # legacy lineages pending migration). certbot renews at 30 days left, so the
 # 14/7-day thresholds mean "renewal has been broken for two weeks".
+# autodetection_retry: the netdata play (hosts: all) runs before the web play
+# issues certs via the tls role, so on a fresh host the lineage may not exist
+# yet — retry instead of dying on the first failed check (default retry is 0).
 jobs:
 {% for lineage in (tls_zones | default({}) | list) + (tls_extra_lineages | default([])) %}
   - name: {{ lineage | replace('.', '_') | replace('-', '_') }}
     source: file:///etc/letsencrypt/live/{{ lineage }}/fullchain.pem
     update_every: 600
+    autodetection_retry: 60
     days_until_expiration_warning: 14
     days_until_expiration_critical: 7
 {% endfor %}

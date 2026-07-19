@@ -24,7 +24,7 @@
     group: root
     mode: "0600"
   no_log: true
-  notify: Restart wireguard
+  notify: Sync wireguard config
 
 - name: Enable and start wg-quick
   ansible.builtin.systemd:
