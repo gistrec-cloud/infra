@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# Catch-all for TLS connections whose SNI matches no vhost — without it nginx
+# hands them to the alphabetically first server block on 443 (a real site,
+# with its certificate). The :80 default_server stays with gistrec-cloud.conf.
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+
+{% if nginx_version is version('1.19.4', '>=') %}
+    # No certificate needed: the handshake itself is rejected, so probes on
+    # the bare IP never see a hostname.
+    ssl_reject_handshake on;
+{% else %}
+    # Pre-1.19.4 nginx cannot reject the handshake without a certificate —
+    # borrow the first tls_zones lineage (the task guard verified it exists)
+    # and close the connection without a response.
+    ssl_certificate     /etc/letsencrypt/live/{{ tls_zones | list | first }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ tls_zones | list | first }}/privkey.pem;
+
+    return 444;
+{% endif %}
+}
