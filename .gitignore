@@ -25,6 +25,9 @@ ansible/files/bin/*
 
 # Raw key / certificate material (defense-in-depth alongside gitleaks)
 *.pem
+# ...except the public RFC 7919 ffdhe2048 group certbot ships to everyone —
+# every vhost references it, the tls role must install it (no secret inside)
+!ansible/roles/tls/files/ssl-dhparams.pem
 *.key
 *.p12
 *.pfx

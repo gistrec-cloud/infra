@@ -74,6 +74,23 @@
     group: root
     mode: "0755"
 
+# Every vhost includes /etc/letsencrypt/options-ssl-nginx.conf and
+# /etc/letsencrypt/ssl-dhparams.pem. Historically certbot's --nginx INSTALLER
+# wrote them; `certonly` with the DNS plugin never does — so a host rebuilt
+# from the repo alone would fail nginx -t on the first TLS vhost. Vendored
+# byte-identical to what certbot 2.9.0 ships (the Mozilla ssl-config options
+# file and the RFC 7919 ffdhe2048 group — certbot copies these same files to
+# everyone, it does not generate per-host dhparams).
+- name: Install the TLS parameter files the vhosts include
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/letsencrypt/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [options-ssl-nginx.conf, ssl-dhparams.pem]
+  notify: Reload nginx if present
+
 - name: Issue per-zone wildcard certificates (first run only; the timer renews)
   ansible.builtin.command:
     cmd: >-

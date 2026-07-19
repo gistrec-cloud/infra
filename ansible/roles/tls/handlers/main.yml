@@ -1,0 +1,8 @@
+---
+# The role can run on hosts without nginx (TLS is fleet material), so guard
+# like the renewal deploy hook does. On a fresh web host the flush happens at
+# the end of the nginx role — by then nginx is installed and configured. A
+# real nginx -t failure must surface, hence no `|| true`.
+- name: Reload nginx if present
+  ansible.builtin.shell: |
+    if command -v nginx >/dev/null; then nginx -t && systemctl reload nginx; fi
