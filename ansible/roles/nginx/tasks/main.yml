@@ -53,8 +53,8 @@
          | selectattr('value.vhosts', 'defined')
          | map(attribute='value.vhosts') | flatten }}
 
-# Before the vhosts that reference them. root:www-data 0640 — the workers
-# read it per request; no_log: the values are credential hashes.
+# no_log: the values are credential hashes. group www-data — workers read
+# the file per request.
 - name: Install htpasswd files the vhosts reference
   ansible.builtin.copy:
     content: "{{ item.value }}"
@@ -90,13 +90,9 @@
   loop: "{{ nginx_vhost_files }}"
   notify: Reload nginx
 
-# Runs BEFORE the vhost template lands: the template renders the 443 block
-# for tls: sites, and nginx -t fails on a missing lineage. certonly with the
-# nginx authenticator solves the challenge on the running server (temporary
-# config, fresh host serves the stock default site at this point) and never
-# edits our files — the installer flavour used to append a 443 block that the
-# next template run silently wiped. A tls: true site without certbot_email
-# now dies loudly at nginx -t instead of silently serving plain HTTP.
+# BEFORE the vhost template: its 443 block references the lineage. certonly
+# authenticates on the running nginx via a temporary config and never edits
+# our files (the installer flavour did — and the template then wiped it).
 - name: Obtain TLS certificates via certbot (certonly — the template owns the vhost)
   ansible.builtin.command: >-
     certbot certonly --nginx --non-interactive --agree-tos

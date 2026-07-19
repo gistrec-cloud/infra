@@ -20,11 +20,8 @@ server {
     return 301 https://$host$request_uri;
 }
 
-# The full 80+443 pair is rendered HERE. The old scheme let the certbot
-# installer (--nginx) append the 443 block to the deployed file — which the
-# next play run overwrote with the 80-only template while creates: kept the
-# certbot task skipped: silent HTTPS loss. The role obtains the certificate
-# via certonly BEFORE this file lands.
+# The lineage must exist before this file lands — the role's certonly task
+# runs first.
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
@@ -33,9 +30,8 @@ server {
     ssl_certificate     /etc/letsencrypt/live/{{ item.server_name }}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/{{ item.server_name }}/privkey.pem;
 
-    # Inline TLS parameters, NOT the /etc/letsencrypt includes the verbatim
-    # vhosts use: nginx_sites hosts need not run the tls role, and certonly
-    # never writes those files.
+    # Inline — nginx_sites hosts need not run the tls role, and certonly
+    # never writes the /etc/letsencrypt include files.
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
     ssl_session_cache shared:le_nginx_SSL:10m;

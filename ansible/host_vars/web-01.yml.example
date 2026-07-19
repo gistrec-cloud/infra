@@ -11,10 +11,8 @@ nginx_sites:
     upstream_port: 8081
     tls: true
 
-# nginx TLS via certbot. REQUIRED once any site above sets tls: true — the
-# vhost template always renders the 443 block for tls: sites, so a missing
-# email (= no issuance) fails loudly at nginx -t instead of silently
-# serving plain HTTP.
+# nginx TLS via certbot. REQUIRED once any site above sets tls: true —
+# without it (= no issuance) the always-rendered 443 block fails nginx -t.
 certbot_email: admin@example.com
 
 # netdata role: pm2 process-down alerts are derived automatically from

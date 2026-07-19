@@ -5,15 +5,9 @@ nginx_sites: []
 
 # Set certbot_email (e.g. in host_vars) to enable Let's Encrypt issuance.
 
-# Basic-auth credential files the verbatim vhosts reference via
-# auth_basic_user_file. Path → htpasswd content; real values are vault refs
-# in the gitignored inventory (all: vars: — web hosts are uniform fleet
-# material, every one gets every file):
-#   nginx_htpasswd_files:
-#     /etc/nginx/.htpasswd: "{{ vault_htpasswd_stats }}"
-#     /etc/nginx/.htpasswd-budget: "{{ vault_htpasswd_budget }}"
-# Codified because nothing else recreates them: nginx -t passes without the
-# file (it opens per request, not at parse time), so a rebuilt host goes
-# green and then serves HTTP 500 to every authed request — and the content
-# is unrecoverable from repo + 1Password alone.
+# htpasswd files the verbatim vhosts reference (auth_basic_user_file):
+# path → content, vault refs in the gitignored inventory (all: vars:), e.g.
+#   /etc/nginx/.htpasswd: "{{ vault_htpasswd_stats }}"
+# Nothing else recreates them, and nginx -t passes without the file (opened
+# per request) — a rebuilt host would serve 500s to every authed request.
 nginx_htpasswd_files: {}

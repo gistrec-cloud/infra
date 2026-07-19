@@ -35,9 +35,8 @@ table inet filter {
         # Docker maintains its own accept rules in the ip filter table.
         ct state established,related accept
         iifname "docker0" accept
-        # Compose projects bridge on br-<id>, not docker0 — without this their
-        # containers' NEW outbound connections hit the drop policy (inbound
-        # still works via DNAT + established, so the breakage is silent).
+        # Compose projects bridge on br-<id>, not docker0 — without this
+        # their NEW outbound connections silently hit the drop policy.
         iifname "br-*" accept
 {% for rule in firewall_docker_allow_tcp %}
         ip saddr {{ rule.from }} tcp dport {{ rule.port }} ct state new accept
