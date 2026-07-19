@@ -6,8 +6,37 @@
 # vars_files. First-found list: the real vault, else the example (placeholders)
 # so syntax checks and fresh clones still parse.
 #
-# Play order is dependency order: baseline (network, firewall) → databases →
-# app dependencies (docker) → apps → web layer on top.
+# Play order is dependency order: registry-derived groups first (the firewall
+# role's honeypot flag reads `web` membership), then baseline (network,
+# firewall) → databases → app dependencies (docker) → apps → web layer on top.
+- name: Registry-derived groups — apps.yml decides who needs the web stack
+  hosts: all
+  gather_facts: false
+  become: false
+  vars_files:
+    # Vault too: evaluating `apps` templates its nested {{ vault_* }} refs.
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+    - ["apps.yml", "apps.yml.example"]
+  tasks:
+    # A vhost-bearing app in the registry puts its host into `web`, so a
+    # `host:` flip re-homes the whole web stack. A static `web:` group
+    # still merges — for warming up a standby before a flip.
+    # Runs FIRST: the baseline play's firewall role gates its honeypot jail
+    # on `web` membership — when this play sat after the apps play, those
+    # tasks silently skipped on every run (caught 2026-07-19).
+    - name: Join `web` when the registry gives this host a vhost
+      ansible.builtin.group_by:
+        key: web
+      changed_when: false
+      # `always`: a --tags run (e.g. --tags nginx) must still derive the
+      # group, or the web play below matches only static members.
+      tags: [always]
+      when: >-
+        apps | default({}) | dict2items
+          | selectattr('value.host', 'equalto', inventory_hostname)
+          | map(attribute='value.vhosts', default=[])
+          | flatten | length > 0
+
 - name: Baseline for every host (monitoring)
   hosts: all
   become: true
@@ -84,31 +113,6 @@
       tags: [apppm2]
     - role: appstatic
       tags: [appstatic]
-
-- name: Registry-derived groups — apps.yml decides who needs the web stack
-  hosts: all
-  gather_facts: false
-  become: false
-  vars_files:
-    # Vault too: evaluating `apps` templates its nested {{ vault_* }} refs.
-    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
-    - ["apps.yml", "apps.yml.example"]
-  tasks:
-    # A vhost-bearing app in the registry puts its host into `web`, so a
-    # `host:` flip re-homes the whole web stack. A static `web:` group
-    # still merges — for warming up a standby before a flip.
-    - name: Join `web` when the registry gives this host a vhost
-      ansible.builtin.group_by:
-        key: web
-      changed_when: false
-      # `always`: a --tags run (e.g. --tags nginx) must still derive the
-      # group, or the web play below matches only static members.
-      tags: [always]
-      when: >-
-        apps | default({}) | dict2items
-          | selectattr('value.host', 'equalto', inventory_hostname)
-          | map(attribute='value.vhosts', default=[])
-          | flatten | length > 0
 
 - name: Web servers — nginx reverse proxy + Node/pm2 apps
   hosts: web

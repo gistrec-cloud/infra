@@ -31,6 +31,15 @@
     mode: "0644"
   notify: Reload nginx
 
+- name: Install the Cloudflare realip snippet (http scope, via conf.d)
+  ansible.builtin.template:
+    src: cloudflare-realip.conf.j2
+    dest: /etc/nginx/conf.d/cloudflare-realip.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
 # Verbatim vhost files declared per app in the apps registry (vhosts: [...]),
 # stored in files/vhosts/<name>.conf (gitignored — real domains). No
 # templating: what you saved is what runs. NOTE: the files reference

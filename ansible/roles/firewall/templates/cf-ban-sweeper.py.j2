@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+# {{ ansible_managed }}
+# Safety net against eternal bans: fail2ban deletes its own CF Access Rule
+# when the (escalating) bantime expires — but that timer lives in the host's
+# sqlite. Retire/wipe the host with active bans and its rules in CF are
+# orphaned forever. Every web host runs this daily: delete any fail2ban-noted
+# rule older than MAX_AGE_DAYS. 8d > the 128h bantime.maxtime cap, so no live
+# ban is ever cut short; an orphan outlives its host by ~3 days. Concurrent
+# sweeps from peer hosts are fine — a lost DELETE race is swallowed below.
+import datetime
+import json
+import syslog
+import urllib.request
+
+TOKEN = "{{ firewall_cf_api_token }}"
+BASE = ("https://api.cloudflare.com/client/v4/accounts/"
+        "{{ firewall_cf_account_id }}/firewall/access_rules/rules")
+MAX_AGE = datetime.timedelta(days=8)
+
+
+def req(url, method="GET"):
+    r = urllib.request.Request(
+        url, method=method, headers={"Authorization": "Bearer " + TOKEN})
+    with urllib.request.urlopen(r, timeout=30) as resp:
+        return json.load(resp)
+
+
+now = datetime.datetime.now(datetime.timezone.utc)
+stale = []
+page = 1
+while True:
+    d = req("%s?page=%d&per_page=100" % (BASE, page))
+    for rule in d["result"]:
+        if not (rule.get("notes") or "").startswith("fail2ban"):
+            continue
+        # Truncate to seconds: CF returns 9-digit fractions, which older
+        # python fromisoformat() rejects.
+        created = datetime.datetime.strptime(
+            rule["created_on"][:19], "%Y-%m-%dT%H:%M:%S"
+        ).replace(tzinfo=datetime.timezone.utc)
+        if now - created > MAX_AGE:
+            stale.append(rule["id"])
+    if page >= d["result_info"]["total_pages"]:
+        break
+    page += 1
+
+deleted = 0
+for rule_id in stale:
+    try:
+        req("%s/%s" % (BASE, rule_id), method="DELETE")
+        deleted += 1
+    except Exception:
+        pass  # already deleted by a peer host's sweeper
+if deleted:
+    syslog.syslog("cf-ban-sweeper: deleted %d orphaned fail2ban rules" % deleted)
