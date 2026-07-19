@@ -20,6 +20,13 @@ netdata_bind_to: "127.0.0.1"
 # Telegram delivery for health alerts (empty = alerts stay dashboard-only).
 netdata_telegram_bot_token: "{{ vault_netdata_telegram_bot_token | default('') }}"
 netdata_telegram_chat_id: "{{ vault_netdata_telegram_chat_id | default('') }}"
+# Twilio SMS escalation (empty = telegram-only). The role→phone map lives in
+# the vault too — phone numbers are personal data and stay out of git.
+netdata_twilio_account_sid: "{{ vault_twilio_account_sid | default('') }}"
+netdata_twilio_api_key: "{{ vault_twilio_api_key | default('') }}"
+netdata_twilio_api_secret: "{{ vault_twilio_api_secret | default('') }}"
+netdata_twilio_messaging_sid: "{{ vault_twilio_messaging_sid | default('') }}"
+netdata_sms_roles: "{{ vault_netdata_sms_roles | default({}) }}"
 # Streaming: shared parent/child API key (per-host role set in host_vars).
 netdata_stream_api_key: "{{ vault_netdata_stream_api_key | default('') }}"
 # Dashboard node names follow the inventory (fleet names), not the machine

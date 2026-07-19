@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+# Fleet liveness endpoint: GET /health answers 200 on every web host, by the
+# host's vps name or by raw IP — nginx matches a literal IP in server_name
+# against the Host header that bare-IP probes (curl, uptime monitors, netdata
+# httpcheck over wg0) send. Deliberately NOT default_server: gistrec-cloud.conf
+# owns that slot on whichever host it lives.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ inventory_hostname }}.vps.gistrec.cloud {{ ansible_host }}{% if wireguard_ip is defined %} {{ wireguard_ip }}{% endif %};
+
+    include snippets/honeypot.conf;
+
+    location = /health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Anything else addressed here is scanner noise — drop it like the honeypot.
+    location / {
+        return 444;
+    }
+}
