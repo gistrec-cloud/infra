@@ -30,3 +30,11 @@ firewall_fail2ban_ignoreip: "127.0.0.1/8 ::1"
 # an immediate all-ports ban. Defaults to web hosts — the log only exists
 # where nginx serves the snippet.
 firewall_nginx_honeypot: "{{ 'web' in group_names }}"
+
+# Second arm of the honeypot ban: mirror it as an account-level Cloudflare IP
+# Access Rule, so the ban also holds for proxied vhosts (their connections
+# always arrive from CF edges — nftables alone can't cut them). Empty token =
+# nftables only. Real values live in the gitignored inventory (all: vars:);
+# the token is 1P item cf-firewall-token.
+firewall_cf_api_token: ""
+firewall_cf_account_id: ""

@@ -12,7 +12,14 @@ logpath   = /var/log/nginx/honeypot.log
 backend   = auto
 maxretry  = 1
 bantime   = 86400
-banaction = nftables-allports
+# Two arms: nftables cuts direct-to-origin traffic (*.vps, edalle.ru, raw IP);
+# the Cloudflare action mirrors the ban as an account-wide IP Access Rule,
+# because proxied vhosts always connect from CF edges and a local ban never
+# touches them. Requires realip (nginx role) so <ip> is the real client.
+action    = nftables-allports
+{% if firewall_cf_api_token | length > 0 %}
+            cloudflare-account[cftoken="{{ firewall_cf_api_token }}", cfaccount="{{ firewall_cf_account_id }}"]
+{% endif %}
 bantime.increment = true
 bantime.maxtime   = 1w
 ignoreip  = {{ firewall_fail2ban_ignoreip }}
