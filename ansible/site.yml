@@ -37,13 +37,9 @@
           | map(attribute='value.vhosts', default=[])
           | flatten | length > 0
 
-# op-backed inventory lookups are LAZY: every task/host that templates the
-# var re-runs `op` — one Touch ID approval each, a dozen-plus per full run.
-# Resolve each token exactly once into localhost's facts; the inventory vars
-# serve hostvars['localhost'] to every host and fall back to the direct
-# lookup for ad-hoc runs. Tagged per consumer, so e.g. --tags nginx prompts
-# for nothing. All prompts land in the first seconds of the run — walking
-# away mid-deploy no longer kills it.
+# op-backed inventory lookups are lazy — every evaluation re-runs `op`, one
+# Touch ID prompt each. Resolve each token once into localhost's facts; the
+# inventory vars serve that fact, falling back to the lookup for ad-hoc runs.
 - name: Controller secrets — one op prompt per token per run
   hosts: all
   gather_facts: false

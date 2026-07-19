@@ -11,9 +11,8 @@
 # duplicate-certificate limit is 5/week per identical SAN set — fine for a
 # handful of web hosts, just don't bootstrap six new ones in one week.
 
-# Pin the inventory expression as a fact so per-task templating stops
-# re-evaluating it. site.yml resolves the op lookup itself once per RUN
-# (localhost fact); standalone role use falls back to one lookup per host.
+# Per-task templating must hit a fact, not the inventory expression
+# (site.yml resolves the op lookup itself once per run).
 - name: Resolve the Cloudflare token once
   ansible.builtin.set_fact:
     tls_cf_api_token: "{{ tls_cf_api_token }}"

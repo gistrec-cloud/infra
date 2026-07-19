@@ -1,6 +1,5 @@
 ---
-# 3 when: clauses + 2 templates re-evaluate this var — pin it once per host
-# (cf. the tls role) so they hit a fact, not the op-backed inventory lookup.
+# when:/template evaluations must hit a fact, not the op-backed lookup.
 - name: Resolve the Cloudflare token once
   ansible.builtin.set_fact:
     firewall_cf_api_token: "{{ firewall_cf_api_token }}"

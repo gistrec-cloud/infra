@@ -18,9 +18,8 @@ all:
     # SANs beyond the apex. Wildcards cover ONE label — list deeper levels
     # explicitly. Token (DNS:Edit on these zones): vault_cf_acme_token in the
     # vault, or override tls_cf_api_token here with a 1Password lookup —
-    # if you do, serve it via the once-per-run resolver play in site.yml
-    # (hostvars['localhost'] fact + direct-lookup fallback), or every task
-    # templating the var re-prompts the 1Password app.
+    # served via site.yml's once-per-run resolver, or every evaluation
+    # re-prompts the 1Password app.
     # tls_acme_email: you@example.com
     # tls_zones:
     #   example.com: ["*.example.com"]
