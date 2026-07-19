@@ -78,6 +78,33 @@
     - firewall_nginx_honeypot | bool
     - firewall_cf_api_token | length > 0
 
+# Orphan sweep: fail2ban unbans (= deletes the CF rule) only while its host
+# lives; a retired host would leave its rules in CF forever. Every web host
+# sweeps daily, so losing any single host can't make a ban eternal.
+- name: Install the CF ban sweeper (mode 0700 — the script embeds the token)
+  ansible.builtin.template:
+    src: cf-ban-sweeper.py.j2
+    dest: /usr/local/sbin/cf-ban-sweeper
+    owner: root
+    group: root
+    mode: "0700"
+  when:
+    - firewall_nginx_honeypot | bool
+    - firewall_cf_api_token | length > 0
+
+- name: Schedule the CF ban sweeper daily
+  ansible.builtin.copy:
+    content: |
+      # Ansible-managed (roles/firewall): daily orphan sweep of fail2ban CF rules.
+      17 4 * * * root /usr/local/sbin/cf-ban-sweeper
+    dest: /etc/cron.d/cf-ban-sweeper
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - firewall_nginx_honeypot | bool
+    - firewall_cf_api_token | length > 0
+
 # mode 0600: the jail file embeds the CF API token (cloudflare-account action).
 - name: Enable the nginx-honeypot jail
   ansible.builtin.template:
