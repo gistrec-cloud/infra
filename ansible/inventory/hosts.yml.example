@@ -17,7 +17,9 @@ all:
     # Per-zone wildcard TLS (tls role, DNS-01 via Cloudflare): zone => extra
     # SANs beyond the apex. Wildcards cover ONE label — list deeper levels
     # explicitly. Token (DNS:Edit on these zones): vault_cf_acme_token in the
-    # vault, or override tls_cf_api_token here with a 1Password lookup.
+    # vault, or override tls_cf_api_token here with a 1Password lookup —
+    # served via site.yml's once-per-run resolver, or every evaluation
+    # re-prompts the 1Password app.
     # tls_acme_email: you@example.com
     # tls_zones:
     #   example.com: ["*.example.com"]

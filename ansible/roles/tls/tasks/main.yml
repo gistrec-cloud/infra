@@ -11,9 +11,8 @@
 # duplicate-certificate limit is 5/week per identical SAN set — fine for a
 # handful of web hosts, just don't bootstrap six new ones in one week.
 
-# The 1Password lookup behind tls_cf_api_token would otherwise re-run `op`
-# for EVERY task and host that templates the var — one desktop-app approval
-# popup each. Pin the resolved value as a fact: one lookup per host per run.
+# Per-task templating must hit a fact, not the inventory expression
+# (site.yml resolves the op lookup itself once per run).
 - name: Resolve the Cloudflare token once
   ansible.builtin.set_fact:
     tls_cf_api_token: "{{ tls_cf_api_token }}"

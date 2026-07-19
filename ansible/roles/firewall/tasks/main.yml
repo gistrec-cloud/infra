@@ -1,4 +1,10 @@
 ---
+# when:/template evaluations must hit a fact, not the op-backed lookup.
+- name: Resolve the Cloudflare token once
+  ansible.builtin.set_fact:
+    firewall_cf_api_token: "{{ firewall_cf_api_token }}"
+  no_log: true
+
 - name: Install nftables and fail2ban
   ansible.builtin.apt:
     name:

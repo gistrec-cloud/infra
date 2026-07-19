@@ -37,6 +37,36 @@
           | map(attribute='value.vhosts', default=[])
           | flatten | length > 0
 
+# op-backed inventory lookups are lazy — every evaluation re-runs `op`, one
+# Touch ID prompt each. Resolve each token once into localhost's facts; the
+# inventory vars serve that fact, falling back to the lookup for ad-hoc runs.
+- name: Controller secrets — one op prompt per token per run
+  hosts: all
+  gather_facts: false
+  become: false
+  # Pinned for the run_once tasks below: free would race the resolution.
+  strategy: linear
+  tasks:
+    - name: Resolve the CF DNS token (tls role)
+      ansible.builtin.set_fact:
+        cf_dns_token: "{{ tls_cf_api_token }}"
+      run_once: true # noqa: run-once[task]
+      delegate_to: localhost
+      delegate_facts: true
+      no_log: true
+      when: tls_cf_api_token is defined
+      tags: [tls]
+
+    - name: Resolve the CF firewall token (firewall role)
+      ansible.builtin.set_fact:
+        cf_firewall_token: "{{ firewall_cf_api_token }}"
+      run_once: true # noqa: run-once[task]
+      delegate_to: localhost
+      delegate_facts: true
+      no_log: true
+      when: firewall_cf_api_token is defined
+      tags: [firewall]
+
 - name: Baseline for every host (monitoring)
   hosts: all
   become: true
