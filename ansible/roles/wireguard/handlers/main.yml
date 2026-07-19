@@ -1,5 +1,21 @@
 ---
-- name: Restart wireguard
-  ansible.builtin.systemd:
-    name: "wg-quick@{{ wireguard_interface }}"
-    state: restarted
+# syncconf applies key/peer/AllowedIPs changes without dropping the tunnel — a
+# wg-quick restart would cut everything riding wg0 mesh-wide (ClickHouse
+# clients, health probes). Changing Address/MTU still needs a manual
+# `systemctl restart wg-quick@wg0` (accepted rarity). No route handling here:
+# every AllowedIPs is a /32 inside the already-connected /24. First provision
+# is safe — tasks enable/start wg-quick before handlers flush, so the
+# interface exists by the time this runs.
+- name: Sync wireguard config
+  # Capture the stripped config FIRST: with a bare process substitution a
+  # failing `wg-quick strip` feeds syncconf an empty stream, which "succeeds"
+  # by silently dropping every peer. A strip failure must abort instead.
+  ansible.builtin.shell: |
+    set -euo pipefail
+    conf="$(wg-quick strip /etc/wireguard/{{ wireguard_interface }}.conf)"
+    wg syncconf {{ wireguard_interface }} <(printf '%s\n' "$conf")
+  args:
+    # process substitution — /bin/sh chokes on it
+    executable: /bin/bash
+  # Handlers only run when notified — the sync IS the change.
+  changed_when: true
