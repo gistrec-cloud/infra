@@ -53,6 +53,19 @@
          | selectattr('value.vhosts', 'defined')
          | map(attribute='value.vhosts') | flatten }}
 
+# Before the vhosts that reference them. root:www-data 0640 — the workers
+# read it per request; no_log: the values are credential hashes.
+- name: Install htpasswd files the vhosts reference
+  ansible.builtin.copy:
+    content: "{{ item.value }}"
+    dest: "{{ item.key }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+  loop: "{{ nginx_htpasswd_files | dict2items }}"
+  no_log: true
+  notify: Reload nginx
+
 # Deployed without the .conf suffix — matching the hand-made files already
 # on the hosts, so adopting an existing vhost overwrites it in place instead
 # of leaving a duplicate server block behind.
