@@ -54,14 +54,15 @@ terraform plan     # must show 0 changes before you apply anything
 
 ## Yandex Cloud — three folders, one root module each
 
-The cloud `b1gbdqnplunl11lqrv6h` has **three folders**, each adopted as its own root module
-(own provider `folder_id` + own state):
+The cloud `b1gxxxxxxxxxxxxxxxxx` has **three folders**, each adopted as its own root module
+(own provider `folder_id` + own state; ids here are placeholders — the real ones live in each
+module's gitignored `terraform.tfvars`):
 
 | Folder | Module | Resources |
 |--------|--------|-----------|
-| `default` (`b1gs8d5lqs5n7dhd3ntf`) | [`terraform/yandex`](yandex) | 71 |
-| `budget-explorer` (`b1gvcvqp72jn00eck6o1`) | [`terraform/yandex-budget-explorer`](yandex-budget-explorer) | 10 |
-| `vk-ads-tool` (`b1gb7scjmu5adgrjlko7`) | [`terraform/yandex-vk-ads-tool`](yandex-vk-ads-tool) | 1 |
+| `default` (`b1gyyyyyyyyy-default`) | [`terraform/yandex`](yandex) | 71 |
+| `budget-explorer` (`b1gyyyyyyyyyy-budget`) | [`terraform/yandex-budget-explorer`](yandex-budget-explorer) | 10 at adoption (16 now — IAM grants were TF-created later) |
+| `vk-ads-tool` (`b1gyyyyyyyyyyy-vkads`) | [`terraform/yandex-vk-ads-tool`](yandex-vk-ads-tool) | 1 |
 
 Apps are split across folders (e.g. `budget-explorer`/`vk-ads-tool` data lives in the shared
 MySQL cluster in `default`, their functions/buckets in their own folders). The recipe below

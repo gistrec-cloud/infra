@@ -1,8 +1,9 @@
 # terraform/yandex — adopted Yandex Cloud footprint
 
-One root module that **adopts the existing** Yandex Cloud resources in folder
-`b1gs8d5lqs5n7dhd3ntf` (they were created by hand / other tooling and imported into
-Terraform state — see [`../IMPORT.md`](../IMPORT.md)). Provider `yandex-cloud/yandex ~> 0.213`.
+One root module that **adopts the existing** Yandex Cloud resources in the `default` folder
+(`b1gyyyyyyyyy-default` — real id in the gitignored `terraform.tfvars`; they were created by
+hand / other tooling and imported into Terraform state — see [`../IMPORT.md`](../IMPORT.md)).
+Provider `yandex-cloud/yandex ~> 0.213`.
 
 Resources are grouped by service and declared with `for_each` over a `locals` inventory,
 so each real object is one map entry rather than a hand-written block.
