@@ -77,20 +77,36 @@
 # .env -> "dotenv <app>"; .env.en -> "dotenv <app>-en"; prod.env -> "dotenv <app>-prod"
 # The pipe lookup strips trailing newlines — put exactly one back, or every
 # host file (ending with \n, as text files do) reports a permanent diff.
+#
+# Restore-only: every op lookup runs in its own forked worker, which 1Password
+# treats as a NEW client — one Touch ID per file, on every converge. Secrets
+# flow host -> 1P (backup-envs.sh), so re-pulling existing files buys nothing;
+# fetch only what is missing. -e apppm2_env_refresh=true forces the pull
+# (deliberate 1P-wins restore). The per-item `when` is evaluated before the
+# content lookup, so skipped files never invoke op.
+- name: Check which env files already exist — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_dir }}/{{ item }}"
+  register: apppm2_env_stat
+  loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
+
 - name: Env files from 1Password — {{ apppm2_app.key }}
   ansible.builtin.copy:
     content: >-
       {{ lookup('ansible.builtin.pipe',
                 'op document get ' ~
                 ('dotenv ' ~ apppm2_app.key ~
-                 ('' if item == '.env' else '-' ~
-                  (item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
+                 ('' if item.item == '.env' else '-' ~
+                  (item.item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
                 | quote ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
-    dest: "{{ apppm2_dir }}/{{ item }}"
+    dest: "{{ apppm2_dir }}/{{ item.item }}"
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0600"
-  loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
+  loop: "{{ apppm2_env_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: apppm2_env_refresh | default(false) or not item.stat.exists
   no_log: true
 
 - name: Bin directory for control scripts — {{ apppm2_app.key }}

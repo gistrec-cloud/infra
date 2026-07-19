@@ -17,19 +17,29 @@
     mode: "0755"
 
 # Twin of "Env files from 1Password" in app.yml — same 1P document naming,
-# same ownership, same trailing-newline fix; keep the two in sync.
+# same ownership, same trailing-newline fix, same restore-only stat gate
+# (op = one Touch ID per file); keep the two in sync.
+- name: Check which env files already exist — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_dir }}/{{ item }}"
+  register: apppm2_env_stat
+  loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
+
 - name: Env files from 1Password — {{ apppm2_app.key }}
   ansible.builtin.copy:
     content: >-
       {{ lookup('ansible.builtin.pipe',
                 'op document get ' ~
                 ('dotenv ' ~ apppm2_app.key ~
-                 ('' if item == '.env' else '-' ~
-                  (item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
+                 ('' if item.item == '.env' else '-' ~
+                  (item.item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
                 | quote ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
-    dest: "{{ apppm2_dir }}/{{ item }}"
+    dest: "{{ apppm2_dir }}/{{ item.item }}"
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
     mode: "0600"
-  loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
+  loop: "{{ apppm2_env_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: apppm2_env_refresh | default(false) or not item.stat.exists
   no_log: true
