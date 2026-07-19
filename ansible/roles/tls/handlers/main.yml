@@ -6,3 +6,5 @@
 - name: Reload nginx if present
   ansible.builtin.shell: |
     if command -v nginx >/dev/null; then nginx -t && systemctl reload nginx; fi
+  # Handlers only run when notified — the reload IS the change.
+  changed_when: true
