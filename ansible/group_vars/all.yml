@@ -20,15 +20,42 @@ netdata_bind_to: "127.0.0.1"
 # Telegram delivery for health alerts (empty = alerts stay dashboard-only).
 netdata_telegram_bot_token: "{{ vault_netdata_telegram_bot_token | default('') }}"
 netdata_telegram_chat_id: "{{ vault_netdata_telegram_chat_id | default('') }}"
-# Twilio SMS escalation (empty = telegram-only). The role→phone map lives in
-# the vault too — phone numbers are personal data and stay out of git.
-netdata_twilio_account_sid: "{{ vault_twilio_account_sid | default('') }}"
-netdata_twilio_api_key: "{{ vault_twilio_api_key | default('') }}"
-netdata_twilio_api_secret: "{{ vault_twilio_api_secret | default('') }}"
-netdata_twilio_messaging_sid: "{{ vault_twilio_messaging_sid | default('') }}"
-netdata_sms_roles: "{{ vault_netdata_sms_roles | default({}) }}"
+# Pushover escalation (replaced the Twilio SMS path 2026-07-19). The
+# role→user-key map lives in the vault — user keys stay out of git.
+netdata_pushover_token: "{{ vault_pushover_app_token | default('') }}"
+netdata_pushover_roles: "{{ vault_netdata_pushover_roles | default({}) }}"
 # Streaming: shared parent/child API key (per-host role set in host_vars).
 netdata_stream_api_key: "{{ vault_netdata_stream_api_key | default('') }}"
 # Dashboard node names follow the inventory (fleet names), not the machine
 # hostnames — those keep pre-rename values (see terraform/yandex/compute.tf).
 netdata_hostname: "{{ inventory_hostname }}"
+
+# --- Cloudflare edge ranges (www.cloudflare.com/ips, synced 2026-07-19) ---
+# Single source for two consumers: the nginx realip snippet (restore the real
+# client IP behind the CF proxy) and the fail2ban ignoreip safety net. Without
+# realip the honeypot jail bans $remote_addr = the CF edge node — a self-DoS
+# for every proxied vhost on the host (87 of 122 live bans on russia-01 were
+# CF edges when this landed).
+cloudflare_edge_ranges:
+  - 173.245.48.0/20
+  - 103.21.244.0/22
+  - 103.22.200.0/22
+  - 103.31.4.0/22
+  - 141.101.64.0/18
+  - 108.162.192.0/18
+  - 190.93.240.0/20
+  - 188.114.96.0/20
+  - 197.234.240.0/22
+  - 198.41.128.0/17
+  - 162.158.0.0/15
+  - 104.16.0.0/13
+  - 104.24.0.0/14
+  - 172.64.0.0/13
+  - 131.0.72.0/22
+  - "2400:cb00::/32"
+  - "2606:4700::/32"
+  - "2803:f800::/32"
+  - "2405:b500::/32"
+  - "2405:8100::/32"
+  - "2a06:98c0::/29"
+  - "2c0f:f248::/32"
