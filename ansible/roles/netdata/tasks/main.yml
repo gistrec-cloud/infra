@@ -136,7 +136,7 @@
   notify: Restart netdata
 
 # alarm-notify.sh re-reads this file on every notification — no restart needed.
-- name: Send health alerts to Telegram (+ Twilio SMS escalation)
+- name: Send health alerts (Telegram + Pushover escalation)
   ansible.builtin.template:
     src: health_alarm_notify.conf.j2
     dest: /etc/netdata/health_alarm_notify.conf
