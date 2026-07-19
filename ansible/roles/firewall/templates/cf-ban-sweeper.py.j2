@@ -4,8 +4,8 @@
 # when the (escalating) bantime expires — but that timer lives in the host's
 # sqlite. Retire/wipe the host with active bans and its rules in CF are
 # orphaned forever. Every web host runs this daily: delete any fail2ban-noted
-# rule older than MAX_AGE_DAYS. 8d > bantime.maxtime (1w), so no live ban is
-# ever cut short; an orphan outlives its host by at most a day. Concurrent
+# rule older than MAX_AGE_DAYS. 8d > the 128h bantime.maxtime cap, so no live
+# ban is ever cut short; an orphan outlives its host by ~3 days. Concurrent
 # sweeps from peer hosts are fine — a lost DELETE race is swallowed below.
 import datetime
 import json

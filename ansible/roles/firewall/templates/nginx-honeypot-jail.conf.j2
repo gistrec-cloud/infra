@@ -11,7 +11,11 @@ logpath   = /var/log/nginx/honeypot.log
 # pyinotify/polling on the file and never resolves to systemd.
 backend   = auto
 maxretry  = 1
-bantime   = 86400
+# 1h first offence, default increment doubles per repeat: 1h → 2h → … → 128h.
+# Soft start keeps collateral (shared Private Relay/WARP egress IPs) short;
+# persistent scanners climb to the cap within days anyway. The CF sweeper's
+# 8d threshold stays safely above the 128h cap.
+bantime   = 3600
 # Two arms: nftables cuts direct-to-origin traffic (*.vps, edalle.ru, raw IP);
 # the Cloudflare action mirrors the ban as an account-wide IP Access Rule,
 # because proxied vhosts always connect from CF edges and a local ban never
@@ -21,5 +25,5 @@ action    = nftables-allports
             cloudflare-account[cftoken="{{ firewall_cf_api_token }}", cfaccount="{{ firewall_cf_account_id }}"]
 {% endif %}
 bantime.increment = true
-bantime.maxtime   = 1w
+bantime.maxtime   = 128h
 ignoreip  = {{ firewall_fail2ban_ignoreip }}
