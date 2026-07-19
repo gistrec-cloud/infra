@@ -93,16 +93,6 @@
   loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
   no_log: true
 
-# ── CI deploy keys (artifact apps): rrsync jails and forced commands ──
-- name: CI deploy keys — {{ apppm2_app.key }}
-  ansible.posix.authorized_key:
-    user: "{{ admin_user }}"
-    key: "{{ item.key }}"
-    key_options: "command=\"{{ item.command }}\",restrict"
-  loop: "{{ apppm2_app.value.deploy_keys | default([]) }}"
-  loop_control:
-    label: "{{ item.key.split() | last }}"
-
 - name: Bin directory for control scripts — {{ apppm2_app.key }}
   ansible.builtin.file:
     path: "{{ apppm2_home }}/bin"
@@ -138,7 +128,11 @@
   become_user: "{{ admin_user }}"
   changed_when: true
   vars:
-    apppm2_running: "{{ (apppm2_jlist.stdout | default('[]', true)) | from_json | map(attribute='name') | list }}"
+    # pm2 prints banners (daemon spawn, "In-memory PM2 is out-of-date") to
+    # stdout BEFORE the JSON; jlist's JSON is always the last line.
+    apppm2_running: >-
+      {{ (apppm2_jlist.stdout_lines | default([]) | last | default('[]', true))
+         | from_json | map(attribute='name') | list }}
     apppm2_missing: "{{ apppm2_app.value.process.pm2 | default([]) | difference(apppm2_running) }}"
   when:
     - apppm2_app.value.process.pm2 | default([]) | length > 0

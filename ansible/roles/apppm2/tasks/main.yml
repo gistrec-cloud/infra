@@ -11,6 +11,123 @@
          | selectattr('value.host', 'equalto', inventory_hostname)
          | selectattr('value.process', 'defined') | list }}
 
+# ── env-only apps ──
+# The pm2 filter above must keep dropping process-less entries (app.yml
+# reads process.type unconditionally), so registry entries that carry only
+# env files (recovery: prod.env/staging.env) get their own pass — otherwise
+# DR never restores them. No pm2 involved, hence no jlist gate. Registry
+# contract (same as backup-envs.sh): a missing env key defaults to [.env],
+# an EXPLICIT env: [] opts out — only the latter is skipped here.
+- name: Select this host's env-only apps
+  ansible.builtin.set_fact:
+    apppm2_env_apps: >-
+      {{ apps | default({}) | dict2items
+         | selectattr('value.host', 'equalto', inventory_hostname)
+         | rejectattr('value.process', 'defined')
+         | rejectattr('value.env', 'equalto', []) | list }}
+
+- name: Restore env-only apps
+  ansible.builtin.include_tasks: envonly.yml
+  loop: "{{ apppm2_env_apps }}"
+  loop_control:
+    loop_var: apppm2_app
+    label: "{{ apppm2_app.key }}"
+
+# ── CI deploy keys (rrsync jails and forced commands) ──
+# authorized_key is additive — a key rotated or dropped in the registry
+# stayed live on the host. Same mechanism as the breakglass role instead:
+# a root-owned key file rendered WHOLE from the registry (removal there =
+# revocation here, deploying it empty revokes the last key), wired in via
+# a trailing Match block.
+- name: Collect the CI deploy keys (this host's and the whole registry's)
+  ansible.builtin.set_fact:
+    apppm2_deploy_keys: >-
+      {{ apps | default({}) | dict2items
+         | selectattr('value.host', 'equalto', inventory_hostname)
+         | map(attribute='value.deploy_keys', default=[]) | flatten }}
+    apppm2_all_deploy_keys: >-
+      {{ apps | default({}) | dict2items
+         | map(attribute='value.deploy_keys', default=[]) | flatten }}
+
+# Gate the sshd surgery on "has or ever had CI keys": a host that never had
+# them (russia-01/-02 today, and foreign germany-02 by omission) keeps stock
+# sshd; once the file exists it stays managed, so emptying the registry
+# still revokes the last key.
+- name: Probe for a previously deployed CI key file
+  ansible.builtin.stat:
+    path: /etc/ssh/deploy_keys
+  register: apppm2_deploy_keys_file
+
+- name: Root-owned CI deploy key file, rendered whole from the registry
+  ansible.builtin.template:
+    src: deploy_keys.j2
+    dest: /etc/ssh/deploy_keys
+    owner: root
+    group: root
+    mode: "0644"
+  when: >-
+    apppm2_deploy_keys | length > 0
+    or apppm2_deploy_keys_file.stat.exists
+
+- name: Point sshd at the deploy key file for the admin user
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MANAGED — apppm2 deploy keys"
+    # Appended to the END of the main config on purpose, exactly like the
+    # breakglass role: a trailing Match block cannot swallow later
+    # directives, and unlike sshd_config.d it behaves identically on any
+    # sshd — pre-8.4 versions leak Match blocks past the end of included
+    # files. .ssh/authorized_keys stays first: personal keys keep working
+    # even if the deploy key file goes missing.
+    block: |
+      Match User {{ admin_user }}
+          AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/deploy_keys
+    validate: /usr/sbin/sshd -t -f %s
+    backup: true
+  register: apppm2_sshd_match
+  when: >-
+    apppm2_deploy_keys | length > 0
+    or apppm2_deploy_keys_file.stat.exists
+
+# NOT a handler: the end-of-play flush is dropped when a later task aborts
+# the host, and the purge below must only run once sshd honours the file.
+- name: Reload sshd — the purge below needs the Match block live
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+  when: apppm2_sshd_match is changed
+
+# Belt over the reload: ask the running sshd which key files it honours for
+# the admin user. If the reload above failed on a previous run, the purge
+# skips instead of orphaning CI (self-heals on the next converge).
+- name: Read the effective AuthorizedKeysFile from the running sshd
+  ansible.builtin.command: >-
+    /usr/sbin/sshd -T
+    -C user={{ admin_user }},host={{ inventory_hostname }},addr=127.0.0.1
+  register: apppm2_sshd_effective
+  changed_when: false
+  check_mode: false
+  when: apppm2_deploy_keys | length > 0
+
+# Migration: earlier revisions pushed these keys additively into
+# ~/.ssh/authorized_keys; nothing re-adds them, so the purge is idempotent.
+# Fleet-wide key list on purpose — hosts the apps moved AWAY from
+# (germany-01) must lose the stale keys too. The web group covers every
+# host that ever ran registry apps; foreign germany-02 is not in it.
+- name: Purge legacy additive deploy keys from authorized_keys
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ item.key }}"
+    state: absent
+  loop: "{{ apppm2_all_deploy_keys }}"
+  loop_control:
+    label: "{{ item.key.split() | last }}"
+  when:
+    - "'web' in group_names"
+    - >-
+      apppm2_deploy_keys | length == 0
+      or '/etc/ssh/deploy_keys' in apppm2_sshd_effective.stdout | default('')
+
 # Fresh hosts (Ubuntu 24.04) ship python3 without the venv module.
 - name: Venv support for python apps
   ansible.builtin.apt:

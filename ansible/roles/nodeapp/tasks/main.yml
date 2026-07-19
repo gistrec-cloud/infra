@@ -113,6 +113,38 @@
   ansible.builtin.command: "pm2 startup systemd -u {{ admin_user }} --hp /home/{{ admin_user }}"
   changed_when: false
 
+# pm2 never rotates ~/.pm2/logs — the pm2-logrotate module caps them
+# (codifies what russia-01 runs hand-installed).
+- name: Install the pm2-logrotate module
+  ansible.builtin.command:
+    cmd: pm2 install pm2-logrotate
+    creates: "/home/{{ admin_user }}/.pm2/modules/pm2-logrotate"
+  become: true
+  become_user: "{{ admin_user }}"
+
+# `pm2 set` rewrites module_conf.json and restarts the module every time —
+# read the current values and set only what differs (a missing file is an
+# empty config: the first run sets everything).
+- name: Read the pm2 module configuration
+  ansible.builtin.slurp:
+    src: "/home/{{ admin_user }}/.pm2/module_conf.json"
+  register: nodeapp_module_conf
+  failed_when: false
+
+- name: Configure pm2-logrotate
+  ansible.builtin.command: "pm2 set pm2-logrotate:{{ item.key }} {{ item.value }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: true
+  vars:
+    nodeapp_logrotate_conf: >-
+      {{ (nodeapp_module_conf.content | default('{}' | b64encode)
+          | b64decode | from_json)['pm2-logrotate'] | default({}) }}
+  loop: "{{ nodeapp_pm2_logrotate | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+  when: nodeapp_logrotate_conf[item.key] | default('') | string != item.value | string
+
 - name: Persist the pm2 process list
   ansible.builtin.command: pm2 save
   become: true
