@@ -1,0 +1,5 @@
+# Ansible managed — apppm2 role. CI deploy keys for {{ admin_user }}, rendered
+# whole from the apps registry: dropping a key there revokes it here.
+{% for item in apppm2_deploy_keys %}
+command="{{ item.command }}",restrict {{ item.key }}
+{% endfor %}

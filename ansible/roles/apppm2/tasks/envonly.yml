@@ -1,0 +1,35 @@
+---
+# Env-only registry entries (env files, no process:) — app.yml cannot take
+# them (it reads process.type unconditionally, and its clone flow wants the
+# directory absent). A directory plus env files is all they need.
+- name: Derive paths — {{ apppm2_app.key }}
+  ansible.builtin.set_fact:
+    apppm2_dir: >-
+      {{ '/home/' ~ admin_user ~ ('' if apppm2_app.value.dir | default('.') == '.'
+         else '/' ~ apppm2_app.value.dir) }}
+
+- name: Application directory — {{ apppm2_app.key }}
+  ansible.builtin.file:
+    path: "{{ apppm2_dir }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+
+# Twin of "Env files from 1Password" in app.yml — same 1P document naming,
+# same ownership, same trailing-newline fix; keep the two in sync.
+- name: Env files from 1Password — {{ apppm2_app.key }}
+  ansible.builtin.copy:
+    content: >-
+      {{ lookup('ansible.builtin.pipe',
+                'op document get ' ~
+                ('dotenv ' ~ apppm2_app.key ~
+                 ('' if item == '.env' else '-' ~
+                  (item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
+                | quote ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
+    dest: "{{ apppm2_dir }}/{{ item }}"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
+  no_log: true

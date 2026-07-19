@@ -1,5 +1,13 @@
 ---
 nodeapp_nodejs_major: 20
+
+# pm2-logrotate module settings (`pm2 set pm2-logrotate:<key> <value>`).
+# Strings on purpose: module_conf.json stores strings and the role compares
+# them as such to decide whether to re-set.
+nodeapp_pm2_logrotate:
+  max_size: "10M"
+  retain: "14"
+
 # List of Node apps managed by pm2; usually set per host in host_vars/.
 # Each item: { name, repo, branch, cwd, script, instances, exec_mode, env }
 nodeapp_node_apps: []
