@@ -90,8 +90,9 @@
     or apppm2_deploy_keys_file.stat.exists
 
 # NOT a handler: the end-of-play flush is dropped when a later task aborts
-# the host, and the purge below must only run once sshd honours the file.
-- name: Reload sshd — the purge below needs the Match block live
+# the host, and the purge below must only run once sshd honours the file
+# (meta: flush_handlers would also flush unrelated pending handlers).
+- name: Reload sshd — the purge below needs the Match block live # noqa: no-handler
   ansible.builtin.service:
     name: ssh
     state: reloaded
