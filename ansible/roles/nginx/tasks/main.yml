@@ -53,6 +53,19 @@
          | selectattr('value.vhosts', 'defined')
          | map(attribute='value.vhosts') | flatten }}
 
+# no_log: the values are credential hashes. group www-data — workers read
+# the file per request.
+- name: Install htpasswd files the vhosts reference
+  ansible.builtin.copy:
+    content: "{{ item.value }}"
+    dest: "{{ item.key }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+  loop: "{{ nginx_htpasswd_files | dict2items }}"
+  no_log: true
+  notify: Reload nginx
+
 # Deployed without the .conf suffix — matching the hand-made files already
 # on the hosts, so adopting an existing vhost overwrites it in place instead
 # of leaving a duplicate server block behind.
@@ -75,6 +88,25 @@
     # the same names — replace them with the symlink.
     force: true
   loop: "{{ nginx_vhost_files }}"
+  notify: Reload nginx
+
+# BEFORE the vhost template: its 443 block references the lineage. certonly
+# authenticates on the running nginx via a temporary config and never edits
+# our files (the installer flavour did — and the template then wiped it).
+- name: Obtain TLS certificates via certbot (certonly — the template owns the vhost)
+  ansible.builtin.command: >-
+    certbot certonly --nginx --non-interactive --agree-tos
+    -m {{ certbot_email }}
+    -d {{ item.server_name }}
+  args:
+    creates: "/etc/letsencrypt/live/{{ item.server_name }}/fullchain.pem"
+  changed_when: true
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.server_name }}"
+  when:
+    - certbot_email is defined
+    - item.tls | default(false)
   notify: Reload nginx
 
 - name: Deploy vhost config
@@ -127,22 +159,6 @@
 - name: Validate nginx configuration
   ansible.builtin.command: nginx -t
   changed_when: false
-
-- name: Obtain TLS certificate via certbot
-  ansible.builtin.command: >-
-    certbot --nginx --non-interactive --agree-tos
-    --redirect -m {{ certbot_email }}
-    -d {{ item.server_name }}
-  args:
-    creates: "/etc/letsencrypt/live/{{ item.server_name }}/fullchain.pem"
-  changed_when: true
-  loop: "{{ nginx_sites }}"
-  loop_control:
-    label: "{{ item.server_name }}"
-  when:
-    - certbot_email is defined
-    - item.tls | default(false)
-  notify: Reload nginx
 
 # Handlers normally flush at end of play — but a failure in a LATER role
 # aborts the host and silently drops the pending reload, leaving workers

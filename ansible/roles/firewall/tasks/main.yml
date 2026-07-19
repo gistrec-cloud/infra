@@ -44,7 +44,8 @@
     owner: root
     group: adm
     mode: "0750"
-  when: firewall_nginx_honeypot | bool
+  # `web`, not the honeypot flag: the error.log pre-touch below needs it too.
+  when: "'web' in group_names"
 
 - name: Ensure the honeypot log exists before fail2ban tails it
   ansible.builtin.copy:
@@ -55,6 +56,17 @@
     group: adm
     mode: "0640"
   when: firewall_nginx_honeypot | bool
+
+# nginx-http-auth jail logpath — same fresh-host reason as the honeypot log.
+- name: Ensure the nginx error log exists before fail2ban tails it
+  ansible.builtin.copy:
+    content: ""
+    dest: /var/log/nginx/error.log
+    force: false
+    owner: root
+    group: adm
+    mode: "0640"
+  when: "'web' in group_names"
 
 - name: Install the nginx-honeypot filter
   ansible.builtin.copy:

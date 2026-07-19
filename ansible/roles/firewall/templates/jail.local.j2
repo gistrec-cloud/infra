@@ -4,6 +4,8 @@ bantime  = {{ firewall_fail2ban_bantime }}
 findtime = {{ firewall_fail2ban_findtime }}
 maxretry = {{ firewall_fail2ban_maxretry }}
 backend  = systemd
+# Every jail inherits this — a sibling/operator auth flake must never ban.
+ignoreip = {{ firewall_fail2ban_ignoreip }}
 # Ban via nftables to match the firewall this role deploys (not iptables).
 banaction          = nftables-multiport
 banaction_allports = nftables-allports
@@ -12,5 +14,12 @@ banaction_allports = nftables-allports
 enabled = true
 port    = {{ ssh_port }}
 
+{% if 'web' in group_names %}
 [nginx-http-auth]
 enabled = true
+# nginx logs auth failures to error.log only (stock filter has no
+# journalmatch) — the [DEFAULT] systemd backend would see 0 hits. Web hosts
+# only: elsewhere the logpath is missing and the jail refuses to start.
+backend = auto
+logpath = /var/log/nginx/error.log
+{% endif %}

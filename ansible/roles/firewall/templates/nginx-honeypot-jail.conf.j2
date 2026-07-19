@@ -26,4 +26,4 @@ action    = nftables-allports
 {% endif %}
 bantime.increment = true
 bantime.maxtime   = 128h
-ignoreip  = {{ firewall_fail2ban_ignoreip }}
+# ignoreip comes from [DEFAULT] in jail.local (firewall_fail2ban_ignoreip).

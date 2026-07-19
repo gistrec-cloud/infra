@@ -11,7 +11,8 @@ nginx_sites:
     upstream_port: 8081
     tls: true
 
-# nginx TLS via certbot (omit to skip cert issuance)
+# nginx TLS via certbot. REQUIRED once any site above sets tls: true —
+# without it (= no issuance) the always-rendered 443 block fails nginx -t.
 certbot_email: admin@example.com
 
 # netdata role: pm2 process-down alerts are derived automatically from
