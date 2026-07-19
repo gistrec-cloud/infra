@@ -23,6 +23,18 @@ netdata_pm2_apps: []
 netdata_telegram_bot_token: ""
 netdata_telegram_chat_id: ""
 
+# Twilio SMS escalation (adopted 2026-07-19 from russia-01's hand-made
+# config). All empty = the template renders telegram-only. Creds come from the
+# vault via group_vars/all.yml. netdata_sms_roles maps alarm `to:` roles to
+# phone numbers — ONLY those roles page the phone (the default custom
+# recipient stays "disabled"), e.g. botcrit = the ClearTranscriptBot deep
+# healthcheck.
+netdata_twilio_account_sid: ""
+netdata_twilio_api_key: ""
+netdata_twilio_api_secret: ""
+netdata_twilio_messaging_sid: ""
+netdata_sms_roles: {}
+
 # go.d httpcheck jobs (empty list = file untouched). When set, the role OWNS
 # /etc/netdata/go.d/httpcheck.conf: add new probes here / in host_vars, never
 # by editing the file on the host — a manual copy over that file is exactly

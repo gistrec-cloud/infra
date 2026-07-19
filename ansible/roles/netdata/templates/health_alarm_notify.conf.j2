@@ -1,7 +1,43 @@
-# Managed by Ansible (netdata role) — local edits will be overwritten.
+# {{ ansible_managed }}
 # alarm-notify.sh sources the stock health_alarm_notify.conf first and this
-# override second, so only the Telegram bits need to live here. The file is
-# read on every notification; changes apply without restarting netdata.
+# override second, so only the deltas live here. The file is read on every
+# notification; changes apply without restarting netdata.
+
+# Telegram — fleet-wide default recipient: every alarm role falls back here.
 SEND_TELEGRAM="YES"
 TELEGRAM_BOT_TOKEN="{{ netdata_telegram_bot_token }}"
 DEFAULT_RECIPIENT_TELEGRAM="{{ netdata_telegram_chat_id }}"
+{% if netdata_twilio_api_key | length > 0 %}
+
+# SMS escalation via Twilio Messaging Service. Deliberately NOT a default
+# recipient: only alarms addressed (`to:`) to a role in netdata_sms_roles
+# page the phone — everything else stays telegram-only.
+SEND_CUSTOM="YES"
+DEFAULT_RECIPIENT_CUSTOM="disabled"
+{% for role, phones in netdata_sms_roles.items() %}
+role_recipients_custom[{{ role }}]="{{ phones }}"
+{% endfor %}
+
+custom_sender() {
+    local account_sid="{{ netdata_twilio_account_sid }}" # для URL — всегда AC
+    local api_key="{{ netdata_twilio_api_key }}"         # SID
+    local api_secret="{{ netdata_twilio_api_secret }}"   # Secret key
+    local mgsid="{{ netdata_twilio_messaging_sid }}"     # Service ID
+
+    local msg="${host} ${status_message}: ${name}"
+    for phone in "${@}"; do
+        httpcode=$(docurl -X POST \
+            "https://api.twilio.com/2010-04-01/Accounts/${account_sid}/Messages.json" \
+            --data-urlencode "To=${phone}" \
+            --data-urlencode "MessagingServiceSid=${mgsid}" \
+            --data-urlencode "Body=${msg}" \
+            -u "${api_key}:${api_secret}" \
+            -o /dev/null -w '%{http_code}')
+        if [ "${httpcode}" = "201" ]; then
+            info "sent SMS via Messaging Service to ${phone}"; sent=$((sent + 1))
+        else
+            error "custom (twilio MG) failed for ${phone}: HTTP ${httpcode}"
+        fi
+    done
+}
+{% endif %}

@@ -47,7 +47,8 @@
     - role: breakglass
       when: breakglass_managed | default(false)
       tags: [breakglass]
-    - netdata
+    - role: netdata
+      tags: [netdata]
     # App cron jobs come from the apps registry — per app, so a job moves
     # hosts together with its app (edit apps.yml, re-run).
     - role: appcron
@@ -100,6 +101,9 @@
       ansible.builtin.group_by:
         key: web
       changed_when: false
+      # `always`: a --tags run (e.g. --tags nginx) must still derive the
+      # group, or the web play below matches only static members.
+      tags: [always]
       when: >-
         apps | default({}) | dict2items
           | selectattr('value.host', 'equalto', inventory_hostname)
@@ -120,7 +124,8 @@
     - role: tls
       when: tls_managed | default(false)
       tags: [tls]
-    - nginx
+    - role: nginx
+      tags: [nginx]
     # No-op until the host declares legacy node apps in host_vars OR opts
     # into the runtime alone (nodeapp_install: true — node + pm2 + boot
     # resurrection for registry-managed hosts, where apppm2 owns the apps).

@@ -96,6 +96,25 @@
     state: absent
   notify: Reload nginx
 
+# Fleet-wide /health (see the template header for the server_name trick).
+- name: Deploy health vhost
+  ansible.builtin.template:
+    src: health.conf.j2
+    dest: /etc/nginx/sites-available/health.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Enable health vhost
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/health.conf
+    dest: /etc/nginx/sites-enabled/health.conf
+    state: link
+    # force: the src doesn't exist yet in --check runs (template not applied).
+    force: true
+  notify: Reload nginx
+
 - name: Validate nginx configuration
   ansible.builtin.command: nginx -t
   changed_when: false
