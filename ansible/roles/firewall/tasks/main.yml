@@ -44,7 +44,9 @@
     owner: root
     group: adm
     mode: "0750"
-  when: firewall_nginx_honeypot | bool
+  # `web`, not the honeypot flag: the nginx-http-auth pre-touch below needs
+  # the directory even with the honeypot opted out.
+  when: "'web' in group_names"
 
 - name: Ensure the honeypot log exists before fail2ban tails it
   ansible.builtin.copy:
@@ -55,6 +57,19 @@
     group: adm
     mode: "0640"
   when: firewall_nginx_honeypot | bool
+
+# Same pre-touch for the nginx-http-auth jail (web hosts, jail.local): its
+# logpath is error.log, and this role runs before nginx exists on a fresh
+# host. nginx and logrotate take the file over from here.
+- name: Ensure the nginx error log exists before fail2ban tails it
+  ansible.builtin.copy:
+    content: ""
+    dest: /var/log/nginx/error.log
+    force: false
+    owner: root
+    group: adm
+    mode: "0640"
+  when: "'web' in group_names"
 
 - name: Install the nginx-honeypot filter
   ansible.builtin.copy:

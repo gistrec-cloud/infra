@@ -4,6 +4,9 @@ bantime  = {{ firewall_fail2ban_bantime }}
 findtime = {{ firewall_fail2ban_findtime }}
 maxretry = {{ firewall_fail2ban_maxretry }}
 backend  = systemd
+# Applies to EVERY jail (sshd included): an auth flake from a sibling host or
+# an operator IP must never blackhole it. Value lives in the inventory.
+ignoreip = {{ firewall_fail2ban_ignoreip }}
 # Ban via nftables to match the firewall this role deploys (not iptables).
 banaction          = nftables-multiport
 banaction_allports = nftables-allports
@@ -12,5 +15,14 @@ banaction_allports = nftables-allports
 enabled = true
 port    = {{ ssh_port }}
 
+{% if 'web' in group_names %}
 [nginx-http-auth]
 enabled = true
+# The [DEFAULT] systemd backend would read the journal, but nginx writes auth
+# failures to error.log only (and the stock filter has no journalmatch) —
+# 0 hits, 0 bans. Same trap the honeypot jail documents: force the file.
+# Web hosts only: elsewhere the logpath does not exist and the jail refuses
+# to start.
+backend = auto
+logpath = /var/log/nginx/error.log
+{% endif %}
