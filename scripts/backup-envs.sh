@@ -46,8 +46,23 @@ in_filter() {
 # be non-empty: ansible rejects an empty vault password as invalid.
 vpf=$(mktemp)
 echo dotenv-backup-dummy > "$vpf"
-trap 'rm -f "$vpf"' EXIT
+# Uploads stage through a local scratch file: op reads stdin to EOF and keeps
+# whatever arrived, so streaming straight from ssh would turn a dropped
+# connection into a truncated "latest" version of the Document.
+TMP=$(mktemp)
+trap 'rm -f "$vpf" "$TMP"' EXIT
 INV=$(ANSIBLE_VAULT_PASSWORD_FILE="$vpf" ansible-inventory --list)
+
+# A typo'd host filter matches nothing and exits 0 — a no-op that looks like
+# a fresh backup. Refuse unknown names before any ssh or op side effects.
+if [ ${#filter[@]} -gt 0 ]; then
+  known=$(python3 -c 'import json,sys
+[print(h) for h in json.load(sys.stdin)["_meta"]["hostvars"]]' <<<"$INV")
+  for x in "${filter[@]}"; do
+    grep -qxF -- "$x" <<<"$known" \
+      || { echo "FAIL: unknown host '$x' (known: $(xargs <<<"$known"))" >&2; exit 1; }
+  done
+fi
 
 # ansible-inventory JSON keeps Jinja UNRENDERED (the key file is
 # "~/.ssh/vps-{{ inventory_hostname }}.pub" fleet-wide since 2026-07) —
@@ -141,18 +156,46 @@ while IFS=$'\t' read -r app host rel; do
   fi
   id="$ids" # one item id, or empty when the Document doesn't exist yet
 
+  if ! "${sshc[@]}" "cat \"\$HOME/$rel\"" > "$TMP"; then
+    echo "FAIL $title — ssh dropped while downloading ~/$rel from $host" >&2
+    fail=1
+    continue
+  fi
+  # $want came from a separate ssh call; a mismatch means a truncated
+  # download or a mid-run edit — either way this payload must not reach 1P.
+  have=$(shasum -a 256 < "$TMP" | cut -d' ' -f1)
+  if [ "$have" != "$want" ]; then
+    echo "FAIL $title — ~/$rel changed between hash and download ($have != $want)" >&2
+    fail=1
+    continue
+  fi
+
+  # op reads stdin only from a PIPE — a plain file redirect dies with
+  # "expected data on stdin but none found" (op 2.35).
   if [ -n "$id" ]; then
-    "${sshc[@]}" "cat \"\$HOME/$rel\"" | op document edit "$id" --vault "$VAULT" - >/dev/null
+    if ! cat "$TMP" | op document edit "$id" --vault "$VAULT" - >/dev/null; then
+      echo "FAIL $title — op document edit failed" >&2
+      fail=1
+      continue
+    fi
     action="updated"
   else
-    id=$("${sshc[@]}" "cat \"\$HOME/$rel\"" | op document create - --vault "$VAULT" \
-      --title "$title" --file-name "${title#dotenv }.env" --tags "$TAG" \
-      --format json | python3 -c 'import json,sys
-d=json.load(sys.stdin); print(d.get("uuid") or d.get("id"))')
+    if ! id=$(cat "$TMP" | op document create - --vault "$VAULT" \
+        --title "$title" --file-name "${title#dotenv }.env" --tags "$TAG" \
+        --format json | python3 -c 'import json,sys
+d=json.load(sys.stdin); print(d.get("uuid") or d.get("id"))'); then
+      echo "FAIL $title — op document create failed" >&2
+      fail=1
+      continue
+    fi
     action="created"
   fi
 
-  got=$(op document get "$id" --vault "$VAULT" | shasum -a 256 | cut -d' ' -f1)
+  if ! got=$(op document get "$id" --vault "$VAULT" | shasum -a 256 | cut -d' ' -f1); then
+    echo "FAIL $title — cannot read the Document back to verify" >&2
+    fail=1
+    continue
+  fi
   if [ "$want" = "$got" ]; then
     echo "OK   $title ($action, sha256 verified)"
   else
