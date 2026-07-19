@@ -77,6 +77,29 @@
   loop: "{{ nginx_vhost_files }}"
   notify: Reload nginx
 
+# Runs BEFORE the vhost template lands: the template renders the 443 block
+# for tls: sites, and nginx -t fails on a missing lineage. certonly with the
+# nginx authenticator solves the challenge on the running server (temporary
+# config, fresh host serves the stock default site at this point) and never
+# edits our files — the installer flavour used to append a 443 block that the
+# next template run silently wiped. A tls: true site without certbot_email
+# now dies loudly at nginx -t instead of silently serving plain HTTP.
+- name: Obtain TLS certificates via certbot (certonly — the template owns the vhost)
+  ansible.builtin.command: >-
+    certbot certonly --nginx --non-interactive --agree-tos
+    -m {{ certbot_email }}
+    -d {{ item.server_name }}
+  args:
+    creates: "/etc/letsencrypt/live/{{ item.server_name }}/fullchain.pem"
+  changed_when: true
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.server_name }}"
+  when:
+    - certbot_email is defined
+    - item.tls | default(false)
+  notify: Reload nginx
+
 - name: Deploy vhost config
   ansible.builtin.template:
     src: vhost.conf.j2
@@ -127,22 +150,6 @@
 - name: Validate nginx configuration
   ansible.builtin.command: nginx -t
   changed_when: false
-
-- name: Obtain TLS certificate via certbot
-  ansible.builtin.command: >-
-    certbot --nginx --non-interactive --agree-tos
-    --redirect -m {{ certbot_email }}
-    -d {{ item.server_name }}
-  args:
-    creates: "/etc/letsencrypt/live/{{ item.server_name }}/fullchain.pem"
-  changed_when: true
-  loop: "{{ nginx_sites }}"
-  loop_control:
-    label: "{{ item.server_name }}"
-  when:
-    - certbot_email is defined
-    - item.tls | default(false)
-  notify: Reload nginx
 
 # Handlers normally flush at end of play — but a failure in a LATER role
 # aborts the host and silently drops the pending reload, leaving workers
