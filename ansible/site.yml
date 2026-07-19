@@ -48,11 +48,13 @@
   hosts: all
   gather_facts: false
   become: false
+  # Pinned for the run_once tasks below: free would race the resolution.
+  strategy: linear
   tasks:
     - name: Resolve the CF DNS token (tls role)
       ansible.builtin.set_fact:
         cf_dns_token: "{{ tls_cf_api_token }}"
-      run_once: true
+      run_once: true # noqa: run-once[task]
       delegate_to: localhost
       delegate_facts: true
       no_log: true
@@ -62,7 +64,7 @@
     - name: Resolve the CF firewall token (firewall role)
       ansible.builtin.set_fact:
         cf_firewall_token: "{{ firewall_cf_api_token }}"
-      run_once: true
+      run_once: true # noqa: run-once[task]
       delegate_to: localhost
       delegate_facts: true
       no_log: true
