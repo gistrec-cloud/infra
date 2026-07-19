@@ -28,9 +28,31 @@
         SOURCE_AUTO_POSITION=1,
         GET_SOURCE_PUBLIC_KEY=1;
       START REPLICA;
+  register: mysql_replica_config
   no_log: true
   changed_when: true
   when:
     - mysql_replication_source_host | length > 0
     - mysql_replication_password | length > 0
-    - "'Replica_IO_Running: Yes' not in mysql_replica_status.stdout"
+    # default: in --check the status read above is skipped and has no stdout.
+    - "'Replica_IO_Running: Yes' not in mysql_replica_status.stdout | default('')"
+
+# START REPLICA is fire-and-forget: it returns OK even when a thread dies
+# immediately (bad credentials, purged GTIDs) — the error only surfaces in
+# SHOW REPLICA STATUS. Poll until both threads run; the IO thread sits in
+# Connecting for the first seconds on the WAN link, hence the retries. Only
+# after a (re)configure — an unconditional check would fail every converge
+# while a replica is broken for external reasons. Deliberately no no_log
+# (unlike the rest of the role): SHOW REPLICA STATUS never prints the
+# password, and Last_IO_Error / Last_SQL_Error must be visible on failure.
+- name: Verify replication threads are running
+  ansible.builtin.command:
+    cmd: docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -e "SHOW REPLICA STATUS\G"'
+  register: mysql_replica_verify
+  until:
+    - "'Replica_IO_Running: Yes' in mysql_replica_verify.stdout"
+    - "'Replica_SQL_Running: Yes' in mysql_replica_verify.stdout"
+  retries: 5
+  delay: 3
+  changed_when: false
+  when: mysql_replica_config is not skipped

@@ -15,6 +15,23 @@
       {{ mysql_port }}, or bind mysql_publish_address to a private IP / 127.0.0.1.
     quiet: true
 
+# App and replication passwords are interpolated into single-quoted SQL literals
+# with no escaping (provision.sql.j2, tasks/primary.yml, tasks/replica.yml), and
+# the role's sql_mode has no NO_BACKSLASH_ESCAPES — a quote OR a trailing
+# backslash breaks out of the literal. Enforce the constraint here instead of
+# trusting the template comment. No loop over users: a per-item failure would
+# print the password.
+- name: Refuse passwords that break single-quoted SQL literals
+  ansible.builtin.assert:
+    that:
+      - mysql_users | map(attribute='password') | select('search', "['\\\\]") | list | length == 0
+      - (mysql_replication_password | default('')) is not search("['\\\\]")
+    fail_msg: >-
+      A mysql_users password or mysql_replication_password contains a single
+      quote or a backslash; both break the single-quoted SQL literals in
+      provision.sql / CHANGE REPLICATION SOURCE. Pick a password without them.
+    quiet: true
+
 # ─── Docker Engine (official apt repo, same keyring pattern as nodeapp) ───
 - name: Ensure apt keyrings directory exists
   ansible.builtin.file:

@@ -3,7 +3,8 @@
 -- idempotent. CREATE USER IF NOT EXISTS deliberately does NOT rotate an existing
 -- user's password (mirrors terraform ignore_changes[password] on the managed
 -- cluster) — rotate with ALTER USER by hand. Passwords must not contain a single
--- quote (they are single-quoted below).
+-- quote or a backslash (single-quoted below, and sql_mode has no
+-- NO_BACKSLASH_ESCAPES) — the assert in tasks/main.yml enforces this.
 {% for db in mysql_databases %}
 CREATE DATABASE IF NOT EXISTS `{{ db }}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 {% endfor %}
