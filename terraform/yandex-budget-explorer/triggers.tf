@@ -13,4 +13,7 @@ resource "yandex_function_trigger" "sync_transactions_timer" {
   timer {
     cron_expression = "0 */6 ? * *"
   }
+
+  # The invoker role for this SA must exist before the trigger is (re)configured.
+  depends_on = [yandex_function_iam_binding.sync_transactions_invoker]
 }

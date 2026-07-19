@@ -59,6 +59,10 @@ resource "yandex_function" "this" {
   execution_timeout  = each.value.execution_timeout
   service_account_id = yandex_iam_service_account.budget_explorer.id
 
+  # The runtime SA must already be able to read the mounted Lockbox secrets when
+  # a version is published, so the payloadViewer grants have to land first.
+  depends_on = [yandex_lockbox_secret_iam_member.functions]
+
   user_hash = data.archive_file.budget_explorer.output_base64sha256
   content {
     zip_filename = data.archive_file.budget_explorer.output_path
@@ -75,4 +79,17 @@ resource "yandex_function" "this" {
       environment_variable = secrets.value.env
     }
   }
+}
+
+# The timer trigger invokes sync-transactions as the budget-explorer SA. The provider
+# has no additive yandex_function_iam_member, so this authoritative binding is scoped
+# STRICTLY to sync-transactions — never for_each it over local.functions: telegram-bot
+# has a live unmanaged allUsers invoker that a binding on it would silently wipe.
+# Before the FIRST apply run `yc serverless function list-access-bindings
+# --name sync-transactions`: the plan renders this as a plain create and can NOT
+# show unmanaged invoker members the binding would remove (verified clean 2026-07-19).
+resource "yandex_function_iam_binding" "sync_transactions_invoker" {
+  function_id = yandex_function.this["sync-transactions"].id
+  role        = "functions.functionInvoker"
+  members     = ["serviceAccount:${yandex_iam_service_account.budget_explorer.id}"]
 }

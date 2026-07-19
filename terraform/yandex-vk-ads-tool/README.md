@@ -1,7 +1,8 @@
 # terraform/yandex-vk-ads-tool — vk-ads-tool folder
 
-Root module for the Yandex Cloud **`vk-ads-tool`** folder (`b1gb7scjmu5adgrjlko7`),
-separate from `terraform/yandex` with its own provider `folder_id` and state.
+Root module for the Yandex Cloud **`vk-ads-tool`** folder (`b1gyyyyyyyyyyy-vkads` — real id
+in the gitignored `terraform.tfvars`), separate from `terraform/yandex` with its own provider
+`folder_id` and state.
 
 ## What it manages (1 resource)
 
