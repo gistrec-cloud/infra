@@ -45,15 +45,17 @@ def note(msg): print(f"     {msg}")
 inv_hosts = set((yaml.safe_load(open(INV)) or {})["all"]["hosts"])
 registry = yaml.safe_load(open(APPS))["apps"]
 
-# ── checkpoint (loaded BEFORE deriving src: flip() has already rewritten the
-#    registry host to dst, so a mid-move resume must read the ORIGINAL src from
-#    the checkpoint, not the flipped registry — else src == dst aborts) ──
+# ── checkpoint (read BEFORE deriving SRC) ──
+# flip() rewrites the registry `host:` to DST, so on a resume `registry[app]`
+# already reads DST. Take the ORIGINAL src from the checkpoint when one exists
+# (rsync/freeze need it too) — otherwise the SRC == DST check below kills every
+# --app resume. --reset drops the checkpoint first, so it must precede this.
 if reset and os.path.exists(STATE): os.remove(STATE)
 state = json.load(open(STATE)) if os.path.exists(STATE) else None
 
 if app:
     if app not in registry: die(f"app {app!r} is not in the registry")
-    src = state["src"] if state and state.get("app") == app else registry[app]["host"]
+    src = state["src"] if state else registry[app]["host"]
 
 for h in (src, dst):
     if h not in inv_hosts: die(f"{h} is not an inventory host ({', '.join(sorted(inv_hosts))})")
@@ -75,6 +77,9 @@ if state is None:
              "apps": sorted(moving),
              "domains": domains, "aliases": aliases,
              "pm2": sorted(p for a in moving.values() for p in (a.get("process") or {}).get("pm2", [])),
+             # appcron markers ("<app>: <name>") of the moved jobs — freeze()
+             # deletes them from SRC (the role only ever adds, and only on DST)
+             "cron": [f"{n}: {c['name']}" for n, a in moving.items() for c in (a.get("cron") or [])],
              # plain-file + CI-artifact dirs travel by rsync (clone apps are
              # rebuilt by the role — their venvs don't survive an OS change)
              "rsync_dirs": sorted({"~/" + a["dir"].split("/")[0] for a in moving.values()
@@ -90,14 +95,15 @@ def run(cmd, cwd=None, env=None):
 
 _conn = {}
 def conn(host):
-    """(public_ip, ssh_user, keyfile, wg_ip) — templated by ansible itself:
-    raw inventory JSON keeps Jinja unrendered (key files are a convention)."""
+    """(public_ip, ssh_user, keyfile, wg_ip, admin_user) — templated by ansible
+    itself: raw inventory JSON keeps Jinja unrendered (key files are a
+    convention). admin_user is the crontab/app owner (usually == ssh_user)."""
     if host not in _conn:
         with tempfile.NamedTemporaryFile("w", suffix=".vpf") as f:
             f.write("dummy"); f.flush()
             out = subprocess.run(
                 ["ansible", host, "-m", "ansible.builtin.debug", "-a",
-                 "msg={{ ansible_host }}|{{ ansible_user }}|{{ ansible_ssh_private_key_file }}|{{ wireguard_ip | default('') }}"],
+                 "msg={{ ansible_host }}|{{ ansible_user }}|{{ ansible_ssh_private_key_file }}|{{ wireguard_ip | default('') }}|{{ admin_user }}"],
                 cwd="ansible",
                 env={**os.environ, "ANSIBLE_VAULT_PASSWORD_FILE": f.name,
                      # ansible.cfg renders results as yaml; force json so the
@@ -112,7 +118,7 @@ def conn(host):
     return _conn[host]
 
 def ssh_argv(host, remote_cmd, forward_agent=False):
-    ip, user, key, _ = conn(host)
+    ip, user, key, _, _ = conn(host)
     key = os.path.expanduser(key)
     return ["ssh", *(["-A"] if forward_agent else []), "-o", "IdentitiesOnly=yes",
             "-o", "ConnectTimeout=15", "-i", key, f"{user}@{ip}", remote_cmd]
@@ -177,7 +183,7 @@ def rsync():
     if not reachable(src):
         note(f"WARN: {src} unreachable — artifact apps will come from CI re-runs;"
              f" plain-file dirs ({', '.join(state['rsync_dirs'])}) are NOT copied"); return
-    _, duser, _, dwg = conn(dst)
+    _, duser, _, dwg, _ = conn(dst)
     target_ip = dwg or conn(dst)[0]
     run(ssh_argv(src, "rsync -a -e 'ssh -o StrictHostKeyChecking=accept-new' "
                  + " ".join(state["rsync_dirs"]) + f" {duser}@{target_ip}:~/", forward_agent=True))
@@ -233,13 +239,37 @@ def smoke_public():
         time.sleep(30)
     die("public smoke did not converge in ~10 min — investigate, then re-run")
 
+def cron_handoff(host, markers):
+    """Delete the exact appcron markers ('<app>: <name>') of the moved apps
+    from a host's crontab. The role only ADDS cron (state=present) and only
+    runs on DST, so without this a moved job keeps firing on SRC too. Ad-hoc
+    cron state=absent = byte-identical marker semantics; the dummy vault
+    password works because ad-hoc loads no play (the vault is a vars_files,
+    not group_vars) — same trick as conn(). Target admin_user (the crontab
+    owner the role writes as), not the ssh user: identical today, but if they
+    diverge this edits the RIGHT crontab. No become on purpose — move-apps
+    stays off the vault (dummy password), and connecting as admin_user already
+    owns its own crontab; a truly divergent admin_user fails loudly here
+    (crontab -u other needs root) instead of silently no-op'ing on the wrong one."""
+    admin = conn(host)[4]
+    with tempfile.NamedTemporaryFile("w", suffix=".vpf") as f:
+        f.write("dummy"); f.flush()
+        for name in markers:
+            run(["ansible", host, "-m", "ansible.builtin.cron",
+                 "-a", f"name={shlex.quote(name)} state=absent user={shlex.quote(admin)}"],
+                cwd="ansible", env={"ANSIBLE_VAULT_PASSWORD_FILE": f.name})
+
 def freeze():
-    if not state["pm2"]:
-        note("no pm2 processes to freeze"); return
     if dead_src or not reachable(src):
         note(f"skipped ({src} dead/unreachable)"); return
-    stops = "; ".join(f"pm2 stop {shlex.quote(p)} || true" for p in state["pm2"])
-    run(ssh_argv(src, f"{stops}; pm2 save --force"))
+    if state["pm2"]:
+        stops = "; ".join(f"pm2 stop {shlex.quote(p)} || true" for p in state["pm2"])
+        run(ssh_argv(src, f"{stops}; pm2 save --force"))
+    else:
+        note("no pm2 processes to freeze")
+    if state.get("cron"):
+        note(f"removing {len(state['cron'])} cron job(s) from {src}")
+        cron_handoff(src, state["cron"])
 
 # ── preflight: a first-time DST needs its one-off host_vars flags ──
 hv_path = f"ansible/host_vars/{dst}.yml"
