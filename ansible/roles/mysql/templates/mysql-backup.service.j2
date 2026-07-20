@@ -6,4 +6,6 @@ After=docker.service
 
 [Service]
 Type=oneshot
+# Optional (leading -): the file is absent when off-site is disabled.
+EnvironmentFile=-{{ mysql_base_dir }}/mysql-backup.env
 ExecStart=/usr/local/bin/mysql-backup.sh

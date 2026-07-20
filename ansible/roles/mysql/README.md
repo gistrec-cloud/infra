@@ -5,11 +5,15 @@ Self-hosted **MySQL 8.0 in Docker** — replaces the managed Yandex cluster
 The managed bill is all-or-nothing (a minimum-size instance), so the goal is to
 move **all 16 databases** off it, then delete the cluster.
 
-- **primary** — russia-01 (`db-01`). Binlog + GTID on, holds the writable copy,
-  serves fleet apps and (VPC-attached) Cloud Functions.
-- **replica** — germany-01 (`db-02`). `super_read_only` standby, pulls from the
-  primary over the **WireGuard tunnel** (see the `wireguard` role) — no MySQL
-  TLS certs, no public 3306. Promotable to primary in ~2 minutes (runbook below).
+- **primary** — currently **finland-01** (interim; the writable copy, binlog +
+  GTID on). Serves fleet apps over WireGuard; Cloud Functions will reach it over a
+  public TLS endpoint. Moves to a RF VPS (timeweb) later via replica-promote.
+- **replica** — a `super_read_only` standby (first one ~2026-07-21), pulls from
+  the primary over the **WireGuard tunnel** (see the `wireguard` role). Promotable
+  to primary in ~2 minutes (runbook below). Endpoints: `primary.mysql.gistrec.cloud`
+  (always-primary, flips on promote) and `replica-NN.mysql.gistrec.cloud`. NB: the
+  primary is LIVE (empty) on finland-01 since 2026-07-20; migrating data off the
+  managed Yandex cluster is in progress.
 
 The whole dataset is <1 GB (clear-transcript-bot ≈ 860 MB is 89% of it), so a 1 GB
 buffer pool caches everything on both nodes.
@@ -104,8 +108,9 @@ SQL
 ```
 Then: set `mysql_role: primary` in its host_vars, open 3306 to consumers
 (publish + firewall), and repoint apps. **Cloud Functions caveat:** they reach
-russia-01 privately via the Yandex VPC; a promoted germany-01 is an external VPS,
-so they'd connect over the public internet (function egress IPs aren't fixed) —
+russia-01 privately via the Yandex VPC; a promoted external replica (e.g.
+finland-01) is off-VPC, so they'd connect over the public internet
+(function egress IPs aren't fixed) —
 needs TLS/a gateway for that path. When russia-01 returns, it rejoins cleanly as
 a replica (GTID). Make the flip durable in git afterwards.
 

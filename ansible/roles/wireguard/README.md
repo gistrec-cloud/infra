@@ -3,8 +3,9 @@
 Private WireGuard mesh between fleet hosts. Every node gets a stable private IP
 on `wg0` (10.10.0.0/24 by convention) so services talk over an encrypted tunnel
 instead of the public internet. Built primarily so **MySQL replication**
-(russia-01 → germany-01) rides the tunnel — no MySQL TLS certificates, no public
-3306 exposure — but it is reusable for ClickHouse, netdata streaming, etc.
+(primary → replica) rides the tunnel — no MySQL TLS certificates, no public
+3306 exposure — its live use today is netdata streaming (russia-02/finland-01 →
+russia-01) + ClickHouse.
 
 ## Topology
 
@@ -16,8 +17,9 @@ and public key live in its (gitignored) host_vars.
 |------------|--------------|
 | russia-01  | 10.10.0.1    |
 | russia-02  | 10.10.0.2    |
-| germany-01 | 10.10.0.3    |
 | finland-01 | 10.10.0.4    |
+
+(10.10.0.3 was germany-01, retired 2026-07-20 — free for reuse.)
 
 ## One-time key generation (per host)
 
@@ -38,15 +40,16 @@ to the mesh peers via `firewall_allow_udp` (see the `firewall` role):
 
 ```yaml
 firewall_allow_udp:
-  - { port: 51820, from: 148.222.187.38 }   # germany-01
+  - { port: 51820, from: 51.250.101.180 }   # russia-01
   - { port: 51820, from: 84.252.139.137 }   # russia-02
 ```
 
-Hosts with no managed firewall (e.g. germany-01) accept the port by default.
+Hosts with no managed firewall accept the port by default (all current mesh
+members run a managed firewall).
 
 ## Verify
 
 ```bash
 wg show                       # handshakes + transfer per peer
-ping -c1 10.10.0.1            # from germany-01, reach russia-01 over the tunnel
+ping -c1 10.10.0.1            # from any peer, reach russia-01 over the tunnel
 ```

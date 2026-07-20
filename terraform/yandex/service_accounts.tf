@@ -12,6 +12,7 @@ locals {
     "clear-transcript-bot" = { description = "Storage + SpeechKit", labels = null }
     "dnd-crime"            = { description = null, labels = null }
     "wordstat"             = { description = null, labels = null }
+    "mysql-backup"         = { description = "MySQL off-site backup uploader (write-only)", labels = { role = "mysql-backup" } }
     "recepter"             = { description = null, labels = null }
     "realm-status"         = { description = "realm-status fn: Lockbox read + self-invoke", labels = { project = "realm-status" } }
   }

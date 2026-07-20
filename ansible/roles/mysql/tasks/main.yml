@@ -68,17 +68,27 @@
     state: started
 
 # ─── Layout ───
-- name: Create MySQL directories
+- name: Create the MySQL base + conf directories
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     state: directory
     owner: root
     group: root
-    mode: "0750"
+    mode: "{{ item.mode }}"
   loop:
-    - "{{ mysql_base_dir }}"
-    - "{{ mysql_data_dir }}"
-    - "{{ mysql_conf_dir }}"
+    - { path: "{{ mysql_base_dir }}", mode: "0750" }
+    # 0755: conf.d is bind-mounted RO and mysqld reads it as uid 999, not root
+    # (0750 root:root → "Can't read dir of '/etc/mysql/conf.d/'", init aborts).
+    - { path: "{{ mysql_conf_dir }}", mode: "0755" }
+  loop_control:
+    label: "{{ item.path }}"
+
+# No owner/group/mode: the mysql image chowns /var/lib/mysql to its own uid on
+# init and every start, so pinning root:root here just churns `changed` each run.
+- name: Ensure the MySQL data dir exists (ownership left to the container)  # noqa: risky-file-permissions
+  ansible.builtin.file:
+    path: "{{ mysql_data_dir }}"
+    state: directory
 
 # Mirrors the managed cluster's strict sql_mode + utf8mb4 so a test DB behaves
 # like prod. Bind-mounted read-only; a change requires a container restart to
@@ -162,6 +172,25 @@
     group: root
     mode: "0700"
   when: mysql_backup_enabled
+
+# rclone, not awscli (dropped from apt in Ubuntu 24.04).
+- name: Install off-site backup tooling (age + rclone)
+  ansible.builtin.apt:
+    name: [age, rclone]
+    state: present
+    update_cache: true
+  when: mysql_backup_enabled and mysql_backup_offsite_enabled
+
+# no_log: carries the S3 static key (0600, loaded via the service EnvironmentFile).
+- name: Render the off-site backup env file (S3 key + bucket + age recipient)
+  ansible.builtin.template:
+    src: mysql-backup.env.j2
+    dest: "{{ mysql_base_dir }}/mysql-backup.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: mysql_backup_enabled and mysql_backup_offsite_enabled
 
 - name: Install the backup script
   ansible.builtin.template:

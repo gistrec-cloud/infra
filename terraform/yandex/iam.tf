@@ -16,6 +16,7 @@ locals {
     "monitoring.admin|recepter-monitoring"       = { role = "monitoring.admin", sa = "recepter-monitoring" }
     "monitoring.admin|recepter"                  = { role = "monitoring.admin", sa = "recepter" }
     "admin|recepter"                             = { role = "admin", sa = "recepter" }
+    "storage.uploader|mysql-backup"              = { role = "storage.uploader", sa = "mysql-backup" }
   }
 
   # monitoring.viewer for personal user accounts (ids in gitignored terraform.tfvars)
