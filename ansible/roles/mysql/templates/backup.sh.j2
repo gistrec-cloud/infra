@@ -19,12 +19,43 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 
 mkdir -p "$BACKUP_DIR"
 fail=0
+{% if mysql_backup_offsite_enabled %}
+
+# Off-site: age-encrypt a fresh dump (the private identity lives ONLY in
+# 1Password — this host writes backups it cannot itself decrypt) and upload it
+# with a sha256 metadata tag. Creds/config come from the systemd EnvironmentFile.
+# The write-only upload key can't prune, so off-site retention is a bucket
+# lifecycle rule, not this script.
+upload_offsite() {
+  local f="$1" enc
+  enc="$f.age"
+  # age (ChaCha20-Poly1305 AEAD) also carries integrity: a corrupted object
+  # fails to decrypt, so no separate checksum is needed.
+  if ! age -r "$AGE_RECIPIENT" -o "$enc" "$f"; then
+    echo "FAIL: age-encrypt of $(basename "$f")" >&2
+    return 1
+  fi
+  # The SA key is write-only (storage.uploader — no read/list). rclone's default
+  # pre-upload bucket/object HEAD + post-upload verify are reads → 403; these
+  # flags make it a pure PutObject.
+  if ! rclone --s3-no-check-bucket --s3-no-head --no-traverse \
+        copyto "$enc" "offsite:$S3_BUCKET/{{ mysql_backup_s3_prefix }}$(basename "$enc")"; then
+    echo "FAIL: off-site upload of $(basename "$enc")" >&2
+    rm -f "$enc"
+    return 1
+  fi
+  rm -f "$enc"
+}
+{% endif %}
 {% for db in mysql_databases %}
 tmp="$BACKUP_DIR/{{ db }}-$STAMP.sql.gz.partial"
 if docker exec "$CONTAINER" sh -c \
   'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --single-transaction --routines --triggers --databases -uroot "{{ db }}"' \
   | gzip > "$tmp"; then
   mv "$tmp" "${tmp%.partial}"
+{% if mysql_backup_offsite_enabled %}
+  upload_offsite "${tmp%.partial}" || fail=1
+{% endif %}
 else
   echo "FAIL: dump of {{ db }} failed" >&2
   rm -f "$tmp"

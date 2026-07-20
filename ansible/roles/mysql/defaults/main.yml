@@ -85,3 +85,22 @@ mysql_backup_dir: /var/backups/mysql
 mysql_backup_retention_days: 14
 mysql_backup_hour: 3
 mysql_backup_minute: 30
+
+# ─── Off-site backup upload (S3-compatible Object Storage) ───
+# Opt-in per host. When on, each fresh local dump is age-encrypted (public
+# recipient below; the PRIVATE identity lives ONLY in 1Password, so a host can
+# WRITE backups it cannot itself read) and uploaded with a sha256 metadata tag.
+# The upload key is a write-only SA (storage.uploader): a leaked host key can add
+# objects but not read or delete them. Off-site retention is a BUCKET lifecycle
+# rule (the write-only key can't prune) — mysql_backup_offsite_retention_days
+# just documents the intended window.
+mysql_backup_offsite_enabled: false
+mysql_backup_s3_endpoint: "https://storage.yandexcloud.net"
+mysql_backup_s3_region: ru-central1
+mysql_backup_s3_bucket: ""
+mysql_backup_s3_prefix: "{{ inventory_hostname }}/"
+mysql_backup_age_recipient: ""
+mysql_backup_offsite_retention_days: 60
+# S3 static key for the mysql-backup SA — from the vault.
+mysql_backup_s3_key_id: "{{ vault_mysql_backup_s3_key_id | default('') }}"
+mysql_backup_s3_secret: "{{ vault_mysql_backup_s3_secret | default('') }}"

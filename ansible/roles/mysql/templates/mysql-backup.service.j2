@@ -6,4 +6,7 @@ After=docker.service
 
 [Service]
 Type=oneshot
+# Optional (leading -): off-site is opt-in; the file is absent when disabled.
+# Carries the S3 static key + bucket/endpoint/age-recipient for the upload.
+EnvironmentFile=-{{ mysql_base_dir }}/mysql-backup.env
 ExecStart=/usr/local/bin/mysql-backup.sh

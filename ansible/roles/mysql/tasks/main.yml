@@ -68,17 +68,35 @@
     state: started
 
 # ─── Layout ───
-- name: Create MySQL directories
+- name: Create the MySQL base + conf directories
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     state: directory
     owner: root
     group: root
-    mode: "0750"
+    mode: "{{ item.mode }}"
   loop:
-    - "{{ mysql_base_dir }}"
-    - "{{ mysql_data_dir }}"
-    - "{{ mysql_conf_dir }}"
+    - { path: "{{ mysql_base_dir }}", mode: "0750" }
+    # conf.d is bind-mounted read-only into the container, where mysqld runs as
+    # the image's `mysql` user (uid 999, not root). 0750 root:root makes the dir
+    # unreadable to it → mysqld aborts at config check ("Can't read dir of
+    # '/etc/mysql/conf.d/'", errno 13). 0755 lets the container read it;
+    # server.cnf inside is 0644 and carries no secrets (the root password is in
+    # mysql.env, 0600, in the base dir — never mounted).
+    - { path: "{{ mysql_conf_dir }}", mode: "0755" }
+  loop_control:
+    label: "{{ item.path }}"
+
+# The data dir is created plainly — root:root on the first run (before the
+# container exists), then left ALONE. No owner/group/mode: the mysql image
+# chowns /var/lib/mysql to its own uid (999) on first init and re-asserts it on
+# every start, so pinning root:root here would fight the entrypoint and report
+# `changed` on every converge (it self-heals on restart, but the diff is noise
+# and briefly wrong ownership in a stopped-container window).
+- name: Ensure the MySQL data dir exists (ownership left to the container)
+  ansible.builtin.file:
+    path: "{{ mysql_data_dir }}"
+    state: directory
 
 # Mirrors the managed cluster's strict sql_mode + utf8mb4 so a test DB behaves
 # like prod. Bind-mounted read-only; a change requires a container restart to
@@ -162,6 +180,27 @@
     group: root
     mode: "0700"
   when: mysql_backup_enabled
+
+# rclone (not awscli — Ubuntu 24.04 dropped the awscli apt package); rclone is in
+# universe and speaks S3-compatible Object Storage via an env-configured remote.
+- name: Install off-site backup tooling (age + rclone)
+  ansible.builtin.apt:
+    name: [age, rclone]
+    state: present
+    update_cache: true
+  when: mysql_backup_enabled and mysql_backup_offsite_enabled
+
+# no_log: carries the S3 static key. 0600 root-only; the service loads it via
+# EnvironmentFile so the secret never reaches a process list.
+- name: Render the off-site backup env file (S3 key + bucket + age recipient)
+  ansible.builtin.template:
+    src: mysql-backup.env.j2
+    dest: "{{ mysql_base_dir }}/mysql-backup.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: mysql_backup_enabled and mysql_backup_offsite_enabled
 
 - name: Install the backup script
   ansible.builtin.template:
