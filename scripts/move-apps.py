@@ -44,17 +44,21 @@ def note(msg): print(f"     {msg}")
 
 inv_hosts = set((yaml.safe_load(open(INV)) or {})["all"]["hosts"])
 registry = yaml.safe_load(open(APPS))["apps"]
+
+# ── checkpoint (loaded BEFORE deriving src: flip() has already rewritten the
+#    registry host to dst, so a mid-move resume must read the ORIGINAL src from
+#    the checkpoint, not the flipped registry — else src == dst aborts) ──
+if reset and os.path.exists(STATE): os.remove(STATE)
+state = json.load(open(STATE)) if os.path.exists(STATE) else None
+
 if app:
     if app not in registry: die(f"app {app!r} is not in the registry")
-    src = registry[app]["host"]
+    src = state["src"] if state and state.get("app") == app else registry[app]["host"]
 
 for h in (src, dst):
     if h not in inv_hosts: die(f"{h} is not an inventory host ({', '.join(sorted(inv_hosts))})")
 if src == dst: die("SRC == DST")
 
-# ── checkpoint ──
-if reset and os.path.exists(STATE): os.remove(STATE)
-state = json.load(open(STATE)) if os.path.exists(STATE) else None
 sig = {"src": src, "dst": dst, "app": app}
 if state and {k: state[k] for k in sig} != sig:
     die(f"a checkpoint for a DIFFERENT move exists ({STATE}: "

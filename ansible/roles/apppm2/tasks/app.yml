@@ -109,6 +109,22 @@
   when: apppm2_env_refresh | default(false) or not item.stat.exists
   no_log: true
 
+# After env restore: a Next.js build bakes NEXT_PUBLIC_* and `prisma generate`
+# reads the datasource. shell (not command): build strings chain with && / |.
+# Idempotent via build_creates (e.g. .next) so it fires on a cold host /
+# migration, not every converge — CI owns rebuilds.
+- name: Build after install — {{ apppm2_app.key }} # noqa: command-instead-of-shell
+  ansible.builtin.shell:
+    cmd: "{{ apppm2_app.value.process.build }}"
+    chdir: "{{ apppm2_dir }}"
+    creates: >-
+      {{ (apppm2_dir ~ '/' ~ apppm2_app.value.process.build_creates)
+         if apppm2_app.value.process.build_creates is defined else omit }}
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: true
+  when: apppm2_app.value.process.build is defined
+
 - name: Bin directory for control scripts — {{ apppm2_app.key }}
   ansible.builtin.file:
     path: "{{ apppm2_home }}/bin"
