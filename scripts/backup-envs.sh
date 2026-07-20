@@ -70,7 +70,10 @@ fi
 sshc_host="" sshc_line=""
 render_conn() { # <host> — "ip|user|keyfile", cached per host
   if [ "$1" != "$sshc_host" ]; then
-    sshc_line=$(ANSIBLE_VAULT_PASSWORD_FILE="$vpf" ansible "$1" -m ansible.builtin.debug \
+    # Force json: ansible.cfg renders debug as yaml, but the sed below parses the
+    # json "msg" field (else it extracts nothing → "could not render conn vars").
+    sshc_line=$(ANSIBLE_VAULT_PASSWORD_FILE="$vpf" ANSIBLE_CALLBACK_RESULT_FORMAT=json \
+        ansible "$1" -m ansible.builtin.debug \
         -a 'msg={{ ansible_host }}|{{ ansible_user }}|{{ ansible_ssh_private_key_file }}' \
       | sed -n 's/.*"msg": "\(.*\)".*/\1/p')
     sshc_host=$1
