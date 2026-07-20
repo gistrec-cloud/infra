@@ -42,11 +42,16 @@ jobs:
       - name: Check formatting
         run: terraform fmt -check -recursive
       - name: Validate each module
+        # Auto-discover every root module (any immediate subdir with a .tf) so
+        # a new module is covered without editing this list — the hardcoded
+        # "dns aws hetzner yandex" silently skipped yandex-budget-explorer and
+        # yandex-vk-ads-tool.
         run: |
-          for d in dns aws hetzner yandex; do
-            echo "== $d =="
-            terraform -chdir="$d" init -backend=false
-            terraform -chdir="$d" validate
+          for d in */; do
+            [ -n "$(find "$d" -maxdepth 1 -name '*.tf' -print -quit)" ] || continue
+            echo "== ${d%/} =="
+            terraform -chdir="${d%/}" init -backend=false
+            terraform -chdir="${d%/}" validate
           done
 
   gitleaks:
