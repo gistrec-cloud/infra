@@ -34,8 +34,15 @@
   when:
     - mysql_replication_source_host | length > 0
     - mysql_replication_password | length > 0
-    # default: in --check the status read above is skipped and has no stdout.
-    - "'Replica_IO_Running: Yes' not in mysql_replica_status.stdout | default('')"
+    # Reconfigure when EITHER thread is down — not just IO. A stopped SQL
+    # thread (IO: Yes / SQL: No, e.g. after STOP REPLICA SQL_THREAD) otherwise
+    # skips this task AND the verify below (gated on `config is not skipped`),
+    # so a half-dead replica reports green forever. STOP/CHANGE/START restarts
+    # both; a persistent SQL data-error then re-fails verify → loud red, which
+    # is the point. default('') keeps --check (status read skipped) from erroring.
+    - >-
+      'Replica_IO_Running: Yes' not in mysql_replica_status.stdout | default('')
+      or 'Replica_SQL_Running: Yes' not in mysql_replica_status.stdout | default('')
 
 # START REPLICA is fire-and-forget: it returns OK even when a thread dies
 # immediately (bad credentials, purged GTIDs) — the error only surfaces in

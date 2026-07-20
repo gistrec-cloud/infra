@@ -80,8 +80,11 @@ data "aws_iam_policy_document" "cloudwatch_yandex_rating_counter" {
 
 data "aws_iam_policy_document" "lambda_yandex_rating_counter" {
   statement {
-    sid       = "VisualEditor0"
-    actions   = ["lambda:*"]
+    # The only consumer of this role is the EventBridge Scheduler target
+    # (schedules.tf), which needs invoke and nothing more. lambda:* let a
+    # compromised function rewrite/delete its own definition — scope it down.
+    sid       = "SelfInvoke"
+    actions   = ["lambda:InvokeFunction"]
     resources = ["arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:yandex-rating-counter"]
   }
 }
