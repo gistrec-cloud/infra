@@ -28,6 +28,8 @@
 #     repo_dir: <path>         # clone destination when the repo root is above dir
 #     ecosystem: <file>        # pm2 file, relative to dir (default ecosystem.config.js)
 #     pm2: [names]             # pm2 process names to ensure exist (env from 1P first)
+#     build: <shell>           # clone type: runs after install+env (next build / prisma generate)
+#     build_creates: <path>    # skip build when this path (rel. to dir) exists — idempotent/resume-safe
 #   static:                    # appstatic role — built bundle the vhost serves
 #     build: <shell>           # runs in dir when root is missing (fresh host / DR)
 #     root: <path under dir>

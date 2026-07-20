@@ -14,6 +14,9 @@ services:
     volumes:
       - {{ mysql_data_dir }}:/var/lib/mysql
       - {{ mysql_conf_dir }}:/etc/mysql/conf.d:ro
+{% if mysql_tls_enabled %}
+      - {{ mysql_tls_dir }}:/etc/mysql/tls:ro
+{% endif %}
     healthcheck:
       # MYSQL_PWD (not -p) keeps the password off the container process list.
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h127.0.0.1 -uroot --silent"]

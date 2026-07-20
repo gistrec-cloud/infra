@@ -40,6 +40,16 @@ mysql_root_password: "{{ vault_mysql_root_password | mandatory }}"
 mysql_innodb_buffer_pool_size: "256M"
 mysql_max_connections: 100
 
+# ─── TLS (optional) ───
+# When on, mysqld presents a real cert so clients that verify the server cert
+# (apps carrying TLS from the managed cluster) connect by name. Cert/key are
+# copied from an LE lineage on the host into a container-readable dir; a certbot
+# renewal hook re-copies + hot-reloads. Does NOT enforce TLS.
+mysql_tls_enabled: false
+mysql_tls_cert_src: ""
+mysql_tls_key_src: ""
+mysql_tls_dir: "{{ mysql_base_dir }}/tls"
+
 # ─── Replication role ───
 # standalone (default) | primary | replica.
 #   primary — binlog + GTID on, creates the replication user.

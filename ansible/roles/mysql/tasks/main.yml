@@ -102,6 +102,48 @@
     mode: "0644"
   notify: Recreate mysql container
 
+# mysqld runs as uid 999 and can't read the LE privkey (0600 root), so copy the
+# cert+key into a 999-owned dir; a certbot renewal hook refreshes it + reloads.
+- name: Provision MySQL TLS material
+  when: mysql_tls_enabled
+  block:
+    - name: Create the TLS dir
+      ansible.builtin.file:
+        path: "{{ mysql_tls_dir }}"
+        state: directory
+        owner: "999"
+        group: "999"
+        mode: "0750"
+    - name: Read the LE cert + key (follows the live/ symlinks)
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop: ["{{ mysql_tls_cert_src }}", "{{ mysql_tls_key_src }}"]
+      register: mysql_tls_read
+      no_log: true
+    - name: Install container-readable cert + key
+      ansible.builtin.copy:
+        content: "{{ mysql_tls_read.results[item.i].content | b64decode }}"
+        dest: "{{ mysql_tls_dir }}/{{ item.f }}"
+        owner: "999"
+        group: "999"
+        mode: "{{ item.m }}"
+      loop:
+        - { i: 0, f: fullchain.pem, m: "0644" }
+        - { i: 1, f: privkey.pem, m: "0600" }
+      no_log: true
+      notify: Recreate mysql container
+    - name: Install the certbot renewal hook (refresh copy + hot-reload TLS)
+      ansible.builtin.copy:
+        dest: /etc/letsencrypt/renewal-hooks/deploy/mysql-reload-tls
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # ANSIBLE MANAGED (mysql role) — refresh the container cert copy + reload TLS.
+          set -e
+          install -o 999 -g 999 -m 0644 -T "{{ mysql_tls_cert_src }}" "{{ mysql_tls_dir }}/fullchain.pem"
+          install -o 999 -g 999 -m 0600 -T "{{ mysql_tls_key_src }}"  "{{ mysql_tls_dir }}/privkey.pem"
+          docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "ALTER INSTANCE RELOAD TLS"' || true
+
 # ─── Container ───
 # The root password reaches the container via a 0600 env file, never the command
 # line / process list. MYSQL_ROOT_PASSWORD only applies on the FIRST init (empty

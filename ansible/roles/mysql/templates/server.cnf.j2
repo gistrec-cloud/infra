@@ -8,6 +8,12 @@ max_connections         = {{ mysql_max_connections }}
 sql_mode = ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 character-set-server = utf8mb4
 collation-server     = utf8mb4_unicode_ci
+{% if mysql_tls_enabled %}
+
+# TLS: present the LE cert so clients verifying the server cert connect by name.
+ssl-cert = /etc/mysql/tls/fullchain.pem
+ssl-key  = /etc/mysql/tls/privkey.pem
+{% endif %}
 {% if mysql_role in ['primary', 'replica'] %}
 
 # ─── Replication (GTID) ───
