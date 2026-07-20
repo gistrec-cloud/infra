@@ -77,6 +77,10 @@ DST=finland-01`):
 - **Open questions** (decide separately): `recovery` — two Go
   binaries + env files, not under pm2 anywhere, moved as plain
   files — still needed at all?; `DndCrimeLanding{,Staging}` — CI
-  pushes artifacts but no vhost serves them (pre-existing);
-  germany-01's fate after a quiet week — retire (terraform) or keep
-  as a spare; its legacy DNS aliases die in August either way.
+  pushes artifacts but no vhost serves them (pre-existing).
+- **RESOLVED 2026-07-20**: germany-01 retired — powered off + deleted by
+  the provider. Repo cleanup: DNS A record destroyed, wg peer 10.10.0.3 +
+  firewall allow-rules dropped (russia-01/russia-02/finland-01), host_vars
+  deleted, inventory host + static `web` group removed. germany-02's netdata
+  stream was repointed off the germany-01 proxy straight to the russia-01
+  parent first (verified arriving from its 109.122.198.50 source IP).
