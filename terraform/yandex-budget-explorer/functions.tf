@@ -11,9 +11,11 @@ locals {
   }
 
   function_env = {
+    # Self-hosted primary public endpoint (off-VPC → public IP; TLS opportunistic,
+    # as with managed).
     LOGIN      = "gistrec"
     MYSQL_DB   = "budget-explorer"
-    MYSQL_HOST = "projects.mysql.gistrec.cloud"
+    MYSQL_HOST = "public.mysql.gistrec.cloud"
     MYSQL_PORT = "3306"
     MYSQL_USER = "budget-explorer"
   }

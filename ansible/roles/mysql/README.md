@@ -67,7 +67,7 @@ Cloud Functions range; the replica publishes on `127.0.0.1` (outbound-only).
    primary assign fresh GTIDs (`--set-gtid-purged=OFF`):
    ```bash
    mysqldump --single-transaction --routines --triggers --set-gtid-purged=OFF \
-     -h projects.mysql.gistrec.cloud --ssl-mode=REQUIRED -u <user> -p <db> > <db>.sql
+     -h public.mysql.gistrec.cloud --ssl-mode=REQUIRED -u <user> -p <db> > <db>.sql
    docker exec -i mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot <db>' < <db>.sql
    ```
 3. Repoint each app / VPC-attached Cloud Function at the primary; verify.

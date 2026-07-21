@@ -10,8 +10,10 @@
 #
 #   scripts/migrate-mysql-data.sh              # all validated DBs
 #   scripts/migrate-mysql-data.sh dnd-crime    # only the named user(s)
+# No `ssh -n`: it would /dev/null the piped `bash -s <<REMOTE` heredoc → the remote
+# runs an empty script (silent no-op, exit 0). The loop is a `for`, needs no -n.
 VAULT="Gistrec Cloud"
-SSH=(ssh -n -o ConnectTimeout=20 -o IdentitiesOnly=yes -i "$HOME/.ssh/vps-finland-01.pub" gistrec@62.238.12.36)
+SSH=(ssh -o ConnectTimeout=20 -o IdentitiesOnly=yes -i "$HOME/.ssh/vps-finland-01.pub" gistrec@62.238.12.36)
 
 want=("$@")
 users=$(op item list --vault "$VAULT" --tags mysql-managed --format json \
@@ -29,7 +31,7 @@ for u in $users; do
   if [ ${#want[@]} -gt 0 ]; then printf '%s\n' "${want[@]}" | grep -qxF "$u" || continue; fi
   j=$(op item get "mysql $u" --vault "$VAULT" --format json) || { echo "FAIL $u: op item get"; bad=$((bad+1)); continue; }
   pw=$(printf '%s' "$j"  | field password)
-  host=$(printf '%s' "$j" | field host); host=${host:-projects.mysql.gistrec.cloud}
+  host=$(printf '%s' "$j" | field host); host=${host:-public.mysql.gistrec.cloud}
   db=$(printf '%s' "$j"  | field database); db=${db:-$u}
   [ -n "$pw" ] || { echo "FAIL $u: no password in 1P item"; bad=$((bad+1)); continue; }
   pb64=$(printf '%s' "$pw" | base64 | tr -d '\n')

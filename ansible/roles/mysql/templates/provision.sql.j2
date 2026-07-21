@@ -10,6 +10,10 @@ CREATE DATABASE IF NOT EXISTS `{{ db }}` CHARACTER SET utf8mb4 COLLATE utf8mb4_u
 {% endfor %}
 {% for user in mysql_users %}
 CREATE USER IF NOT EXISTS '{{ user.name }}'@'%' IDENTIFIED BY '{{ user.password }}';
+{% if user.database == '*' %}
+GRANT {{ user.privileges | default('ALL') }} ON *.* TO '{{ user.name }}'@'%'{% if user.grant_option | default(false) %} WITH GRANT OPTION{% endif %};
+{% else %}
 GRANT {{ user.privileges | default('ALL') }} ON `{{ user.database }}`.* TO '{{ user.name }}'@'%';
+{% endif %}
 {% endfor %}
 FLUSH PRIVILEGES;

@@ -40,6 +40,9 @@ mysql_root_password: "{{ vault_mysql_root_password | mandatory }}"
 mysql_innodb_buffer_pool_size: "256M"
 mysql_max_connections: 100
 
+# Match the managed cluster's Europe/Moscow (else SYSTEM inherits the host's UTC).
+mysql_time_zone: "Europe/Moscow"
+
 # ─── TLS (optional) ───
 # When on, mysqld presents a real cert so clients that verify the server cert
 # (apps carrying TLS from the managed cluster) connect by name. Cert/key are

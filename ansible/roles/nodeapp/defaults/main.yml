@@ -1,5 +1,7 @@
 ---
-nodeapp_nodejs_major: 20
+# Fleet standard. state: present, so a bump flips the apt repo, not an installed
+# node — a real major upgrade is a deliberate `apt install nodejs` + app restart.
+nodeapp_nodejs_major: 22
 
 # pm2-logrotate module settings (`pm2 set pm2-logrotate:<key> <value>`).
 # Strings on purpose: module_conf.json stores strings and the role compares
