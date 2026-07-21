@@ -44,6 +44,10 @@ netdata_pushover_roles: {}
 #   status_accepted: list of healthy HTTP codes, default [200]
 netdata_httpcheck_jobs: []
 
+# go.d filecheck jobs — file freshness; backs the backup-staleness alert (the
+# backup scripts touch a `.last-success` marker). Entries: { name, path }.
+netdata_filecheck_files: []
+
 # Custom health.d alarm files (empty list = nothing copied). Paths relative to
 # the playbook dir; each file lands in /etc/netdata/health.d/<basename>.
 netdata_health_files: []

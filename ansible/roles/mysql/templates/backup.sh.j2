@@ -61,4 +61,7 @@ fi
 # separately once they are a day old.
 find "$BACKUP_DIR" -maxdepth 1 -name '*.sql.gz' -type f -mtime +"$RETENTION" -delete
 find "$BACKUP_DIR" -maxdepth 1 -name '*.sql.gz.partial' -type f -mtime +0 -delete
+
+# Freshness marker (netdata go.d filecheck): touched only on a clean run — its age flags a stalled backup.
+[ "$fail" -eq 0 ] && touch "$BACKUP_DIR/.last-success"
 exit "$fail"

@@ -100,13 +100,33 @@
   notify: Restart netdata
   when: netdata_pm2_apps | length > 0
 
+# Liveness/memory/oom alarms install on the notifying evaluator only (parent or
+# standalone) — the parent already evaluates streamed child charts, so installing
+# on children too would double-notify. Children still set netdata_pm2_apps to stream.
 - name: Alert when a pm2 app has no processes
   ansible.builtin.copy:
     src: pm2_health.conf
     dest: /etc/netdata/health.d/pm2.conf
     mode: "0644"
   notify: Restart netdata
-  when: netdata_pm2_apps | length > 0
+  when: netdata_pm2_apps | length > 0 and netdata_stream_destination | length == 0
+
+- name: Alert when a pm2 app's memory runs high (leak/OOM early warning)
+  ansible.builtin.copy:
+    src: pm2_memory.conf
+    dest: /etc/netdata/health.d/pm2_memory.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_pm2_apps | length > 0 and netdata_stream_destination | length == 0
+
+# Re-arm the stock oom_kill alarm (ships `to: silent`). Parent/standalone only.
+- name: Notify on OOM kills (re-arm the silenced stock alarm)
+  ansible.builtin.copy:
+    src: oom_notify.conf
+    dest: /etc/netdata/health.d/oom_notify.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_stream_destination | length == 0
 
 # go.d re-reads job configs only at startup, hence the full restart.
 - name: Configure go.d httpcheck probes
@@ -128,6 +148,15 @@
     mode: "0644"
   notify: Restart netdata
   when: tls_managed | default(false)
+
+# go.d re-reads job configs only at startup, hence the full restart.
+- name: Configure go.d filecheck (backup-freshness markers)
+  ansible.builtin.template:
+    src: filecheck.conf.j2
+    dest: /etc/netdata/go.d/filecheck.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_filecheck_files | length > 0
 
 - name: Install custom health alarm files
   ansible.builtin.copy:
