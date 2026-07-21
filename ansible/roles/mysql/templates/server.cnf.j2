@@ -4,10 +4,8 @@ innodb_buffer_pool_size = {{ mysql_innodb_buffer_pool_size }}
 max_connections         = {{ mysql_max_connections }}
 
 # Match the managed cluster (terraform/yandex/mysql.tf) so behaviour is identical
-# — same strict sql_mode, same utf8mb4 defaults, same time zone. The managed Yandex
-# cluster defaulted to Europe/Moscow; without this the container inherits the host's
-# UTC (SYSTEM) and NOW()/CURRENT_TIMESTAMP drift −3h. The named zone needs the tz
-# tables, which the mysql image loads into the data dir.
+# — same strict sql_mode, same utf8mb4 defaults, same time zone (else SYSTEM
+# inherits the host's UTC).
 sql_mode = ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 character-set-server = utf8mb4
 collation-server     = utf8mb4_unicode_ci

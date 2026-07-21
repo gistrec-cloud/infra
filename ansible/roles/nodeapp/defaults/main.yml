@@ -1,7 +1,6 @@
 ---
-# Fleet standard. NB: the role installs with `state: present`, so bumping this
-# does NOT auto-upgrade an already-installed node — it flips the apt repo; a real
-# major upgrade (e.g. finland-01 20→22) is a deliberate `apt install nodejs` + app restart.
+# Fleet standard. state: present, so a bump flips the apt repo, not an installed
+# node — a real major upgrade is a deliberate `apt install nodejs` + app restart.
 nodeapp_nodejs_major: 22
 
 # pm2-logrotate module settings (`pm2 set pm2-logrotate:<key> <value>`).

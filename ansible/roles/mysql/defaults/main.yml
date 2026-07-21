@@ -40,9 +40,7 @@ mysql_root_password: "{{ vault_mysql_root_password | mandatory }}"
 mysql_innodb_buffer_pool_size: "256M"
 mysql_max_connections: 100
 
-# Server time zone — the managed Yandex cluster ran Europe/Moscow, so match it
-# (SYSTEM would inherit the host's UTC and shift NOW()/CURRENT_TIMESTAMP by −3h).
-# Override to "+03:00" if a host lacks the named-zone tz tables.
+# Match the managed cluster's Europe/Moscow (else SYSTEM inherits the host's UTC).
 mysql_time_zone: "Europe/Moscow"
 
 # ─── TLS (optional) ───

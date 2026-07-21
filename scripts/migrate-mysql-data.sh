@@ -10,10 +10,8 @@
 #
 #   scripts/migrate-mysql-data.sh              # all validated DBs
 #   scripts/migrate-mysql-data.sh dnd-crime    # only the named user(s)
-# No `ssh -n` here: the REMOTE script is piped in via `bash -s <<REMOTE`, and -n
-# redirects ssh stdin from /dev/null — the remote would get an EMPTY script and
-# silently do nothing (dump/load/verify all skipped) while exiting 0. The loop
-# below is a `for` over a variable, not a while-read, so it needs no -n guard.
+# No `ssh -n`: it would /dev/null the piped `bash -s <<REMOTE` heredoc → the remote
+# runs an empty script (silent no-op, exit 0). The loop is a `for`, needs no -n.
 VAULT="Gistrec Cloud"
 SSH=(ssh -o ConnectTimeout=20 -o IdentitiesOnly=yes -i "$HOME/.ssh/vps-finland-01.pub" gistrec@62.238.12.36)
 
