@@ -44,6 +44,13 @@ netdata_pushover_roles: {}
 #   status_accepted: list of healthy HTTP codes, default [200]
 netdata_httpcheck_jobs: []
 
+# go.d filecheck jobs (empty = file untouched). Watches file freshness — the
+# mysql/clickhouse backup scripts touch a `.last-success` marker on a clean run,
+# and health.d/backup-staleness.conf alerts when a marker's age exceeds the
+# schedule. Runs on the backup host (child); the parent evaluates the streamed
+# chart. Entries: { name: <chart id>, path: <absolute file to watch> }.
+netdata_filecheck_files: []
+
 # Custom health.d alarm files (empty list = nothing copied). Paths relative to
 # the playbook dir; each file lands in /etc/netdata/health.d/<basename>.
 netdata_health_files: []

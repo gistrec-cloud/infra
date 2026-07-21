@@ -100,13 +100,38 @@
   notify: Restart netdata
   when: netdata_pm2_apps | length > 0
 
+# Liveness + memory alarms install on the notifying evaluator only (parent or
+# standalone — netdata_stream_destination unset). A netdata parent runs health
+# against streamed CHILD charts too, so one copy on the parent covers the whole
+# fleet; installing on the children as well would double-notify (same reason the
+# fleet /health probes split health_*/watch_* prefixes). Children still set
+# netdata_pm2_apps above so their grouped app.* charts exist and stream up.
 - name: Alert when a pm2 app has no processes
   ansible.builtin.copy:
     src: pm2_health.conf
     dest: /etc/netdata/health.d/pm2.conf
     mode: "0644"
   notify: Restart netdata
-  when: netdata_pm2_apps | length > 0
+  when: netdata_pm2_apps | length > 0 and netdata_stream_destination | length == 0
+
+- name: Alert when a pm2 app's memory runs high (leak/OOM early warning)
+  ansible.builtin.copy:
+    src: pm2_memory.conf
+    dest: /etc/netdata/health.d/pm2_memory.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_pm2_apps | length > 0 and netdata_stream_destination | length == 0
+
+# The stock oom_kill alarm ships `to: silent`; this companion re-arms OOM-kill
+# notifications fleet-wide. Parent/standalone only — the parent evaluates
+# streamed children's mem.oom_kill, so children stay silent to avoid duplicates.
+- name: Notify on OOM kills (re-arm the silenced stock alarm)
+  ansible.builtin.copy:
+    src: oom_notify.conf
+    dest: /etc/netdata/health.d/oom_notify.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_stream_destination | length == 0
 
 # go.d re-reads job configs only at startup, hence the full restart.
 - name: Configure go.d httpcheck probes
@@ -128,6 +153,15 @@
     mode: "0644"
   notify: Restart netdata
   when: tls_managed | default(false)
+
+# go.d re-reads job configs only at startup, hence the full restart.
+- name: Configure go.d filecheck (backup-freshness markers)
+  ansible.builtin.template:
+    src: filecheck.conf.j2
+    dest: /etc/netdata/go.d/filecheck.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_filecheck_files | length > 0
 
 - name: Install custom health alarm files
   ansible.builtin.copy:

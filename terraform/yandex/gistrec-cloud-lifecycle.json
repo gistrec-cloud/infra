@@ -1,0 +1,6 @@
+{
+  "lifecycleRules": [
+    { "id": "expire-mysql-offsite", "enabled": true, "filter": { "prefix": "mysql/" }, "expiration": { "days": "365" } },
+    { "id": "expire-clickhouse-offsite", "enabled": true, "filter": { "prefix": "clickhouse/" }, "expiration": { "days": "365" } }
+  ]
+}
