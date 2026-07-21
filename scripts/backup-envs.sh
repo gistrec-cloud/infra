@@ -70,8 +70,7 @@ fi
 sshc_host="" sshc_line=""
 render_conn() { # <host> — "ip|user|keyfile", cached per host
   if [ "$1" != "$sshc_host" ]; then
-    # ansible.cfg defaults callback_result_format=yaml → force json so the sed matches.
-    sshc_line=$(ANSIBLE_CALLBACK_RESULT_FORMAT=json ANSIBLE_VAULT_PASSWORD_FILE="$vpf" ansible "$1" -m ansible.builtin.debug \
+    sshc_line=$(ANSIBLE_VAULT_PASSWORD_FILE="$vpf" ansible "$1" -m ansible.builtin.debug \
         -a 'msg={{ ansible_host }}|{{ ansible_user }}|{{ ansible_ssh_private_key_file }}' \
       | sed -n 's/.*"msg": "\(.*\)".*/\1/p')
     sshc_host=$1
