@@ -14,13 +14,6 @@ locals {
       disk_name = "projects"
       hostname  = "projects"
     }
-    "russia-02" = {
-      memory    = 2
-      image_id  = "fd8chrq89mmk8tqm85r8"
-      disk_size = 20
-      disk_name = "disk-ubuntu-24-04-lts-1734197525817"
-      hostname  = "vk-ads-tool"
-    }
   }
 }
 
