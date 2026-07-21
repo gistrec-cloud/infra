@@ -1,0 +1,39 @@
+<clickhouse>
+    <!-- {{ ansible_managed }} -->
+    <!-- Hot-reloaded by ClickHouse on change. Passwords are stored as sha256 of
+         the vault plaintext (computed on the host); the clear value never lands
+         here. -->
+    <profiles>
+        <default>
+            <max_memory_usage>{{ clickhouse_profile_max_memory_usage }}</max_memory_usage>
+            <max_threads>{{ clickhouse_profile_max_threads }}</max_threads>
+        </default>
+        <monitoring>
+            <readonly>2</readonly>
+            <max_memory_usage>200000000</max_memory_usage>
+            <max_threads>1</max_threads>
+        </monitoring>
+    </profiles>
+
+    <users>
+        <!-- admin: only reachable from inside the container (docker exec / loopback) -->
+        <default>
+            <networks replace="replace">
+                <ip>127.0.0.1</ip>
+                <ip>::1</ip>
+            </networks>
+        </default>
+{% for user in clickhouse_users %}
+
+        <{{ user.name }}>
+            <password_sha256_hex>{{ user.password | hash('sha256') }}</password_sha256_hex>
+            <profile>{{ user.profile | default('default') }}</profile>
+            <quota>default</quota>
+            <networks><ip>{{ user.networks | default('::/0') }}</ip></networks>
+            <allow_databases>
+                <database>{{ user.database }}</database>
+            </allow_databases>
+        </{{ user.name }}>
+{% endfor %}
+    </users>
+</clickhouse>

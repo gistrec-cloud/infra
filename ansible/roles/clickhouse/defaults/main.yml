@@ -1,0 +1,94 @@
+---
+# ─── Docker Engine ───
+# Official apt repo (distro docker.io lags); present, not latest, so upgrades stay
+# deliberate. A no-op where the mysql role already installed it (same host).
+clickhouse_docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+
+# ─── ClickHouse container ───
+# Pin an exact patch in host_vars for reproducible upgrades. 25.8 matches what
+# ran on russia-02 before the move.
+clickhouse_image: "clickhouse/clickhouse-server:25.8"
+clickhouse_container_name: clickhouse
+
+# Host layout. Data is a bind mount — disposable, lean on the nightly backup.
+clickhouse_base_dir: /opt/clickhouse
+clickhouse_data_dir: "{{ clickhouse_base_dir }}/data"
+clickhouse_config_dir: "{{ clickhouse_base_dir }}/config.d"
+clickhouse_users_dir: "{{ clickhouse_base_dir }}/users.d"
+
+# The server process runs as this uid/gid inside the official image (the data dir
+# ends up owned by it). TLS material + users.d must be readable by it.
+clickhouse_uid: 101
+clickhouse_gid: 101
+
+# ─── Ports & exposure ───
+# Native (9000) and HTTP (8123) speak plaintext, so they publish on loopback only
+# (host-local tools / docker exec). The TLS ports (native-secure 9440, HTTPS 8443)
+# carry the public endpoint — Docker DNATs a 0.0.0.0 publish past the input chain,
+# so firewall_docker_allow_tcp is the only gate (see the assert in tasks/main.yml).
+clickhouse_plain_publish_address: "127.0.0.1"
+clickhouse_tls_publish_address: "0.0.0.0"
+clickhouse_tcp_port: 9000
+clickhouse_http_port: 8123
+clickhouse_tcp_secure_port: 9440
+clickhouse_https_port: 8443
+
+# Low-memory server tuning (small pools, no system-log tables). Fine on a bigger
+# host too; bump clickhouse_max_memory_usage / mem limits in host_vars if needed.
+clickhouse_mem_limit: "1g"
+clickhouse_memswap_limit: "2g"
+clickhouse_max_server_memory_ratio: "0.5"
+clickhouse_max_concurrent_queries: 20
+clickhouse_profile_max_memory_usage: 400000000
+clickhouse_profile_max_threads: 2
+clickhouse_timezone: "Europe/Moscow"
+
+# ─── TLS ───
+# When on, ClickHouse presents a real cert on 9440/8443 so clients that verify
+# connect by name (primary/public.clickhouse). Cert/key are copied from an LE
+# lineage on the host into a container-readable dir; a certbot renewal hook
+# re-copies + reloads. Required whenever a TLS port is published on 0.0.0.0.
+clickhouse_tls_enabled: false
+clickhouse_tls_cert_src: ""
+clickhouse_tls_key_src: ""
+clickhouse_tls_dir: "{{ clickhouse_base_dir }}/tls"
+
+# ─── Databases & users ───
+# Databases: created idempotently (CREATE DATABASE IF NOT EXISTS) via a piped SQL
+# script. Users: declared in users.d/zz-users.xml (hot-reloaded by CH); the
+# plaintext password (from the vault) is hashed to sha256 on the host, never
+# stored in clear. allow_databases scopes each app user to its own database.
+#   clickhouse_databases: [vk-ads-tool]
+#   clickhouse_users:
+#     - { name: vk-ads-tool, password: "{{ vault_clickhouse_vk_ads_tool }}", database: vk-ads-tool }
+# Optional per-user keys: profile (default: "default"), networks (default: "::/0").
+clickhouse_databases: []
+clickhouse_users: []
+
+# ─── Backups ───
+# Nightly per-database logical dump (DDL + Native data per table) → tar.gz under
+# clickhouse_backup_dir, rotated after the retention window, driven by a systemd
+# timer. Off-site upload is the opt-in block below.
+clickhouse_backup_enabled: true
+clickhouse_backup_dir: /var/backups/clickhouse
+clickhouse_backup_retention_days: 14
+clickhouse_backup_hour: 3
+clickhouse_backup_minute: 45
+
+# ─── Off-site backup upload (S3-compatible Object Storage) ───
+# Opt-in per host: each fresh dump is age-encrypted (private identity ONLY in
+# 1Password) and uploaded with a write-only key. Retention is a bucket lifecycle
+# rule — the key can't prune. Reuses the mysql-backup uploader key/recipient by
+# default (same bucket); override in host_vars.
+clickhouse_backup_offsite_enabled: false
+clickhouse_backup_s3_endpoint: "https://storage.yandexcloud.net"
+clickhouse_backup_s3_region: ru-central1
+clickhouse_backup_s3_bucket: ""
+clickhouse_backup_s3_prefix: "clickhouse/{{ inventory_hostname }}/"
+clickhouse_backup_age_recipient: ""
+clickhouse_backup_s3_key_id: "{{ vault_mysql_backup_s3_key_id | default('') }}"
+clickhouse_backup_s3_secret: "{{ vault_mysql_backup_s3_secret | default('') }}"

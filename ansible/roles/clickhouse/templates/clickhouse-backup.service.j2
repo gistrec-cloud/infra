@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=ClickHouse (Docker) nightly backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# Optional (leading -): the file is absent when off-site is disabled.
+EnvironmentFile=-{{ clickhouse_base_dir }}/clickhouse-backup.env
+ExecStart=/usr/local/bin/clickhouse-backup.sh

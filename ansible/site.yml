@@ -113,7 +113,7 @@
     - role: appcron
       tags: [appcron]
 
-- name: Database servers — self-hosted MySQL (Docker), primary/replica
+- name: Database servers — self-hosted MySQL + ClickHouse (Docker)
   hosts: db
   become: true
   vars_files:
@@ -126,6 +126,12 @@
     # before the apps that need them.
     - role: mysql
       when: mysql_managed | default(false)
+    # ClickHouse (VkAdsTool stats store, moved off russia-02). Same 0.0.0.0-publish
+    # assert; publishes plaintext on loopback and TLS (9440/8443) publicly. The
+    # *.clickhouse.<zone> SAN is issued by the tls role in the later web play, so a
+    # fresh host needs a second deploy for the container to copy the real cert.
+    - role: clickhouse
+      when: clickhouse_managed | default(false)
 
 - name: Applications — docker dependencies, pm2 apps, static bundles
   hosts: all

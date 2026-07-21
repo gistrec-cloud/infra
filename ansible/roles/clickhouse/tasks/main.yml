@@ -1,0 +1,256 @@
+---
+# Docker DNATs a published port before the nftables *forward* chain, so a 0.0.0.0
+# publish sails past the default-drop input chain — only firewall_docker_allow_tcp
+# gates it. Refuse to expose a TLS port that way without a managed firewall.
+- name: Refuse to expose ClickHouse TLS without a managed firewall
+  ansible.builtin.assert:
+    that:
+      - (not clickhouse_tls_enabled) or (clickhouse_tls_publish_address != '0.0.0.0') or (firewall_managed | default(false))
+    fail_msg: >-
+      Publishing the ClickHouse TLS ports on 0.0.0.0 without firewall_managed
+      exposes {{ clickhouse_tcp_secure_port }}/{{ clickhouse_https_port }} to the
+      internet (Docker DNAT bypasses the input chain). Set firewall_managed: true
+      with firewall_docker_allow_tcp entries, or bind clickhouse_tls_publish_address
+      to a private IP.
+    quiet: true
+
+# Native/HTTP speak plaintext — never publish them on a public address; the wire
+# would carry credentials in clear (no auth+TLS guard like the secure ports).
+- name: Refuse to publish plaintext ClickHouse ports publicly
+  ansible.builtin.assert:
+    that:
+      - clickhouse_plain_publish_address == '127.0.0.1' or clickhouse_plain_publish_address is match('^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)')
+    fail_msg: >-
+      clickhouse_plain_publish_address ({{ clickhouse_plain_publish_address }})
+      is not loopback or a private IP. The native/HTTP ports are plaintext — bind
+      them to 127.0.0.1 or a mesh IP, and use the TLS ports for public traffic.
+    quiet: true
+
+# User names become XML element names in users.d and are interpolated raw; a
+# name outside this set would break the XML (or the SQL grants downstream).
+- name: Refuse ClickHouse user / database names that break the templates
+  ansible.builtin.assert:
+    that:
+      - clickhouse_users | map(attribute='name') | reject('match', '^[A-Za-z_][A-Za-z0-9_-]*$') | list | length == 0
+      - clickhouse_databases | reject('match', '^[A-Za-z_][A-Za-z0-9_-]*$') | list | length == 0
+    fail_msg: >-
+      A ClickHouse user or database name is not a plain identifier
+      ([A-Za-z_][A-Za-z0-9_-]*) — it would break users.xml / provision.sql.
+    quiet: true
+
+# ─── Docker Engine (official apt repo; no-op where the mysql role installed it) ───
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Add Docker's official GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Add Docker apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+    filename: docker
+    state: present
+
+- name: Install Docker Engine and the compose plugin
+  ansible.builtin.apt:
+    name: "{{ clickhouse_docker_packages }}"
+    state: present
+    update_cache: true
+
+- name: Enable and start Docker
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+
+# ─── Layout ───
+- name: Create the ClickHouse base + config directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ clickhouse_base_dir }}", mode: "0750" }
+    # 0755: config.d / users.d are bind-mounted RO and read by the container's
+    # clickhouse user (uid {{ clickhouse_uid }}), not root.
+    - { path: "{{ clickhouse_config_dir }}", mode: "0755" }
+    - { path: "{{ clickhouse_users_dir }}", mode: "0755" }
+  loop_control:
+    label: "{{ item.path }}"
+
+# No owner/mode: the image chowns /var/lib/clickhouse to its own uid on init, so
+# pinning root here just churns `changed` every run.
+- name: Ensure the ClickHouse data dir exists (ownership left to the container)  # noqa: risky-file-permissions
+  ansible.builtin.file:
+    path: "{{ clickhouse_data_dir }}"
+    state: directory
+
+- name: Render the ClickHouse server config
+  ansible.builtin.template:
+    src: config.xml.j2
+    dest: "{{ clickhouse_config_dir }}/zz-server.xml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recreate clickhouse container
+
+# clickhouse-server runs as uid {{ clickhouse_uid }} and can't read the LE privkey
+# (0600 root), so copy the cert+key into a dir it owns; a certbot renewal hook
+# refreshes them + reloads config (hot, no restart).
+- name: Provision ClickHouse TLS material
+  when: clickhouse_tls_enabled
+  block:
+    - name: Create the TLS dir
+      ansible.builtin.file:
+        path: "{{ clickhouse_tls_dir }}"
+        state: directory
+        owner: "{{ clickhouse_uid }}"
+        group: "{{ clickhouse_gid }}"
+        mode: "0750"
+    - name: Read the LE cert + key (follows the live/ symlinks)
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop: ["{{ clickhouse_tls_cert_src }}", "{{ clickhouse_tls_key_src }}"]
+      register: clickhouse_tls_read
+      no_log: true
+    - name: Install container-readable cert + key
+      ansible.builtin.copy:
+        content: "{{ clickhouse_tls_read.results[item.i].content | b64decode }}"
+        dest: "{{ clickhouse_tls_dir }}/{{ item.f }}"
+        owner: "{{ clickhouse_uid }}"
+        group: "{{ clickhouse_gid }}"
+        mode: "{{ item.m }}"
+      loop:
+        - { i: 0, f: fullchain.pem, m: "0644" }
+        - { i: 1, f: privkey.pem, m: "0600" }
+      no_log: true
+      notify: Recreate clickhouse container
+    - name: Install the certbot renewal hook (refresh copy + reload config)
+      ansible.builtin.copy:
+        dest: /etc/letsencrypt/renewal-hooks/deploy/clickhouse-reload-tls
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # ANSIBLE MANAGED (clickhouse role) — refresh the container cert copy + reload.
+          set -e
+          install -o {{ clickhouse_uid }} -g {{ clickhouse_gid }} -m 0644 -T "{{ clickhouse_tls_cert_src }}" "{{ clickhouse_tls_dir }}/fullchain.pem"
+          install -o {{ clickhouse_uid }} -g {{ clickhouse_gid }} -m 0600 -T "{{ clickhouse_tls_key_src }}"  "{{ clickhouse_tls_dir }}/privkey.pem"
+          docker exec {{ clickhouse_container_name }} clickhouse-client --query "SYSTEM RELOAD CONFIG" || true
+
+# ─── Users (declarative, hot-reloaded) ───
+# sha256 of the vault plaintext is computed in the template; the clear value never
+# lands on disk. no_log: the source var carries the plaintext password.
+- name: Render the ClickHouse users config
+  ansible.builtin.template:
+    src: users.xml.j2
+    dest: "{{ clickhouse_users_dir }}/zz-users.xml"
+    owner: "{{ clickhouse_uid }}"
+    group: "{{ clickhouse_gid }}"
+    mode: "0640"
+  no_log: true
+  notify: Recreate clickhouse container
+
+# ─── Container ───
+- name: Render the docker compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ clickhouse_base_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recreate clickhouse container
+
+# --wait blocks until the healthcheck passes, so provisioning never races startup.
+- name: Start the ClickHouse container
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans --wait --wait-timeout 180
+    chdir: "{{ clickhouse_base_dir }}"
+  register: clickhouse_compose_up
+  changed_when: >-
+    'Started' in clickhouse_compose_up.stderr or
+    'Created' in clickhouse_compose_up.stderr or
+    'Recreated' in clickhouse_compose_up.stderr
+
+# If config changed, recreate + become healthy BEFORE creating databases below.
+- name: Apply pending container recreation
+  ansible.builtin.meta: flush_handlers
+
+# Databases, idempotently. Users come from users.d (above); tables/data belong to
+# the app / the data migration, not this role. --multiquery reads statements from
+# stdin; changed_when false — CREATE DATABASE IF NOT EXISTS is a no-op once made.
+- name: Apply databases
+  ansible.builtin.command:
+    cmd: docker exec -i {{ clickhouse_container_name }} clickhouse-client --multiquery
+    stdin: "{{ lookup('template', 'provision.sql.j2') }}"
+  changed_when: false
+  when: clickhouse_databases | length > 0
+
+# ─── Backups (systemd timer) ───
+- name: Create the backup directory
+  ansible.builtin.file:
+    path: "{{ clickhouse_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: clickhouse_backup_enabled
+
+# rclone, not awscli (dropped from apt in Ubuntu 24.04).
+- name: Install off-site backup tooling (age + rclone)
+  ansible.builtin.apt:
+    name: [age, rclone]
+    state: present
+    update_cache: true
+  when: clickhouse_backup_enabled and clickhouse_backup_offsite_enabled
+
+# no_log: carries the S3 static key (0600, loaded via the service EnvironmentFile).
+- name: Render the off-site backup env file (S3 key + bucket + age recipient)
+  ansible.builtin.template:
+    src: clickhouse-backup.env.j2
+    dest: "{{ clickhouse_base_dir }}/clickhouse-backup.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: clickhouse_backup_enabled and clickhouse_backup_offsite_enabled
+
+- name: Install the backup script
+  ansible.builtin.template:
+    src: backup.sh.j2
+    dest: /usr/local/bin/clickhouse-backup.sh
+    owner: root
+    group: root
+    mode: "0750"
+  when: clickhouse_backup_enabled
+
+- name: Install the backup systemd unit and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - clickhouse-backup.service
+    - clickhouse-backup.timer
+  when: clickhouse_backup_enabled
+  notify: Reload systemd
+
+- name: Enable and start the backup timer
+  ansible.builtin.systemd:
+    name: clickhouse-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: clickhouse_backup_enabled
