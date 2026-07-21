@@ -2,10 +2,8 @@
 # Stable attributes are managed here. The per-bucket lifecycle_rule / logging
 # configuration is left under ignore_changes: those are managed over the S3 API
 # (needs a static key we deliberately don't mint) and are adopted as-is.
-# gistrec-cloud off-site backup retention (prefixes mysql/ + clickhouse/) = 365d,
-# set out-of-band: `yc storage bucket update --name gistrec-cloud
-# --lifecycle-rules-from-file gistrec-cloud-lifecycle.json`. The write-only uploader
-# key can't prune, so the bucket lifecycle is what ages backups out.
+# gistrec-cloud backup retention (mysql/+clickhouse/) = 365d, set out-of-band from
+# gistrec-cloud-lifecycle.json (uploader key can't prune; bucket lifecycle does).
 
 locals {
   buckets = {

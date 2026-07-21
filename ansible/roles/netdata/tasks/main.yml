@@ -100,12 +100,9 @@
   notify: Restart netdata
   when: netdata_pm2_apps | length > 0
 
-# Liveness + memory alarms install on the notifying evaluator only (parent or
-# standalone — netdata_stream_destination unset). A netdata parent runs health
-# against streamed CHILD charts too, so one copy on the parent covers the whole
-# fleet; installing on the children as well would double-notify (same reason the
-# fleet /health probes split health_*/watch_* prefixes). Children still set
-# netdata_pm2_apps above so their grouped app.* charts exist and stream up.
+# Liveness/memory/oom alarms install on the notifying evaluator only (parent or
+# standalone) — the parent already evaluates streamed child charts, so installing
+# on children too would double-notify. Children still set netdata_pm2_apps to stream.
 - name: Alert when a pm2 app has no processes
   ansible.builtin.copy:
     src: pm2_health.conf
@@ -122,9 +119,7 @@
   notify: Restart netdata
   when: netdata_pm2_apps | length > 0 and netdata_stream_destination | length == 0
 
-# The stock oom_kill alarm ships `to: silent`; this companion re-arms OOM-kill
-# notifications fleet-wide. Parent/standalone only — the parent evaluates
-# streamed children's mem.oom_kill, so children stay silent to avoid duplicates.
+# Re-arm the stock oom_kill alarm (ships `to: silent`). Parent/standalone only.
 - name: Notify on OOM kills (re-arm the silenced stock alarm)
   ansible.builtin.copy:
     src: oom_notify.conf

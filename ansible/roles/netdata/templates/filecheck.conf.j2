@@ -1,6 +1,5 @@
 # {{ ansible_managed }}
-# go.d filecheck — file existence / age / size. One job per watched file so each
-# gets its own chart. Used for backup-freshness markers (health.d/backup-staleness.conf).
+# go.d filecheck — one job per watched file (backup-freshness markers).
 jobs:
 {% for f in netdata_filecheck_files %}
   - name: {{ f.name }}
