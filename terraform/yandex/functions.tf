@@ -42,7 +42,10 @@ resource "yandex_function" "realm_status" {
   }
 
   environment = {
-    MYSQL_HOST           = "projects.mysql.gistrec.cloud"
+    # Self-hosted primary (finland-01) public endpoint — the function can't reach
+    # the wg mesh, so it dials the public IP. db.py verifies TLS only when
+    # MYSQL_CHECK_SSL=1 (unset here → opportunistic/unverified, as with managed).
+    MYSQL_HOST           = "public.mysql.gistrec.cloud"
     MYSQL_PORT           = "3306"
     MYSQL_USER           = "realmctl"
     MYSQL_DB             = "realmctl"

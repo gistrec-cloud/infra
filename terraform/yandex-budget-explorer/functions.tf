@@ -13,7 +13,10 @@ locals {
   function_env = {
     LOGIN      = "gistrec"
     MYSQL_DB   = "budget-explorer"
-    MYSQL_HOST = "projects.mysql.gistrec.cloud"
+    # Self-hosted primary (finland-01) public endpoint — functions can't reach the
+    # wg mesh, so they dial the public IP. TLS is opportunistic/unverified in
+    # database.py (no ssl args), same posture as the retired managed cluster.
+    MYSQL_HOST = "public.mysql.gistrec.cloud"
     MYSQL_PORT = "3306"
     MYSQL_USER = "budget-explorer"
   }

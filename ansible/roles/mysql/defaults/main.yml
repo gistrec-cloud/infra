@@ -40,6 +40,11 @@ mysql_root_password: "{{ vault_mysql_root_password | mandatory }}"
 mysql_innodb_buffer_pool_size: "256M"
 mysql_max_connections: 100
 
+# Server time zone — the managed Yandex cluster ran Europe/Moscow, so match it
+# (SYSTEM would inherit the host's UTC and shift NOW()/CURRENT_TIMESTAMP by −3h).
+# Override to "+03:00" if a host lacks the named-zone tz tables.
+mysql_time_zone: "Europe/Moscow"
+
 # ─── TLS (optional) ───
 # When on, mysqld presents a real cert so clients that verify the server cert
 # (apps carrying TLS from the managed cluster) connect by name. Cert/key are
