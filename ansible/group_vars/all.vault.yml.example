@@ -34,3 +34,13 @@ vault_admin_ssh_keys:
 # vault_mysql_ctb:       "REPLACE_ME"
 # vault_mysql_wordpress: "REPLACE_ME"
 # ... one per remaining app user
+# Off-site backup uploader (storage.uploader) — reused by the clickhouse role too:
+# vault_mysql_backup_s3_key_id: "REPLACE_ME"
+# vault_mysql_backup_s3_secret: "REPLACE_ME"
+
+# ─── Self-hosted ClickHouse (clickhouse role) ───
+# Needed on hosts with clickhouse_managed: true. One password per app user
+# (mirror clickhouse_users in host_vars). The role hashes these to sha256 on the
+# host — the clear value never lands on disk.
+# vault_clickhouse_vk_ads_tool:      "REPLACE_ME"
+# vault_clickhouse_vk_ads_tool_test: "REPLACE_ME"

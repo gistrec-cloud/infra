@@ -1,0 +1,7 @@
+-- {{ ansible_managed }}
+-- Piped into the container over stdin; never written to disk. Idempotent —
+-- CREATE DATABASE IF NOT EXISTS is a no-op once the database exists. App tables
+-- are owned by the app / the data migration, not by this role.
+{% for db in clickhouse_databases %}
+CREATE DATABASE IF NOT EXISTS `{{ db }}`;
+{% endfor %}

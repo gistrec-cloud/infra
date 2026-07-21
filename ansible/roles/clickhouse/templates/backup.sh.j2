@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Per-database logical backup: <table>.sql (DDL) for every table + <table>.native
+# (data) for *MergeTree engines, tar.gz'd per database, then pruned. Dumps run
+# INSIDE the container via clickhouse-client (default user over loopback), so no
+# password ever hits a process list. tables.order lists tables base-first so a
+# restore recreates MergeTree tables before the views that read them.
+#
+# Each database tars into a .partial renamed only on success. A failed database
+# neither aborts the rest nor the rotation; the exit code stays non-zero so the
+# systemd unit fails visibly. Restore runbook: see the role README.
+set -euo pipefail
+
+BACKUP_DIR="{{ clickhouse_backup_dir }}"
+CONTAINER="{{ clickhouse_container_name }}"
+RETENTION={{ clickhouse_backup_retention_days }}
+STAMP="$(date +%Y%m%d-%H%M%S)"
+
+mkdir -p "$BACKUP_DIR"
+fail=0
+
+chc() { docker exec "$CONTAINER" clickhouse-client "$@"; }
+{% if clickhouse_backup_offsite_enabled %}
+
+# Off-site: age-encrypt each fresh archive (private identity ONLY in 1Password)
+# and upload it. Creds come from the systemd EnvironmentFile.
+upload_offsite() {
+  local f="$1" enc
+  enc="$f.age"
+  if ! age -r "$AGE_RECIPIENT" -o "$enc" "$f"; then
+    echo "FAIL: age-encrypt of $(basename "$f")" >&2; return 1
+  fi
+  # write-only key (storage.uploader): skip rclone's read-ish bucket/object HEADs.
+  if ! rclone --s3-no-check-bucket --s3-no-head --no-traverse \
+        copyto "$enc" "offsite:$S3_BUCKET/{{ clickhouse_backup_s3_prefix }}$(basename "$enc")"; then
+    echo "FAIL: off-site upload of $(basename "$enc")" >&2; rm -f "$enc"; return 1
+  fi
+  rm -f "$enc"
+}
+{% endif %}
+
+dump_db() {
+  local db="$1" tbl
+  local work="$BACKUP_DIR/$db-$STAMP"
+  mkdir -p "$work" || return 1
+  # MergeTree tables carry data; list them separately so we only dump rows there.
+  chc --query "SELECT name FROM system.tables WHERE database='$db' AND engine LIKE '%MergeTree%' AND NOT is_temporary ORDER BY name" --format TabSeparatedRaw > "$work/.mergetree" || return 1
+  # All tables, base engines first, so restore creates them before dependent views.
+  chc --query "SELECT name FROM system.tables WHERE database='$db' AND NOT is_temporary ORDER BY (engine LIKE '%MergeTree%') DESC, name" --format TabSeparatedRaw > "$work/tables.order" || return 1
+  while IFS= read -r tbl; do
+    [ -n "$tbl" ] || continue
+    chc --query "SHOW CREATE TABLE \`$db\`.\`$tbl\`" --format TabSeparatedRaw > "$work/$tbl.sql" || return 1
+  done < "$work/tables.order"
+  while IFS= read -r tbl; do
+    [ -n "$tbl" ] || continue
+    chc --query "SELECT * FROM \`$db\`.\`$tbl\` FORMAT Native" > "$work/$tbl.native" || return 1
+  done < "$work/.mergetree"
+  rm -f "$work/.mergetree"
+  tar -czf "$BACKUP_DIR/$db-$STAMP.tar.gz.partial" -C "$BACKUP_DIR" "$db-$STAMP" || return 1
+  mv "$BACKUP_DIR/$db-$STAMP.tar.gz.partial" "$BACKUP_DIR/$db-$STAMP.tar.gz" || return 1
+  rm -rf "$work"
+  printf '%s\n' "$BACKUP_DIR/$db-$STAMP.tar.gz"
+}
+{% for db in clickhouse_databases %}
+
+if out=$(dump_db "{{ db }}"); then
+{% if clickhouse_backup_offsite_enabled %}
+  upload_offsite "$out" || fail=1
+{% endif %}
+  :
+else
+  echo "FAIL: dump of {{ db }} failed" >&2
+  rm -rf "$BACKUP_DIR/{{ db }}-$STAMP" "$BACKUP_DIR/{{ db }}-$STAMP.tar.gz.partial"
+  fail=1
+fi
+{% endfor %}
+
+# Rotation: drop archives older than the retention window; sweep day-old partials.
+find "$BACKUP_DIR" -maxdepth 1 -name '*.tar.gz' -type f -mtime +"$RETENTION" -delete
+find "$BACKUP_DIR" -maxdepth 1 -name '*.tar.gz.partial' -type f -mtime +0 -delete
+exit "$fail"

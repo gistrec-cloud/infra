@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Run the ClickHouse backup nightly
+
+[Timer]
+OnCalendar=*-*-* {{ '%02d' | format(clickhouse_backup_hour) }}:{{ '%02d' | format(clickhouse_backup_minute) }}:00
+# Catch up if the host was down at the scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

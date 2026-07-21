@@ -1,0 +1,39 @@
+# {{ ansible_managed }}
+services:
+  clickhouse:
+    image: {{ clickhouse_image }}
+    container_name: {{ clickhouse_container_name }}
+    restart: unless-stopped
+    mem_limit: {{ clickhouse_mem_limit }}
+    memswap_limit: {{ clickhouse_memswap_limit }}
+    ports:
+      # Plaintext native/HTTP — loopback only (host-local tools, docker exec).
+      - "{{ clickhouse_plain_publish_address }}:{{ clickhouse_tcp_port }}:9000"
+      - "{{ clickhouse_plain_publish_address }}:{{ clickhouse_http_port }}:8123"
+{% if clickhouse_tls_enabled %}
+      # TLS native/HTTPS — the public endpoint, gated by firewall_docker_allow_tcp.
+      - "{{ clickhouse_tls_publish_address }}:{{ clickhouse_tcp_secure_port }}:9440"
+      - "{{ clickhouse_tls_publish_address }}:{{ clickhouse_https_port }}:8443"
+{% endif %}
+    volumes:
+      - {{ clickhouse_data_dir }}:/var/lib/clickhouse
+      - {{ clickhouse_config_dir }}:/etc/clickhouse-server/config.d:ro
+      - {{ clickhouse_users_dir }}:/etc/clickhouse-server/users.d:ro
+{% if clickhouse_tls_enabled %}
+      - {{ clickhouse_tls_dir }}:/etc/clickhouse-server/tls:ro
+{% endif %}
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
