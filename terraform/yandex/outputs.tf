@@ -13,16 +13,6 @@ output "lockbox_secret_ids" {
   value       = { for k, s in yandex_lockbox_secret.this : k => s.id }
 }
 
-output "mysql_cluster_id" {
-  description = "Managed MySQL cluster id."
-  value       = yandex_mdb_mysql_cluster.projects.id
-}
-
-output "mysql_databases" {
-  description = "Databases in the shared MySQL cluster."
-  value       = sort(keys(yandex_mdb_mysql_database.this))
-}
-
 output "instance_ids" {
   description = "Adopted Compute instances, name → id."
   value       = { for k, vm in yandex_compute_instance.this : k => vm.id }
