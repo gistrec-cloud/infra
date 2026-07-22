@@ -1,0 +1,69 @@
+---
+# Legacy host_vars-driven applications. Registry-managed applications are
+# deployed by apppm2; both share the runtime installed by runtime.yml.
+- name: Create application directories
+  ansible.builtin.file:
+    path: "{{ item.cwd }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  loop: "{{ nodeapp_node_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Deploy application code
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.cwd }}"
+    version: "{{ item.branch | default('main') }}"
+    accept_hostkey: true
+  become: true
+  become_user: "{{ admin_user }}"
+  loop: "{{ nodeapp_node_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Install production dependencies
+  community.general.npm:
+    path: "{{ item.cwd }}"
+    production: true
+    state: present
+  become: true
+  become_user: "{{ admin_user }}"
+  loop: "{{ nodeapp_node_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Render pm2 ecosystem file
+  ansible.builtin.template:
+    src: ecosystem.config.js.j2
+    dest: "{{ item.cwd }}/ecosystem.config.js"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0644"
+  loop: "{{ nodeapp_node_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# startOrReload consumes both code and ecosystem changes, so a second
+# end-of-play `pm2 reload all` handler would only reload unrelated apps again.
+- name: Start or reload apps under pm2
+  ansible.builtin.command:
+    cmd: pm2 startOrReload ecosystem.config.js
+    chdir: "{{ item.cwd }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  register: nodeapp_pm2_reload
+  changed_when: >-
+    'Applying action' in nodeapp_pm2_reload.stdout
+    or 'Starting' in nodeapp_pm2_reload.stdout
+  loop: "{{ nodeapp_node_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Persist the pm2 process list
+  ansible.builtin.command: pm2 save --force
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: false

@@ -186,8 +186,7 @@ def rsync():
                  + " ".join(state["rsync_dirs"]) + f" {duser}@{target_ip}:~/", forward_agent=True))
 
 def deploy():
-    for _ in range(2):
-        run(["ansible-playbook", "site.yml", "-l", dst], cwd="ansible")
+    run(["ansible-playbook", "site.yml", "-l", dst], cwd="ansible")
 
 def smoke_local():
     ip = conn(dst)[0]

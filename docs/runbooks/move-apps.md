@@ -9,7 +9,7 @@ scripts/move-apps.py --app <name> <DST>   # one app   (--dry-run to preview)
 ```
 
 It flips the configs (apps.yml + terraform/dns), rsyncs plain-file
-dirs, deploys $DST twice, smokes it directly, applies DNS (refusing
+dirs, converges $DST once, smokes it directly, applies DNS (refusing
 any plan that isn't update-only), waits for public convergence and
 reconciles $SRC. The appcron/apppm2/nginx ownership manifests remove
 only registry objects that no longer belong there; unrelated manual
@@ -24,12 +24,13 @@ gone: artifact apps come back with their next CI deploy, clone apps
 from git + 1P envs; only plain-file apps (no repo/CI — e.g. recovery)
 die with their host, which is their own DR gap to close.
 
-One-off prep for a first-time $DST: `nodeapp_install: true` /
-`tls_managed: true` in its host_vars + a baseline `site.yml -l $DST`
-run (the script checks and tells you). Everything else derives:
-`web` membership from the registry, certs from the tls role, CI
-target from the `deploy.*` alias (trusted via accept-new — no CI
-variables to touch, DndCrime#15).
+One-off config for a first-time $DST: `nodeapp_install: true` /
+`tls_managed: true` in its host_vars (the script checks and tells you).
+No baseline run is needed: the prerequisite play issues certificates and
+installs Node/pm2 before databases and apps in the same converge. Everything
+else derives: `web` membership from the registry, certs from the tls role,
+CI target from the `deploy.*` alias (trusted via accept-new — no CI variables
+to touch, DndCrime#15).
 
 After first deploying the ownership-manifest version of the roles, run one
 normal `site.yml` converge before the next move. That initial run records the
