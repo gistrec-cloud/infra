@@ -8,7 +8,7 @@
 #
 # Play order is dependency order: registry-derived groups first (the firewall
 # role's honeypot flag reads `web` membership), then baseline (network,
-# firewall) → databases → app dependencies (docker) → apps → web layer on top.
+# firewall) → certificates/runtimes → databases → apps → web layer on top.
 - name: Registry-derived groups — apps.yml decides who needs the web stack
   hosts: all
   gather_facts: false
@@ -125,6 +125,34 @@
     - role: appcron
       tags: [appcron]
 
+# Provision shared host prerequisites before anything consumes them. In the old
+# order ClickHouse tried to copy a certificate issued only in the later web play,
+# while apppm2 ran before nodeapp installed pm2; fresh hosts needed a second run.
+- name: Host prerequisites — TLS certificates and Node/pm2 runtime
+  hosts: all
+  become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+  tasks:
+    # TLS is fleet material, not an nginx implementation detail. Issue lineages
+    # before MySQL/ClickHouse copy them into their containers. Baseline runs
+    # first because the role also grants the netdata user certificate traversal.
+    - name: Provision fleet TLS certificates
+      ansible.builtin.import_role:
+        name: tls
+      when: tls_managed | default(false)
+      tags: [tls]
+    # Runtime-only phase. Legacy node apps are deployed later, after app docker
+    # dependencies; registry apps then find pm2 on their first apppm2 pass.
+    - name: Install the Node.js and pm2 runtime
+      ansible.builtin.import_role:
+        name: nodeapp
+        tasks_from: runtime
+      when: >-
+        nodeapp_node_apps | default([]) | length > 0
+        or nodeapp_install | default(false)
+      tags: [nodeapp]
+
 - name: Database servers — self-hosted MySQL + ClickHouse (Docker)
   hosts: db
   become: true
@@ -139,9 +167,8 @@
     - role: mysql
       when: mysql_managed | default(false)
     # ClickHouse (VkAdsTool stats store, moved off russia-02). Same 0.0.0.0-publish
-    # assert; publishes plaintext on loopback and TLS (9440/8443) publicly. The
-    # *.clickhouse.<zone> SAN is issued by the tls role in the later web play, so a
-    # fresh host needs a second deploy for the container to copy the real cert.
+    # assert; publishes plaintext on loopback and TLS (9440/8443) publicly. Its
+    # certificate lineage already exists from the prerequisite play above.
     - role: clickhouse
       when: clickhouse_managed | default(false)
 
@@ -151,18 +178,32 @@
   vars_files:
     - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
     - ["apps.yml", "apps.yml.example"]
-  roles:
+  tasks:
     # Everything below is driven by the apps registry and is a no-op on hosts
     # with no matching apps (germany-02 stays untouched). appdocker runs first:
     # app containers (tg-bot-api, ...) are dependencies of the apps.
-    - role: appdocker
+    - name: Converge app container dependencies
+      ansible.builtin.import_role:
+        name: appdocker
       tags: [appdocker]
-    - role: apppm2
+    # Host-vars-driven legacy apps share the early node runtime. Keep them after
+    # docker dependencies and before registry apps/nginx.
+    - name: Converge legacy node applications
+      ansible.builtin.import_role:
+        name: nodeapp
+        tasks_from: apps
+      when: nodeapp_node_apps | default([]) | length > 0
+      tags: [nodeapp]
+    - name: Converge registry-managed pm2 applications
+      ansible.builtin.import_role:
+        name: apppm2
       tags: [apppm2]
-    - role: appstatic
+    - name: Converge registry-managed static applications
+      ansible.builtin.import_role:
+        name: appstatic
       tags: [appstatic]
 
-- name: Web servers — nginx reverse proxy + Node/pm2 apps
+- name: Web servers — nginx reverse proxy
   hosts: web
   become: true
   vars_files:
@@ -170,20 +211,7 @@
     # Deployed-apps registry: nginx takes per-app vhost file lists from it.
     - ["apps.yml", "apps.yml.example"]
   roles:
-    # Per-zone wildcard certs (DNS-01) must exist before nginx enables the
-    # vhosts that reference them — tls runs first. Opt-in per host
-    # (tls_managed); zones + email live in the inventory, token in the vault.
-    - role: tls
-      when: tls_managed | default(false)
-      tags: [tls]
+    # Per-zone wildcard certs already exist from the prerequisite play, so nginx
+    # can enable every registry vhost on this first converge.
     - role: nginx
       tags: [nginx]
-    # No-op until the host declares legacy node apps in host_vars OR opts
-    # into the runtime alone (nodeapp_install: true — node + pm2 + boot
-    # resurrection for registry-managed hosts, where apppm2 owns the apps).
-    # Adopted hosts that manage their own node/pm2 set neither.
-    - role: nodeapp
-      when: >-
-        nodeapp_node_apps | default([]) | length > 0
-        or nodeapp_install | default(false)
-      tags: [nodeapp]

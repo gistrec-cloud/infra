@@ -196,33 +196,19 @@
          | from_json | map(attribute='name') | list }}
   when: apppm2_jlist.rc | default(1) == 0
 
-# On a cold host pm2 arrives later (web play → nodeapp): skip with a
-# notice when it's coming, refuse otherwise — never mask the missing
-# runtime as "no processes".
-- name: Skip apps until the web play installs the pm2 runtime
-  ansible.builtin.debug:
-    msg: >-
-      pm2 is not runnable yet (pm2 jlist rc={{ apppm2_jlist.rc }});
-      the web play installs it (nodeapp_install) later in this run —
-      re-run site.yml to deploy this host's pm2 apps (the run-twice
-      convention).
-  when:
-    - apppm2_apps | length > 0
-    - apppm2_jlist.rc | default(1) != 0
-    - nodeapp_install | default(false)
-
-- name: Refuse registry pm2 apps on a host with no pm2 and no nodeapp_install
+# The prerequisite play installs an opted-in Node/pm2 runtime before this role.
+# Fail loudly if that invariant is broken instead of silently requiring a rerun.
+- name: Refuse registry pm2 apps when the runtime prerequisite is unavailable
   ansible.builtin.fail:
     msg: >-
       {{ apppm2_apps | length }} registry pm2 app(s) target
       {{ inventory_hostname }}, but pm2 is not runnable (pm2 jlist
-      rc={{ apppm2_jlist.rc }}) and nodeapp_install is not set — set it
-      in host_vars (node + pm2 + boot resurrection) or install pm2 by
-      hand on adopted hosts.
+      rc={{ apppm2_jlist.rc | default('not run') }}). The prerequisite play
+      must install it first: set nodeapp_install: true in host_vars, or keep
+      the adopted host's hand-managed pm2 runtime healthy.
   when:
     - apppm2_apps | length > 0
     - apppm2_jlist.rc | default(1) != 0
-    - not (nodeapp_install | default(false))
 
 # The manifest is the ownership boundary: never infer ownership from `pm2 jlist`,
 # because adopted hosts may run unrelated hand-managed processes under
@@ -255,9 +241,7 @@
   ansible.builtin.meta: flush_handlers
 
 # Do not advance an existing manifest when pm2 was unavailable: preserving it
-# makes the stale-process cleanup retry on the next converge. A cold destination
-# has no previous ownership, so it may record the desired names while nodeapp
-# installs pm2 later in this run.
+# makes stale-process cleanup retry after the runtime prerequisite is repaired.
 - name: Persist the pm2 ownership manifest
   ansible.builtin.copy:
     content: "{{ apppm2_desired_processes | to_nice_json }}\n"
@@ -267,9 +251,7 @@
     mode: "0644"
   when:
     - apppm2_desired_processes | length > 0
-    - >-
-      apppm2_jlist.rc | default(1) == 0
-      or apppm2_previous_processes | length == 0
+    - apppm2_jlist.rc | default(1) == 0
 
 - name: Remove an empty pm2 ownership manifest
   ansible.builtin.file:

@@ -53,7 +53,7 @@ infra/
 │       ├── firewall/             # nftables + fail2ban
 │       ├── nginx/                # reverse proxy, vhosts from the registry
 │       ├── tls/                  # per-zone wildcard certs (DNS-01) — fleet material
-│       ├── nodeapp/              # Node.js + pm2 runtime
+│       ├── nodeapp/              # early Node.js/pm2 runtime + legacy apps
 │       ├── apppm2/               # registry-driven pm2 apps (clone or CI artifact)
 │       ├── appstatic/            # registry-driven static bundles
 │       ├── appdocker/            # registry-driven docker dependencies
@@ -79,7 +79,7 @@ infra/
 | `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth)  |
 | `nginx`    | Install nginx, reconcile vhosts from the apps registry                  |
 | `tls`      | Per-zone wildcard Let's Encrypt certs via DNS-01 (Cloudflare) — any host can serve any domain |
-| `nodeapp`  | Node.js (NodeSource) + pm2 runtime + boot resurrection                  |
+| `nodeapp`  | Early Node.js/pm2 runtime bootstrap; legacy host-vars apps deploy later |
 | `apppm2`   | Reconcile registry PM2 apps: bootstrap desired names, delete previously managed stale names |
 | `appstatic`| Registry-driven static bundles — built on fresh hosts, served by vhosts |
 | `appdocker`| Registry-driven docker dependencies (containers / compose), started before apps |
