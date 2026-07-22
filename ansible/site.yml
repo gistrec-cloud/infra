@@ -18,6 +18,17 @@
     - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
     - ["apps.yml", "apps.yml.example"]
   tasks:
+    # A host that just lost its final registry vhost is no longer selected by
+    # the apps expression below. Keep it in `web` for one final nginx run while
+    # its ownership manifest exists; nginx removes the empty manifest after it
+    # has deleted the stale vhosts.
+    - name: Probe the registry nginx ownership manifest
+      ansible.builtin.stat:
+        path: "{{ infra_registry_state_dir }}/nginx-vhosts.json"
+      register: registry_nginx_manifest
+      changed_when: false
+      tags: [always]
+
     # A vhost-bearing app in the registry puts its host into `web`, so a
     # `host:` flip re-homes the whole web stack. A static `web:` group
     # still merges — for warming up a standby before a flip.
@@ -32,10 +43,11 @@
       # group, or the web play below matches only static members.
       tags: [always]
       when: >-
-        apps | default({}) | dict2items
-          | selectattr('value.host', 'equalto', inventory_hostname)
-          | map(attribute='value.vhosts', default=[])
-          | flatten | length > 0
+        registry_nginx_manifest.stat.exists
+        or (apps | default({}) | dict2items
+            | selectattr('value.host', 'equalto', inventory_hostname)
+            | map(attribute='value.vhosts', default=[])
+            | flatten | length > 0)
 
 # op-backed inventory lookups are lazy — every evaluation re-runs `op`, one
 # Touch ID prompt each. Resolve each token once into localhost's facts; the

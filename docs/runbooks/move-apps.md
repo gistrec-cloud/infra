@@ -11,13 +11,15 @@ scripts/move-apps.py --app <name> <DST>   # one app   (--dry-run to preview)
 It flips the configs (apps.yml + terraform/dns), rsyncs plain-file
 dirs, deploys $DST twice, smokes it directly, applies DNS (refusing
 any plan that isn't update-only), waits for public convergence and
-freezes $SRC's pm2. CI is not part of a move: workflows target the
+reconciles $SRC. The appcron/apppm2/nginx ownership manifests remove
+only registry objects that no longer belong there; unrelated manual
+services remain untouched. CI is not part of a move: workflows target the
 stable `deploy.*` alias and keep working untouched.
 
 **Failure handling**: every step is idempotent, and completed steps
 are checkpointed in `.move-apps.state.json` — re-running the same
 command resumes at the failed step (`--reset` starts over; the file
-is removed on success). `--dead-src` skips rsync/freeze when $SRC is
+is removed on success). `--dead-src` skips rsync/reconciliation when $SRC is
 gone: artifact apps come back with their next CI deploy, clone apps
 from git + 1P envs; only plain-file apps (no repo/CI — e.g. recovery)
 die with their host, which is their own DR gap to close.
@@ -29,11 +31,18 @@ run (the script checks and tells you). Everything else derives:
 target from the `deploy.*` alias (trusted via accept-new — no CI
 variables to touch, DndCrime#15).
 
+After first deploying the ownership-manifest version of the roles, run one
+normal `site.yml` converge before the next move. That initial run records the
+currently managed PM2 processes and vhosts without deleting anything; later
+runs can then distinguish stale registry objects from hand-managed ones. The
+move script checks these source manifests before changing either config.
+
 ## Rollback
 
 Any point before the DNS step: nothing user-visible happened, just
 stop (and `--reset` + re-flip if configs moved). After it: run the
-move in reverse — $SRC is untouched until you deliberately retire it.
+move in reverse. Source cleanup happens only after the destination has
+passed the public smoke checks.
 
 ## First use: germany-01 → finland-01 (2026-07)
 

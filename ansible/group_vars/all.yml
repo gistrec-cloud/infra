@@ -4,6 +4,12 @@
 
 timezone: Etc/UTC
 
+# Roles driven by apps.yml keep tiny ownership manifests here. Reconciliation
+# removes only names that a role recorded itself. App cron markers explicitly
+# present in the registry are also owned; unrelated cron, pm2 and nginx entries
+# stay untouched.
+infra_registry_state_dir: /var/lib/gistrec-infra
+
 # --- common role ---
 # Admin/app user = the actual SSH login user per host (gistrec / vk-ads-tool),
 # retiring the separate "deploy" service account (Phase 2). nodeapp_node_apps is

@@ -1,10 +1,80 @@
 ---
-# Cron jobs declared per app in the apps registry (apps.yml, loaded via
-# vars_files in site.yml). Entries are keyed "<app>: <name>" — ansible's
-# cron marker comment — so manually added crontab lines are never touched;
-# adopting an existing manual line = let this role add the managed copy,
-# then delete the manual one.
-- name: Install app cron jobs
+# Cron jobs declared per app in the registry. The role owns only markers named
+# "<app>: <job>". A per-host manifest makes removals declarative: moving or
+# deleting an app removes its old jobs on the next converge without touching
+# any manually maintained crontab entries.
+- name: Derive desired and registry-wide app cron jobs
+  ansible.builtin.set_fact:
+    appcron_desired_jobs: >-
+      {{ apps | default({}) | dict2items
+         | selectattr('value.host', 'equalto', inventory_hostname)
+         | selectattr('value.cron', 'defined')
+         | list | subelements('value.cron') }}
+    appcron_all_jobs: >-
+      {{ apps | default({}) | dict2items
+         | selectattr('value.cron', 'defined')
+         | list | subelements('value.cron') }}
+    appcron_desired_markers: []
+    appcron_all_markers: []
+
+- name: Collect desired app cron markers
+  ansible.builtin.set_fact:
+    appcron_desired_markers: >-
+      {{ appcron_desired_markers + [item.0.key ~ ': ' ~ item.1.name] }}
+  loop: "{{ appcron_desired_jobs }}"
+  loop_control:
+    label: "{{ item.0.key }}: {{ item.1.name }}"
+
+- name: Collect registry-wide app cron markers
+  ansible.builtin.set_fact:
+    appcron_all_markers: >-
+      {{ appcron_all_markers + [item.0.key ~ ': ' ~ item.1.name] }}
+  loop: "{{ appcron_all_jobs }}"
+  loop_control:
+    label: "{{ item.0.key }}: {{ item.1.name }}"
+
+- name: Ensure the registry ownership state directory exists
+  ansible.builtin.file:
+    path: "{{ infra_registry_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Probe the app cron ownership manifest
+  ansible.builtin.stat:
+    path: "{{ infra_registry_state_dir }}/appcron.json"
+  register: appcron_manifest_file
+
+- name: Read the app cron ownership manifest
+  ansible.builtin.slurp:
+    src: "{{ infra_registry_state_dir }}/appcron.json"
+  register: appcron_manifest_raw
+  when: appcron_manifest_file.stat.exists
+
+- name: Decode the previous app cron ownership manifest
+  ansible.builtin.set_fact:
+    appcron_previous_markers: >-
+      {{ (appcron_manifest_raw.content | b64decode | from_json)
+         if appcron_manifest_file.stat.exists else [] }}
+
+- name: Derive stale app cron markers
+  ansible.builtin.set_fact:
+    appcron_stale_markers: >-
+      {{ (appcron_previous_markers + appcron_all_markers) | unique
+         | difference(appcron_desired_markers) | sort }}
+
+# appcron_all_markers is included for the first manifest rollout: markers are
+# namespaced by registry app/job, so an old job from a pre-manifest move is also
+# safe to remove. Future removals are covered by the persisted manifest.
+- name: Remove stale managed app cron jobs
+  ansible.builtin.cron:
+    name: "{{ item }}"
+    user: "{{ admin_user }}"
+    state: absent
+  loop: "{{ appcron_stale_markers }}"
+
+- name: Install desired app cron jobs
   ansible.builtin.cron:
     name: "{{ item.0.key }}: {{ item.1.name }}"
     minute: "{{ item.1.minute | default('*') }}"
@@ -14,10 +84,21 @@
     weekday: "{{ item.1.weekday | default('*') }}"
     job: "{{ item.1.job }}"
     user: "{{ admin_user }}"
-  loop: >-
-    {{ apps | default({}) | dict2items
-       | selectattr('value.host', 'equalto', inventory_hostname)
-       | selectattr('value.cron', 'defined')
-       | list | subelements('value.cron') }}
+  loop: "{{ appcron_desired_jobs }}"
   loop_control:
     label: "{{ item.0.key }}: {{ item.1.name }}"
+
+- name: Persist the app cron ownership manifest
+  ansible.builtin.copy:
+    content: "{{ appcron_desired_markers | unique | sort | to_nice_json }}\n"
+    dest: "{{ infra_registry_state_dir }}/appcron.json"
+    owner: root
+    group: root
+    mode: "0644"
+  when: appcron_desired_markers | length > 0
+
+- name: Remove an empty app cron ownership manifest
+  ansible.builtin.file:
+    path: "{{ infra_registry_state_dir }}/appcron.json"
+    state: absent
+  when: appcron_desired_markers | length == 0

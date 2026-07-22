@@ -160,12 +160,9 @@
   become_user: "{{ admin_user }}"
   changed_when: true
   vars:
-    # pm2 prints banners (daemon spawn, "In-memory PM2 is out-of-date") to
-    # stdout BEFORE the JSON; jlist's JSON is always the last line.
-    apppm2_running: >-
-      {{ (apppm2_jlist.stdout_lines | default([]) | last | default('[]', true))
-         | from_json | map(attribute='name') | list }}
-    apppm2_missing: "{{ apppm2_app.value.process.pm2 | default([]) | difference(apppm2_running) }}"
+    apppm2_missing: >-
+      {{ apppm2_app.value.process.pm2 | default([])
+         | difference(apppm2_current_processes) }}
   when:
     - apppm2_app.value.process.pm2 | default([]) | length > 0
     - apppm2_eco.stat.exists | default(false)

@@ -77,13 +77,13 @@ infra/
 |------------|-------------------------------------------------------------------------|
 | `common`   | Admin user, SSH key auth + sshd hardening, base packages, timezone      |
 | `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth)  |
-| `nginx`    | Install nginx, deploy vhosts from the apps registry                     |
+| `nginx`    | Install nginx, reconcile vhosts from the apps registry                  |
 | `tls`      | Per-zone wildcard Let's Encrypt certs via DNS-01 (Cloudflare) — any host can serve any domain |
 | `nodeapp`  | Node.js (NodeSource) + pm2 runtime + boot resurrection                  |
-| `apppm2`   | Registry-driven pm2 apps: git clone + runtime bootstrap or CI artifacts, env files from 1Password |
+| `apppm2`   | Reconcile registry PM2 apps: bootstrap desired names, delete previously managed stale names |
 | `appstatic`| Registry-driven static bundles — built on fresh hosts, served by vhosts |
 | `appdocker`| Registry-driven docker dependencies (containers / compose), started before apps |
-| `appcron`  | Registry-driven cron jobs — a job moves hosts together with its app     |
+| `appcron`  | Reconcile registry cron jobs — stale managed markers are removed after a move |
 | `netdata`  | Install netdata, bind to localhost, Telegram alert when a pm2 app dies  |
 | `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
 | `chrony`   | Opt-in time sync: chrony replaces systemd-timesyncd (clock-stepping hypervisors) |

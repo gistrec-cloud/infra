@@ -1,6 +1,8 @@
 ---
 - name: Save pm2 process list
-  ansible.builtin.command: pm2 save
+  # --force is required to persist an intentionally empty process list after
+  # the last registry-managed app leaves a host.
+  ansible.builtin.command: pm2 save --force
   become: true
   become_user: "{{ admin_user }}"
   changed_when: true
