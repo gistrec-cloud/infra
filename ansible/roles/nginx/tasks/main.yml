@@ -51,7 +51,55 @@
       {{ apps | default({}) | dict2items
          | selectattr('value.host', 'equalto', inventory_hostname)
          | selectattr('value.vhosts', 'defined')
-         | map(attribute='value.vhosts') | flatten }}
+         | map(attribute='value.vhosts') | flatten | unique | sort }}
+
+- name: Ensure the registry ownership state directory exists
+  ansible.builtin.file:
+    path: "{{ infra_registry_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Probe the registry nginx ownership manifest
+  ansible.builtin.stat:
+    path: "{{ infra_registry_state_dir }}/nginx-vhosts.json"
+  register: nginx_manifest_file
+
+- name: Read the registry nginx ownership manifest
+  ansible.builtin.slurp:
+    src: "{{ infra_registry_state_dir }}/nginx-vhosts.json"
+  register: nginx_manifest_raw
+  when: nginx_manifest_file.stat.exists
+
+- name: Decode the previous registry nginx ownership manifest
+  ansible.builtin.set_fact:
+    nginx_previous_vhost_files: >-
+      {{ (nginx_manifest_raw.content | b64decode | from_json)
+         if nginx_manifest_file.stat.exists else [] }}
+
+- name: Derive stale registry nginx vhosts
+  ansible.builtin.set_fact:
+    nginx_stale_vhost_files: >-
+      {{ nginx_previous_vhost_files
+         | difference(nginx_vhost_files) | sort }}
+
+# Remove the enabled link first, then its source file. Only verbatim registry
+# vhosts participate; legacy nginx_sites and hand-written unrelated files are
+# outside this manifest and remain untouched.
+- name: Disable stale registry nginx vhosts
+  ansible.builtin.file:
+    path: "/etc/nginx/sites-enabled/{{ item }}"
+    state: absent
+  loop: "{{ nginx_stale_vhost_files }}"
+  notify: Reload nginx
+
+- name: Remove stale registry nginx vhost files
+  ansible.builtin.file:
+    path: "/etc/nginx/sites-available/{{ item }}"
+    state: absent
+  loop: "{{ nginx_stale_vhost_files }}"
+  notify: Reload nginx
 
 # no_log: the values are credential hashes. group www-data — workers read
 # the file per request.
@@ -219,6 +267,23 @@
 - name: Validate nginx configuration
   ansible.builtin.command: nginx -t
   changed_when: false
+
+# Persist ownership only after the resulting nginx configuration validates. If
+# anything above fails, the previous manifest survives and cleanup is retried.
+- name: Persist the registry nginx ownership manifest
+  ansible.builtin.copy:
+    content: "{{ nginx_vhost_files | to_nice_json }}\n"
+    dest: "{{ infra_registry_state_dir }}/nginx-vhosts.json"
+    owner: root
+    group: root
+    mode: "0644"
+  when: nginx_vhost_files | length > 0
+
+- name: Remove an empty registry nginx ownership manifest
+  ansible.builtin.file:
+    path: "{{ infra_registry_state_dir }}/nginx-vhosts.json"
+    state: absent
+  when: nginx_vhost_files | length == 0
 
 # Handlers normally flush at end of play — but a failure in a LATER role
 # aborts the host and silently drops the pending reload, leaving workers

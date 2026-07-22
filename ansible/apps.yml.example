@@ -11,8 +11,9 @@
 #                                     # (static sites, system endpoints)
 #   repo: <github repo — documentation>
 #   notes: <free text>
-#   cron: [cron jobs the app needs — installed by the appcron role, keyed
-#          "<app>: <name>"; minute/hour/day/month/weekday default to "*"]
+#   cron: [cron jobs the app needs — reconciled by the appcron role, keyed
+#          "<app>: <name>"; removing/moving one deletes the old managed marker;
+#          minute/hour/day/month/weekday default to "*"]
 #   port: <the app's loopback port — GLOBALLY unique across the fleet, so any
 #          set of apps can co-locate on any host without collisions>
 #   vhosts: [verbatim nginx server-block files the app needs, by name:
@@ -21,7 +22,8 @@
 #            api-example-com); a separate domain = a separate file, even for
 #            redirects and staging; www/aliases live in the primary's file;
 #            domainless internal stubs are named by purpose (stub-status)]
-#   process:                   # apppm2 role — the app's processes exist on the host
+#   process:                   # apppm2 role — desired processes exist here;
+#                              # previously managed names are deleted after a move
 #     type: clone | artifact   # clone: git + runtime bootstrap; artifact: CI rsyncs builds
 #     runtime: python | node   # venv + pip requirements / npm ci (clone type)
 #     venv: .venv              # python venv dir, relative to dir

@@ -11,6 +11,44 @@
          | selectattr('value.host', 'equalto', inventory_hostname)
          | selectattr('value.process', 'defined') | list }}
 
+- name: Derive desired pm2 process names
+  ansible.builtin.set_fact:
+    apppm2_desired_processes: >-
+      {{ apppm2_apps
+         | map(attribute='value.process.pm2', default=[])
+         | flatten | unique | sort }}
+
+- name: Ensure the registry ownership state directory exists
+  ansible.builtin.file:
+    path: "{{ infra_registry_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Probe the pm2 ownership manifest
+  ansible.builtin.stat:
+    path: "{{ infra_registry_state_dir }}/apppm2.json"
+  register: apppm2_manifest_file
+
+- name: Read the pm2 ownership manifest
+  ansible.builtin.slurp:
+    src: "{{ infra_registry_state_dir }}/apppm2.json"
+  register: apppm2_manifest_raw
+  when: apppm2_manifest_file.stat.exists
+
+- name: Decode the previous pm2 ownership manifest
+  ansible.builtin.set_fact:
+    apppm2_previous_processes: >-
+      {{ (apppm2_manifest_raw.content | b64decode | from_json)
+         if apppm2_manifest_file.stat.exists else [] }}
+
+- name: Derive stale managed pm2 process names
+  ansible.builtin.set_fact:
+    apppm2_stale_processes: >-
+      {{ apppm2_previous_processes
+         | difference(apppm2_desired_processes) | sort }}
+
 # ── env-only apps ──
 # The pm2 filter above must keep dropping process-less entries (app.yml
 # reads process.type unconditionally), so registry entries that carry only
@@ -147,7 +185,16 @@
   failed_when: false
   # Read-only — run it in check mode too, so previews see the real state.
   check_mode: false
-  when: apppm2_apps | length > 0
+  when: >-
+    apppm2_apps | length > 0
+    or apppm2_previous_processes | length > 0
+
+- name: Parse current pm2 process names
+  ansible.builtin.set_fact:
+    apppm2_current_processes: >-
+      {{ (apppm2_jlist.stdout_lines | default([]) | last | default('[]', true))
+         | from_json | map(attribute='name') | list }}
+  when: apppm2_jlist.rc | default(1) == 0
 
 # On a cold host pm2 arrives later (web play → nodeapp): skip with a
 # notice when it's coming, refuse otherwise — never mask the missing
@@ -177,6 +224,22 @@
     - apppm2_jlist.rc | default(1) != 0
     - not (nodeapp_install | default(false))
 
+# The manifest is the ownership boundary: never infer ownership from `pm2 jlist`,
+# because adopted hosts may run unrelated hand-managed processes under
+# the same user. A removed registry process is deleted (not merely stopped), so
+# it cannot be resurrected from the saved dump on reboot.
+- name: Delete stale managed pm2 processes
+  ansible.builtin.command:
+    argv: [pm2, delete, "{{ item }}"]
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: true
+  loop: "{{ apppm2_stale_processes }}"
+  when:
+    - apppm2_jlist.rc | default(1) == 0
+    - item in apppm2_current_processes | default([])
+  notify: Save pm2 process list
+
 - name: Deploy each app
   ansible.builtin.include_tasks: app.yml
   loop: "{{ apppm2_apps }}"
@@ -184,3 +247,36 @@
     loop_var: apppm2_app
     label: "{{ apppm2_app.key }}"
   when: apppm2_jlist.rc | default(1) == 0
+
+# A failed save must leave the old ownership manifest in place; otherwise a
+# deleted process could still resurrect from PM2's previous dump on reboot and
+# the next converge would no longer consider it stale.
+- name: Apply pending pm2 process-list save
+  ansible.builtin.meta: flush_handlers
+
+# Do not advance an existing manifest when pm2 was unavailable: preserving it
+# makes the stale-process cleanup retry on the next converge. A cold destination
+# has no previous ownership, so it may record the desired names while nodeapp
+# installs pm2 later in this run.
+- name: Persist the pm2 ownership manifest
+  ansible.builtin.copy:
+    content: "{{ apppm2_desired_processes | to_nice_json }}\n"
+    dest: "{{ infra_registry_state_dir }}/apppm2.json"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - apppm2_desired_processes | length > 0
+    - >-
+      apppm2_jlist.rc | default(1) == 0
+      or apppm2_previous_processes | length == 0
+
+- name: Remove an empty pm2 ownership manifest
+  ansible.builtin.file:
+    path: "{{ infra_registry_state_dir }}/apppm2.json"
+    state: absent
+  when:
+    - apppm2_desired_processes | length == 0
+    - >-
+      apppm2_jlist.rc | default(1) == 0
+      or apppm2_previous_processes | length == 0
