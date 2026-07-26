@@ -1,0 +1,9 @@
+---
+- name: Read the Let's Encrypt certificate and key
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  loop:
+    - "{{ container_tls_cert_src }}"
+    - "{{ container_tls_key_src }}"
+  register: container_tls_read
+  no_log: true
