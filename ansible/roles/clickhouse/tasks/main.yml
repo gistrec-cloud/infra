@@ -93,17 +93,10 @@
         container_tls_cert_src: "{{ clickhouse_tls_cert_src }}"
         container_tls_key_src: "{{ clickhouse_tls_key_src }}"
         container_tls_change_handler: Recreate clickhouse container
-    - name: Install the certbot renewal hook (refresh copy + reload config)
-      ansible.builtin.copy:
-        dest: /etc/letsencrypt/renewal-hooks/deploy/clickhouse-reload-tls
-        mode: "0755"
-        content: |
-          #!/bin/sh
-          # ANSIBLE MANAGED (clickhouse role) — refresh the container cert copy + reload.
-          set -e
-          install -o {{ clickhouse_uid }} -g {{ clickhouse_gid }} -m 0644 -T "{{ clickhouse_tls_cert_src }}" "{{ clickhouse_tls_dir }}/fullchain.pem"
-          install -o {{ clickhouse_uid }} -g {{ clickhouse_gid }} -m 0600 -T "{{ clickhouse_tls_key_src }}"  "{{ clickhouse_tls_dir }}/privkey.pem"
-          docker exec {{ clickhouse_container_name }} clickhouse-client --query "SYSTEM RELOAD CONFIG" || true
+        container_tls_hook_path: /etc/letsencrypt/renewal-hooks/deploy/clickhouse-reload-tls
+        container_tls_reload_command: >-
+          docker exec {{ clickhouse_container_name }} clickhouse-client
+          --query "SYSTEM RELOAD CONFIG"
 
 # ─── Users (declarative, hot-reloaded) ───
 # sha256 of the vault plaintext is computed in the template; the clear value never
