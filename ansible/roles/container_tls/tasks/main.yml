@@ -1,0 +1,9 @@
+---
+- name: Create the container TLS destination
+  ansible.builtin.import_tasks: directory.yml
+
+- name: Read the container TLS sources
+  ansible.builtin.import_tasks: read.yml
+
+- name: Install the container TLS copies
+  ansible.builtin.import_tasks: install.yml
