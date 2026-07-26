@@ -88,17 +88,11 @@
         container_tls_cert_src: "{{ mysql_tls_cert_src }}"
         container_tls_key_src: "{{ mysql_tls_key_src }}"
         container_tls_change_handler: Recreate mysql container
-    - name: Install the certbot renewal hook (refresh copy + hot-reload TLS)
-      ansible.builtin.copy:
-        dest: /etc/letsencrypt/renewal-hooks/deploy/mysql-reload-tls
-        mode: "0755"
-        content: |
-          #!/bin/sh
-          # ANSIBLE MANAGED (mysql role) — refresh the container cert copy + reload TLS.
-          set -e
-          install -o 999 -g 999 -m 0644 -T "{{ mysql_tls_cert_src }}" "{{ mysql_tls_dir }}/fullchain.pem"
-          install -o 999 -g 999 -m 0600 -T "{{ mysql_tls_key_src }}"  "{{ mysql_tls_dir }}/privkey.pem"
-          docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "ALTER INSTANCE RELOAD TLS"' || true
+        container_tls_hook_path: /etc/letsencrypt/renewal-hooks/deploy/mysql-reload-tls
+        container_tls_reload_command: >-
+          docker exec {{ mysql_container_name }} sh -c
+          'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot
+          -e "ALTER INSTANCE RELOAD TLS"'
 
 # ─── Container ───
 # The root password reaches the container via a 0600 env file, never the command

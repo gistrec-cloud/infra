@@ -1,0 +1,12 @@
+---
+- name: Install the certbot renewal hook
+  ansible.builtin.copy:
+    dest: "{{ container_tls_hook_path }}"
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # ANSIBLE MANAGED (container_tls role) — refresh the container copies and reload.
+      set -e
+      install -o {{ container_tls_owner }} -g {{ container_tls_group }} -m 0644 -T "{{ container_tls_cert_src }}" "{{ container_tls_dir }}/fullchain.pem"
+      install -o {{ container_tls_owner }} -g {{ container_tls_group }} -m 0600 -T "{{ container_tls_key_src }}" "{{ container_tls_dir }}/privkey.pem"
+      {{ container_tls_reload_command }} || true

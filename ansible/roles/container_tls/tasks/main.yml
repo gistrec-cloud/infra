@@ -7,3 +7,6 @@
 
 - name: Install the container TLS copies
   ansible.builtin.import_tasks: install.yml
+
+- name: Install the container TLS renewal hook
+  ansible.builtin.import_tasks: hook.yml
