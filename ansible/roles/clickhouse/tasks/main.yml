@@ -91,15 +91,16 @@
         container_tls_dir: "{{ clickhouse_tls_dir }}"
         container_tls_owner: "{{ clickhouse_uid }}"
         container_tls_group: "{{ clickhouse_gid }}"
-    - name: Read the LE cert + key (follows the live/ symlinks)
-      ansible.builtin.slurp:
-        src: "{{ item }}"
-      loop: ["{{ clickhouse_tls_cert_src }}", "{{ clickhouse_tls_key_src }}"]
-      register: clickhouse_tls_read
-      no_log: true
+    - name: Read the ClickHouse TLS source material
+      ansible.builtin.import_role:
+        name: container_tls
+        tasks_from: read
+      vars:
+        container_tls_cert_src: "{{ clickhouse_tls_cert_src }}"
+        container_tls_key_src: "{{ clickhouse_tls_key_src }}"
     - name: Install container-readable cert + key
       ansible.builtin.copy:
-        content: "{{ clickhouse_tls_read.results[item.i].content | b64decode }}"
+        content: "{{ container_tls_read.results[item.i].content | b64decode }}"
         dest: "{{ clickhouse_tls_dir }}/{{ item.f }}"
         owner: "{{ clickhouse_uid }}"
         group: "{{ clickhouse_gid }}"

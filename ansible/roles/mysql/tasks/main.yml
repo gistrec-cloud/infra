@@ -86,15 +86,16 @@
         container_tls_dir: "{{ mysql_tls_dir }}"
         container_tls_owner: "999"
         container_tls_group: "999"
-    - name: Read the LE cert + key (follows the live/ symlinks)
-      ansible.builtin.slurp:
-        src: "{{ item }}"
-      loop: ["{{ mysql_tls_cert_src }}", "{{ mysql_tls_key_src }}"]
-      register: mysql_tls_read
-      no_log: true
+    - name: Read the MySQL TLS source material
+      ansible.builtin.import_role:
+        name: container_tls
+        tasks_from: read
+      vars:
+        container_tls_cert_src: "{{ mysql_tls_cert_src }}"
+        container_tls_key_src: "{{ mysql_tls_key_src }}"
     - name: Install container-readable cert + key
       ansible.builtin.copy:
-        content: "{{ mysql_tls_read.results[item.i].content | b64decode }}"
+        content: "{{ container_tls_read.results[item.i].content | b64decode }}"
         dest: "{{ mysql_tls_dir }}/{{ item.f }}"
         owner: "999"
         group: "999"
