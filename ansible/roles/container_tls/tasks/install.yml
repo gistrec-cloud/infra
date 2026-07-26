@@ -1,0 +1,13 @@
+---
+- name: Install the container-readable certificate and key
+  ansible.builtin.copy:
+    content: "{{ container_tls_read.results[item.index].content | b64decode }}"
+    dest: "{{ container_tls_dir }}/{{ item.filename }}"
+    owner: "{{ container_tls_owner }}"
+    group: "{{ container_tls_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { index: 0, filename: fullchain.pem, mode: "0644" }
+    - { index: 1, filename: privkey.pem, mode: "0600" }
+  no_log: true
+  notify: "{{ container_tls_change_handler }}"
