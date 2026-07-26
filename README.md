@@ -59,6 +59,7 @@ infra/
 │       ├── appdocker/            # registry-driven docker dependencies
 │       ├── appcron/              # registry-driven cron jobs
 │       ├── registry_manifest/    # shared ownership-manifest lifecycle
+│       ├── docker_runtime/       # shared Docker Engine + Compose bootstrap
 │       ├── netdata/              # monitoring agent
 │       ├── wireguard/            # private encrypted mesh between fleet hosts
 │       ├── chrony/               # opt-in time sync
@@ -86,6 +87,7 @@ infra/
 | `appdocker`| Registry-driven docker dependencies (containers / compose), started before apps |
 | `appcron`  | Reconcile registry cron jobs — stale managed markers are removed after a move |
 | `registry_manifest` | Internal helper shared by registry roles to load and persist ownership boundaries |
+| `docker_runtime` | Internal Docker Engine and Compose bootstrap shared by container roles |
 | `netdata`  | Install netdata, bind to localhost, Telegram alert when a pm2 app dies  |
 | `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
 | `chrony`   | Opt-in time sync: chrony replaces systemd-timesyncd (clock-stepping hypervisors) |
