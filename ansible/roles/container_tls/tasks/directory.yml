@@ -1,0 +1,8 @@
+---
+- name: Create the container TLS directory
+  ansible.builtin.file:
+    path: "{{ container_tls_dir }}"
+    state: directory
+    owner: "{{ container_tls_owner }}"
+    group: "{{ container_tls_group }}"
+    mode: "0750"

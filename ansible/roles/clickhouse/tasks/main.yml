@@ -83,13 +83,14 @@
 - name: Provision ClickHouse TLS material
   when: clickhouse_tls_enabled
   block:
-    - name: Create the TLS dir
-      ansible.builtin.file:
-        path: "{{ clickhouse_tls_dir }}"
-        state: directory
-        owner: "{{ clickhouse_uid }}"
-        group: "{{ clickhouse_gid }}"
-        mode: "0750"
+    - name: Create the ClickHouse TLS directory
+      ansible.builtin.import_role:
+        name: container_tls
+        tasks_from: directory
+      vars:
+        container_tls_dir: "{{ clickhouse_tls_dir }}"
+        container_tls_owner: "{{ clickhouse_uid }}"
+        container_tls_group: "{{ clickhouse_gid }}"
     - name: Read the LE cert + key (follows the live/ symlinks)
       ansible.builtin.slurp:
         src: "{{ item }}"

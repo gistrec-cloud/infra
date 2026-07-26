@@ -78,13 +78,14 @@
 - name: Provision MySQL TLS material
   when: mysql_tls_enabled
   block:
-    - name: Create the TLS dir
-      ansible.builtin.file:
-        path: "{{ mysql_tls_dir }}"
-        state: directory
-        owner: "999"
-        group: "999"
-        mode: "0750"
+    - name: Create the MySQL TLS directory
+      ansible.builtin.import_role:
+        name: container_tls
+        tasks_from: directory
+      vars:
+        container_tls_dir: "{{ mysql_tls_dir }}"
+        container_tls_owner: "999"
+        container_tls_group: "999"
     - name: Read the LE cert + key (follows the live/ symlinks)
       ansible.builtin.slurp:
         src: "{{ item }}"
