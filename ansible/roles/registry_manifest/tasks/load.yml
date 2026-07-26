@@ -1,0 +1,34 @@
+---
+# Shared ownership boundary for registry-driven roles. Callers provide the
+# manifest name and desired object names, then act on registry_manifest_stale.
+- name: Ensure the registry ownership state directory exists
+  ansible.builtin.file:
+    path: "{{ infra_registry_state_dir }}"
+    state: directory
+    owner: "{{ registry_manifest_owner | default('root') }}"
+    group: "{{ registry_manifest_group | default('root') }}"
+    mode: "0755"
+
+- name: Probe the registry ownership manifest
+  ansible.builtin.stat:
+    path: "{{ infra_registry_state_dir }}/{{ registry_manifest_name }}.json"
+  register: registry_manifest_file
+
+- name: Read the registry ownership manifest
+  ansible.builtin.slurp:
+    src: "{{ infra_registry_state_dir }}/{{ registry_manifest_name }}.json"
+  register: registry_manifest_raw
+  when: registry_manifest_file.stat.exists
+
+- name: Decode the previous registry ownership manifest
+  ansible.builtin.set_fact:
+    registry_manifest_previous: >-
+      {{ (registry_manifest_raw.content | b64decode | from_json)
+         if registry_manifest_file.stat.exists else [] }}
+
+- name: Derive stale registry-managed objects
+  ansible.builtin.set_fact:
+    registry_manifest_stale: >-
+      {{ (registry_manifest_previous
+          + (registry_manifest_seed | default([])))
+         | unique | difference(registry_manifest_desired) | sort }}
