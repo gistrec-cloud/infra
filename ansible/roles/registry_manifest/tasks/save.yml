@@ -1,0 +1,22 @@
+---
+# Persist only after the caller has successfully reconciled its subsystem.
+# Separate write/remove gates let PM2 preserve an existing ownership boundary
+# while its runtime is unavailable, without leaving needless empty manifests.
+- name: Persist the registry ownership manifest
+  ansible.builtin.copy:
+    content: "{{ registry_manifest_desired | to_nice_json }}\n"
+    dest: "{{ infra_registry_state_dir }}/{{ registry_manifest_name }}.json"
+    owner: "{{ registry_manifest_owner | default('root') }}"
+    group: "{{ registry_manifest_group | default('root') }}"
+    mode: "0644"
+  when:
+    - registry_manifest_desired | length > 0
+    - registry_manifest_can_write | default(true)
+
+- name: Remove an empty registry ownership manifest
+  ansible.builtin.file:
+    path: "{{ infra_registry_state_dir }}/{{ registry_manifest_name }}.json"
+    state: absent
+  when:
+    - registry_manifest_desired | length == 0
+    - registry_manifest_can_remove | default(true)
