@@ -26,3 +26,11 @@ dns_records = [
   { zone = "example.com", type = "MX",    name = "example.com",     content = "mail.example.com", priority = 10 },
   { zone = "example.org", type = "A",     name = "api.example.org", content = "198.51.100.7" }, # off-fleet: literal IP
 ]
+
+# Zones whose NS stays at Porkbun (porkbun.tf). Keys come from the environment
+# (.envrc): TF_VAR_porkbun_api_key / TF_VAR_porkbun_secret_api_key. Unlike the
+# CF records above, `name` is the subdomain part only ("" = apex).
+porkbun_records = [
+  { domain = "example.net", type = "A",     name = "",    host = "web-01" },
+  { domain = "example.net", type = "CNAME", name = "www", content = "example.net" },
+]

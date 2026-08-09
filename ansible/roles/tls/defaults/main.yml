@@ -17,3 +17,11 @@ tls_dns_propagation_seconds: 30
 # vault; the real inventory instead points this at the 1Password item the
 # terraform DNS token lives in (single source — one rotation covers both).
 tls_cf_api_token: "{{ vault_cf_acme_token | default('') }}"
+
+# Zones whose DNS lives at Porkbun instead of Cloudflare (same zone => extra
+# SANs shape as tls_zones). DNS-01 rides the vendored files/porkbun-*.sh
+# certbot hooks — no third-party plugin. Keys: the same 1P item terraform's
+# porkbun provider uses (porkbun-api), via the inventory + site.yml resolver.
+tls_porkbun_zones: {}
+tls_porkbun_api_key: ""
+tls_porkbun_secret_api_key: ""
