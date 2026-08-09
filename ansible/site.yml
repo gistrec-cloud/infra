@@ -79,6 +79,26 @@
       when: firewall_cf_api_token is defined
       tags: [firewall]
 
+    - name: Resolve the Porkbun API key (tls role)
+      ansible.builtin.set_fact:
+        porkbun_api_key: "{{ tls_porkbun_api_key }}"
+      run_once: true # noqa: run-once[task]
+      delegate_to: localhost
+      delegate_facts: true
+      no_log: true
+      when: tls_porkbun_api_key is defined
+      tags: [tls]
+
+    - name: Resolve the Porkbun secret key (tls role)
+      ansible.builtin.set_fact:
+        porkbun_secret_key: "{{ tls_porkbun_secret_api_key }}"
+      run_once: true # noqa: run-once[task]
+      delegate_to: localhost
+      delegate_facts: true
+      no_log: true
+      when: tls_porkbun_secret_api_key is defined
+      tags: [tls]
+
 - name: Baseline for every host (monitoring)
   hosts: all
   become: true

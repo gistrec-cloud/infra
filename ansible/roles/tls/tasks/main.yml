@@ -1,5 +1,6 @@
 ---
-# Per-zone wildcard certificates via Let's Encrypt DNS-01 (Cloudflare).
+# Per-zone wildcard certificates via Let's Encrypt DNS-01 (Cloudflare;
+# Porkbun-hosted zones ride the vendored hooks further down).
 # Every TLS-managed host issues and renews its OWN lineages for every zone —
 # TLS is fleet material: any web host can serve any domain the moment DNS
 # points at it, and moving an app needs no certificate step at all (no
@@ -18,6 +19,13 @@
     tls_cf_api_token: "{{ tls_cf_api_token }}"
   no_log: true
 
+- name: Resolve the Porkbun key pair once
+  ansible.builtin.set_fact:
+    tls_porkbun_api_key: "{{ tls_porkbun_api_key }}"
+    tls_porkbun_secret_api_key: "{{ tls_porkbun_secret_api_key }}"
+  no_log: true
+  when: tls_porkbun_zones | length > 0
+
 - name: Refuse to run half-configured
   ansible.builtin.assert:
     that:
@@ -30,12 +38,24 @@
       tls_zones zones — vault or a 1Password lookup) is missing.
     quiet: true
 
+- name: Refuse to run half-configured (Porkbun)
+  ansible.builtin.assert:
+    that:
+      - tls_porkbun_api_key | length > 0
+      - tls_porkbun_secret_api_key | length > 0
+    fail_msg: >-
+      tls_porkbun_zones is set but the porkbun-api key pair (inventory
+      1Password lookup) is missing.
+    quiet: true
+  when: tls_porkbun_zones | length > 0
+
 - name: Install certbot + Cloudflare DNS plugin
   ansible.builtin.apt:
     name:
       - certbot
       - python3-certbot-dns-cloudflare
       - acl # setfacl — netdata traverse grants below
+      - dnsutils # dig — the porkbun hooks poll the authoritative NS
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -136,6 +156,96 @@
        | symmetric_difference([item.item.key] + item.item.value)
        | length > 0
 
+# ── Porkbun zones: same per-zone wildcard scheme, DNS-01 via the vendored
+# manual hooks (no python3-certbot-dns-porkbun exists in apt; a pip plugin
+# would need --break-system-packages into apt-certbot's env — vendoring ~40
+# lines of hook beats that). Hooks land in the renewal conf, so the stock
+# certbot timer renews these lineages like any other.
+- name: Install Porkbun API credentials for DNS-01
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/porkbun.ini
+    content: |
+      # ANSIBLE MANAGED (tls role). Sourced by the porkbun-*.sh hooks. The
+      # per-domain "API ACCESS" toggle in the Porkbun dashboard gates which
+      # zones this pair can touch.
+      PORKBUN_API_KEY={{ tls_porkbun_api_key }}
+      PORKBUN_SECRET_API_KEY={{ tls_porkbun_secret_api_key }}
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: tls_porkbun_zones | length > 0
+
+- name: Install the Porkbun DNS-01 certbot hooks
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/letsencrypt/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [porkbun-auth.sh, porkbun-cleanup.sh]
+  when: tls_porkbun_zones | length > 0
+
+- name: Read the SAN set of each existing Porkbun zone certificate
+  ansible.builtin.shell:
+    cmd: >-
+      test -e /etc/letsencrypt/live/{{ item.key }}/cert.pem || exit 42;
+      openssl x509 -noout -ext subjectAltName
+      -in /etc/letsencrypt/live/{{ item.key }}/cert.pem
+  loop: "{{ tls_porkbun_zones | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: tls_porkbun_san_probe
+  # Same contract as the CF probe above: rc 42 = "issue it", anything else
+  # non-zero aborts (a misread must not reissue every run).
+  failed_when: tls_porkbun_san_probe.rc not in [0, 42]
+  changed_when: false
+  check_mode: false
+
+# Rehearse against the LE staging environment first: a broken hook or DNS
+# mishap must not burn the 5/week duplicate limit (or the 5/h failed-auth
+# limit) on the production endpoint. Runs only when the real issue below
+# would run, so steady-state stays a no-op.
+- name: Rehearse Porkbun issuance on LE staging (new zone or changed SAN set)
+  ansible.builtin.command:
+    cmd: >-
+      certbot certonly --non-interactive --agree-tos --dry-run
+      --email {{ tls_acme_email }}
+      --manual --preferred-challenges dns
+      --manual-auth-hook /etc/letsencrypt/porkbun-auth.sh
+      --manual-cleanup-hook /etc/letsencrypt/porkbun-cleanup.sh
+      --cert-name {{ item.item.key }}
+      -d {{ ([item.item.key] + item.item.value) | join(' -d ') }}
+  changed_when: true
+  loop: "{{ tls_porkbun_san_probe.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when: >-
+    item.rc != 0
+    or (item.stdout | regex_findall('DNS:([^,\s]+)'))
+       | symmetric_difference([item.item.key] + item.item.value)
+       | length > 0
+
+- name: Issue per-zone wildcard certificates via Porkbun DNS-01
+  ansible.builtin.command:
+    cmd: >-
+      certbot certonly --non-interactive --agree-tos
+      --email {{ tls_acme_email }}
+      --manual --preferred-challenges dns
+      --manual-auth-hook /etc/letsencrypt/porkbun-auth.sh
+      --manual-cleanup-hook /etc/letsencrypt/porkbun-cleanup.sh
+      --cert-name {{ item.item.key }}
+      -d {{ ([item.item.key] + item.item.value) | join(' -d ') }}
+  changed_when: true
+  loop: "{{ tls_porkbun_san_probe.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when: >-
+    item.rc != 0
+    or (item.stdout | regex_findall('DNS:([^,\s]+)'))
+       | symmetric_difference([item.item.key] + item.item.value)
+       | length > 0
+
 # Netdata's x509check reads the public fullchain files straight off the disk.
 # certbot keeps live/ and archive/ at 0700 — grant the netdata user TRAVERSE
 # only (x) on the directories: fullchain.pem is 0644 and becomes readable,
@@ -150,7 +260,9 @@
     permissions: x
     state: present
   vars:
-    tls_all_lineages: "{{ (tls_zones | list) + (tls_extra_lineages | default([])) }}"
+    tls_all_lineages: >-
+      {{ (tls_zones | list) + (tls_porkbun_zones | list)
+         + (tls_extra_lineages | default([])) }}
   loop: >-
     {{ ['/etc/letsencrypt/live', '/etc/letsencrypt/archive']
        + (tls_all_lineages | map('regex_replace', '^', '/etc/letsencrypt/live/') | list)

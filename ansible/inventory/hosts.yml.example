@@ -24,6 +24,13 @@ all:
     # tls_zones:
     #   example.com: ["*.example.com"]
     #   example.org: ["*.example.org", "*.vps.example.org"]
+    # Zones whose DNS lives at Porkbun instead (DNS-01 via the tls role's
+    # vendored hooks). Key pair: the porkbun-api 1P item (same one
+    # terraform/dns uses), via lookups like tls_cf_api_token above.
+    # tls_porkbun_zones:
+    #   example.net: ["*.example.net"]
+    # tls_porkbun_api_key: "..."
+    # tls_porkbun_secret_api_key: "..."
   # Groups are derived, not listed: `web` from the apps registry (site.yml;
   # a temporary static web: block still merges — warm-standby only), the
   # wireguard mesh from wireguard_ip in host_vars (members also need
