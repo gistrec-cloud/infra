@@ -1,8 +1,7 @@
 ---
 # The distro netdata package is ancient (v1.33 on Ubuntu 22.04, below the
-# streaming-recommended v2.9) — use the official netdata repo, edge channel,
-# matching the kickstart-installed parents. force: false keeps the files that
-# the netdata-repo-edge package already manages on those parents.
+# streaming-recommended v2.9) — use the official netdata repo. force: false
+# keeps the files that the netdata-repo package already manages on parents.
 - name: Install the official netdata repository key
   ansible.builtin.get_url:
     url: https://repo.netdata.cloud/netdatabot.gpg.key
@@ -10,21 +9,33 @@
     mode: "0644"
     force: false
 
-- name: Add the official netdata repository (edge channel)
+# Stable, not edge (2026-08-08). The edge channel publishes nightlies, so
+# apt-daily-upgrade restarted the agent every morning; each restart re-armed
+# every standing alarm from UNINITIALIZED and re-notified it. That single
+# mechanism produced ~half of the fleet's alert-transition log. force: true
+# here on purpose: the channel is the thing being fixed, so an edge file left
+# on a host must lose to the role rather than survive as drift.
+- name: Add the official netdata repository (stable channel)
   ansible.builtin.copy:
-    dest: /etc/apt/sources.list.d/netdata-edge.sources
+    dest: /etc/apt/sources.list.d/netdata-stable.sources
     content: |
       Types: deb
-      URIs: http://repository.netdata.cloud/repos/edge/{{ ansible_distribution | lower }}/
+      URIs: http://repository.netdata.cloud/repos/stable/{{ ansible_distribution | lower }}/
       Suites: {{ ansible_distribution_release }}/
       Signed-By: /usr/share/keyrings/netdata-archive-keyring.asc
       By-Hash: Yes
       Enabled: Yes
     mode: "0644"
-    force: false
+    force: true
 
-# present, not latest: the edge channel updates daily and every run would
-# upgrade-and-restart the agent. Upgrades are deliberate: apt on the host.
+# Two sources files would put the nightlies back: apt unions every enabled
+# list, and an edge nightly outranks the stable release.
+- name: Drop the superseded netdata edge repository
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/netdata-edge.sources
+    state: absent
+
+# present, not latest: upgrades are deliberate: apt on the host.
 - name: Install netdata
   ansible.builtin.apt:
     name: netdata

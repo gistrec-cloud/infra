@@ -4,9 +4,16 @@
 # notification; changes apply without restarting netdata.
 
 # Telegram — fleet-wide default recipient: every alarm role falls back here.
+# The |critical modifier (alarm-notify's filter_recipient_by_criticality) drops
+# WARNING notifications: they were ~2/3 of the traffic and none were actionable
+# (2026-08-08 — 192 transitions in the log, 95 of them one swap threshold and one
+# pending-reboot flag re-raised daily by netdata restarts). CRITICAL still pages,
+# and its follow-up de-escalation + CLEAR ride the same tracking file, so a real
+# outage still arrives as a "down"/"recovered" pair. Every app health alarm in
+# files/netdata/health.d is crit-only, so this costs no application coverage.
 SEND_TELEGRAM="YES"
 TELEGRAM_BOT_TOKEN="{{ netdata_telegram_bot_token }}"
-DEFAULT_RECIPIENT_TELEGRAM="{{ netdata_telegram_chat_id }}"
+DEFAULT_RECIPIENT_TELEGRAM="{{ netdata_telegram_chat_id }}|critical"
 {% if netdata_pushover_token | length > 0 %}
 
 # Pushover — the "wake me" escalation layer. Deliberately NOT a default
