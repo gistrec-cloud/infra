@@ -63,6 +63,8 @@
 - name: Remove the legacy netdata drop rule from the live chain
   ansible.builtin.command:
     argv: [iptables, -D, INPUT, -p, tcp, -m, tcp, --dport, "19999", -j, DROP]
+  # Gated by the probe above, so reaching this task always means a removal.
+  changed_when: true
   when: firewall_legacy_drop.rc == 0
 
 - name: Configure fail2ban jails
