@@ -29,6 +29,44 @@
     enabled: true
     state: started
 
+# ── legacy netfilter-persistent layer ──
+# russia-01 predates this role and still runs iptables-persistent: at boot
+# netfilter-persistent replays /etc/iptables/rules.v4 into `ip filter`, a table
+# nothing here manages. Both it and our `inet filter` hook input at priority
+# filter and are evaluated independently, so a DROP there outvotes the ACCEPT
+# we deploy — the ruleset looks correct while the packet dies. Until 2026-08-08
+# that file held a catch-all `--dport 19999 -j DROP` behind a whitelist of
+# long-dead IPs; it had eaten 10956 packets and kept every netdata child from
+# reaching the parent. Swept by port, not wholesale: the file's *nat section is
+# Docker's own snapshot and must survive.
+- name: Check whether the legacy persisted iptables ruleset exists
+  ansible.builtin.stat:
+    path: /etc/iptables/rules.v4
+  register: firewall_legacy_rules
+
+- name: Strip legacy netdata rules from the persisted iptables ruleset
+  ansible.builtin.lineinfile:
+    path: /etc/iptables/rules.v4
+    regexp: --dport 19999
+    state: absent
+  when: firewall_legacy_rules.stat.exists
+
+# -C is the probe (rc 0 = present), so the -D below stays idempotent. Both are
+# no-ops on hosts that never had the legacy layer.
+- name: Detect the legacy netdata drop rule in the live chain
+  ansible.builtin.command:
+    argv: [iptables, -C, INPUT, -p, tcp, -m, tcp, --dport, "19999", -j, DROP]
+  register: firewall_legacy_drop
+  changed_when: false
+  failed_when: false
+
+- name: Remove the legacy netdata drop rule from the live chain
+  ansible.builtin.command:
+    argv: [iptables, -D, INPUT, -p, tcp, -m, tcp, --dport, "19999", -j, DROP]
+  # Gated by the probe above, so reaching this task always means a removal.
+  changed_when: true
+  when: firewall_legacy_drop.rc == 0
+
 - name: Configure fail2ban jails
   ansible.builtin.template:
     src: jail.local.j2

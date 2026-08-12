@@ -186,6 +186,7 @@
     # before the apps that need them.
     - role: mysql
       when: mysql_managed | default(false)
+      tags: [mysql]
     # ClickHouse (VkAdsTool stats store, moved off russia-02). Same 0.0.0.0-publish
     # assert; publishes plaintext on loopback and TLS (9440/8443) publicly. Its
     # certificate lineage already exists from the prerequisite play above.

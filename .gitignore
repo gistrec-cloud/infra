@@ -63,6 +63,8 @@ override.tf.json
 *_override.tf.json
 
 # ─── Misc ─────────────────────────────────────────────────────────
+# Claude Code workspace (skills, scheduled tasks) — local tooling state
+.claude/
 *.retry
 *.log
 .DS_Store
