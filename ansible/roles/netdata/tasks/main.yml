@@ -139,6 +139,19 @@
   notify: Restart netdata
   when: netdata_stream_destination | length == 0
 
+# Early (85%) disk warning addressed to the `disk` role, the one recipient
+# exempt from the fleet's |critical Telegram filter — the stock alarm's WARNING
+# is filtered and its CRITICAL only fires under 5 GB free, so a filling disk
+# used to surface only once it was full (2026-08-13, finland-01). Pushover is
+# untouched: `disk` is not in netdata_pushover_roles, so this never wakes anyone.
+- name: Warn early when a disk is filling up
+  ansible.builtin.copy:
+    src: disk_space_early.conf
+    dest: /etc/netdata/health.d/disk_space_early.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_stream_destination | length == 0
+
 # go.d re-reads job configs only at startup, hence the full restart.
 - name: Configure go.d httpcheck probes
   ansible.builtin.template:
