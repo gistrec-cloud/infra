@@ -36,9 +36,21 @@ jobs:
     defaults:
       run:
         working-directory: terraform
+    env:
+      # Provider binaries land in a cache dir instead of six per-module .terraform
+      # copies — one download of the ~200 MB yandex provider per run, and none at
+      # all on a cache hit.
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
+      TF_IN_AUTOMATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
+      - name: Restore the provider cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.terraform-plugin-cache
+          key: tf-providers-${{ runner.os }}-${{ hashFiles('terraform/**/versions.tf') }}
+          restore-keys: tf-providers-${{ runner.os }}-
       - name: Check formatting
         run: terraform fmt -check -recursive
       - name: Validate each module
@@ -46,11 +58,25 @@ jobs:
         # a new module is covered without editing this list — the hardcoded
         # "dns aws hetzner yandex" silently skipped yandex-budget-explorer and
         # yandex-vk-ads-tool.
+        #
+        # `init` is retried: it reaches the registry *and* GitHub releases for
+        # provider checksums, and a single timed-out request there fails a run that
+        # has nothing to do with the change under review (2026-08-13, run
+        # 31652868402: "could not query provider registry" on the yandex provider).
         run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          retry() {
+            for attempt in 1 2 3; do
+              "$@" && return 0
+              echo "::warning::attempt ${attempt}/3 failed: $* — retrying"
+              sleep $((attempt * 15))
+            done
+            return 1
+          }
           for d in */; do
             [ -n "$(find "$d" -maxdepth 1 -name '*.tf' -print -quit)" ] || continue
             echo "== ${d%/} =="
-            terraform -chdir="${d%/}" init -backend=false
+            retry terraform -chdir="${d%/}" init -backend=false
             terraform -chdir="${d%/}" validate
           done
 
