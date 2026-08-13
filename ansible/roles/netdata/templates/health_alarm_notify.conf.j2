@@ -14,6 +14,16 @@
 SEND_TELEGRAM="YES"
 TELEGRAM_BOT_TOKEN="{{ netdata_telegram_bot_token }}"
 DEFAULT_RECIPIENT_TELEGRAM="{{ netdata_telegram_chat_id }}|critical"
+
+# `disk` is the one role exempt from that filter — its WARNING must arrive,
+# because a filling disk is only actionable *before* it is full. The stock
+# disk_space_usage warns at 80% but is `to: sysadmin`, so its WARNING lands in
+# the filtered default and the fleet hears nothing until CRITICAL — which the
+# stock alarm gates behind `$avail < 5` GB (~93% of finland-01's 75 GB root).
+# On 2026-08-13 that meant the first message arrived at 100%, with MySQL already
+# refusing writes. Only files/disk_space_early.conf addresses this role, so the
+# exemption costs exactly one warning per filling disk, not a reopened floodgate.
+role_recipients_telegram[disk]="{{ netdata_telegram_chat_id }}"
 {% if netdata_pushover_token | length > 0 %}
 
 # Pushover — the "wake me" escalation layer. Deliberately NOT a default
