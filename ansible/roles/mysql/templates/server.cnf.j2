@@ -10,6 +10,19 @@ sql_mode = ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,E
 character-set-server = utf8mb4
 collation-server     = utf8mb4_unicode_ci
 default-time-zone    = '{{ mysql_time_zone }}'
+{% if mysql_max_execution_time | int > 0 %}
+
+# ─── Runaway-query guard (see mysql_max_execution_time in defaults) ───
+# Deliberately init_connect and NOT `max_execution_time = N` as a global: the
+# server runs that per-connection string only for clients WITHOUT SUPER /
+# CONNECTION_ADMIN. That exemption is the whole point — backup.sh dumps as root,
+# and mysqldump's table scans are plain SELECTs that a global setting would
+# happily kill mid-dump (mysqldump has no --init-command to opt out, and a dump
+# killed mid-stream is exactly what the .partial dance exists to avoid).
+# So: apps and ad-hoc analytics users are capped, root's backups and migrations
+# are not. Caps SELECT only — DML/DDL and long migrations are unaffected.
+init_connect = 'SET SESSION max_execution_time = {{ mysql_max_execution_time }}'
+{% endif %}
 {% if mysql_tls_enabled %}
 
 # TLS: present the LE cert so clients verifying the server cert connect by name.

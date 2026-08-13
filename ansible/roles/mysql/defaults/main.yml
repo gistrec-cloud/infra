@@ -40,6 +40,19 @@ mysql_root_password: "{{ vault_mysql_root_password | mandatory }}"
 mysql_innodb_buffer_pool_size: "256M"
 mysql_max_connections: 100
 
+# ─── Runaway-query guard ───
+# SELECT timeout (ms) applied via init_connect, NOT as a global — see
+# server.cnf.j2 for why. 0 disables the guard entirely.
+#
+# Sized off the 2026-08-13 incident: an ad-hoc self-join over usage-beacon.events
+# (a 4 MB table) ran 640s and spilled 52 GB of internal temp files, filling the
+# 75 GB disk and wedging every write on the primary ("Disk is full writing
+# ./mysql-bin.000011"). tmp_table_size does NOT bound this — it is only the
+# threshold at which a temp table moves to disk, where it then grows unbounded.
+# Every legitimate fleet query is milliseconds; 30s is far above them and far
+# below the runtime needed to fill a disk.
+mysql_max_execution_time: 30000
+
 # Match the managed cluster's Europe/Moscow (else SYSTEM inherits the host's UTC).
 mysql_time_zone: "Europe/Moscow"
 
