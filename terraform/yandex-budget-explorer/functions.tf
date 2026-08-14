@@ -27,6 +27,12 @@ locals {
     { env = "EXCHANGE_RATE_API_KEY", lockbox = "budget-explorer-exchangerate-api-key", key = "exchangerate-api-key", version = "e6q5rfsmuikr9bgi9vde" },
     { env = "HASHED_PASSWORD", lockbox = "budget-explorer-raifaisen-hashed-password", key = "hashed-password", version = "e6q98j9bjnhqrm557v99" },
     { env = "ANTHROPIC_API_KEY", lockbox = "budget-explorer-claude-api-key", key = "claude-api-key", version = "e6qknje7hjftcgpsgnv0" },
+    # Функции работают из РФ, где api.anthropic.com недоступен, поэтому категоризация
+    # (categories.py) ходит через relay в AWS. Без этих двух переменных клиент бьётся
+    # в таймаут, get_category_from_description глушит исключение и молча отдаёт
+    # «Другое» — так и накопились неразмеченные транзакции.
+    { env = "ANTHROPIC_BASE_URL", lockbox = "budget-explorer-anthropic-relay-url", key = "relay-url", version = "e6q0fkohiuj4epfo0g7a" },
+    { env = "ANTHROPIC_RELAY_TOKEN", lockbox = "budget-explorer-anthropic-relay-token", key = "relay-token", version = "e6ql7254061s5t0c5eef" },
   ]
 }
 

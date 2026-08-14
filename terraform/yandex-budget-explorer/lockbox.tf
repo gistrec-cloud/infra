@@ -7,6 +7,12 @@ locals {
     "budget-explorer-exchangerate-api-key",
     "budget-explorer-webhook-secret",
     "budget-explorer-telegram-token",
+    # Функции живут в Яндекс-облаке (РФ), откуда api.anthropic.com не отвечает,
+    # поэтому категоризация ходит через relay (terraform/aws, репо anthropic-relay).
+    # URL тоже здесь, а не в function_env: этот .tf лежит в git, а Function URL —
+    # публичный неаутентифицированный эндпоинт (terraform/aws/README.md: «never publish»).
+    "budget-explorer-anthropic-relay-url",
+    "budget-explorer-anthropic-relay-token",
   ]
 }
 
@@ -18,7 +24,7 @@ resource "yandex_lockbox_secret" "this" {
   labels              = { project = "budget-explorer" }
 }
 
-# Grant payloadViewer per-secret rather than folder-wide, and only on the 5 secrets
+# Grant payloadViewer per-secret rather than folder-wide, and only on the secrets
 # the functions actually mount (local.function_secrets in functions.tf) — nothing
 # mounts webhook-secret, so the SA gets no grant on it. The live folder-wide roles
 # the SA runs on today stay unmanaged; dropping them is a manual follow-up.
