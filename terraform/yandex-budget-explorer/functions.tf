@@ -6,7 +6,7 @@
 
 locals {
   functions = {
-    "sync-transactions" = { entrypoint = "main_sync.handler", execution_timeout = "60" }
+    "sync-transactions" = { entrypoint = "main_sync.handler", execution_timeout = "180" }
     "telegram-bot"      = { entrypoint = "main_telegram.handler", execution_timeout = "300" }
   }
 
@@ -54,6 +54,8 @@ data "archive_file" "budget_explorer" {
     "deploy.sh",
     "README.md",
     "pyvenv.cfg",
+    "design_handoff_transactions",
+    "YandexInternalRootCA.crt",
   ]
 }
 
