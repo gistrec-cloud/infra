@@ -2,7 +2,7 @@
 # Non-secret defaults shared by all hosts.
 # Secrets belong in group_vars/all.vault.yml (gitignored, ansible-vault encrypted).
 
-timezone: Etc/UTC
+timezone: Europe/Moscow
 
 # Roles driven by apps.yml keep tiny ownership manifests here. Reconciliation
 # removes only names that a role recorded itself. App cron markers explicitly

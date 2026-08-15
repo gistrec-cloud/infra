@@ -1,8 +1,5 @@
 ---
-- name: Set system timezone
-  community.general.timezone:
-    name: "{{ timezone }}"
-
+# Timezone moved to the baseline play in site.yml (applies to every host).
 - name: Install base packages
   ansible.builtin.apt:
     name:
