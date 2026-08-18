@@ -1,8 +1,5 @@
 ---
-- name: Set system timezone
-  community.general.timezone:
-    name: "{{ timezone }}"
-
+# Timezone moved to the baseline play in site.yml (applies to every host).
 - name: Install base packages
   ansible.builtin.apt:
     name:
@@ -64,6 +61,15 @@
   # The assert above guarantees a key is present before password auth is disabled.
   # backup: true keeps the previous drop-in so a bad config can be restored from
   # /etc/ssh/sshd_config.d/ if the sshd -t check below ever fails.
+
+# sshd takes the FIRST value it sees and includes sshd_config.d in lexical
+# order, so a provider's 50-cloud-init.conf (PasswordAuthentication yes on
+# Timeweb images) silently wins over 99-hardening.conf. Caught on russia-03.
+- name: Remove the cloud-init sshd drop-in
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    state: absent
+  notify: Restart sshd
 
 - name: Verify full sshd configuration is valid
   ansible.builtin.command: sshd -t

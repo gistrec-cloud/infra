@@ -70,6 +70,7 @@ infra/
 │   ├── dns/                      # Cloudflare DNS records (host_ips: fleet IPs live once)
 │   ├── aws/                      # Lambda functions + Function URLs
 │   ├── hetzner/                  # Hetzner Cloud server (finland-01)
+│   ├── timeweb/                  # Timeweb Cloud server (russia-03) + floating IPv4
 │   └── yandex/                   # Object Storage, Managed MySQL, Compute, Cloud Function
 └── docs/runbooks/                # operational procedures (move-apps, break-glass)
 ```

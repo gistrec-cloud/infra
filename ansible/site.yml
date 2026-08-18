@@ -106,6 +106,13 @@
     - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
     # Deployed-apps registry (gitignored; the example keeps parsing alive).
     - ["apps.yml", "apps.yml.example"]
+  pre_tasks:
+    # Every host, not just common_managed ones: apps write naive timestamps off
+    # the system clock and have to match MySQL/ClickHouse.
+    - name: Set system timezone
+      community.general.timezone:
+        name: "{{ timezone }}"
+      tags: [timezone]
   roles:
     # Adopted live servers keep their existing users and sshd setup. common
     # (admin user + sshd hardening) is opt-in for freshly provisioned hosts.
