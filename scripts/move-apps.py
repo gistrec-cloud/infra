@@ -147,11 +147,44 @@ def flip():
         new = (l.replace(f'host = "{src}"', f'host = "{dst}"')
                 .replace(f'"{src}{DOMAIN_SUFFIX}"', f'"{dst}{DOMAIN_SUFFIX}"'))
         if new != l: tf[i] = new; changed.append(m.group(1))
-    print(f"  apps: {', '.join(state['apps'])} -> {dst}")
+    print(f"  apps: {len(seen)} host: entries -> {dst}")
     print(f"  dns:  {', '.join(changed) or 'already flipped'}")
-    if dry:
-        print("dry-run: nothing written"); sys.exit(0)
     open(APPS, "w").writelines(lines); open(TFVARS, "w").writelines(tf)
+
+def preview():
+    """Pretty read-only plan: per-app table + dns/rsync/steps sections."""
+    bold = (lambda s: f"\033[1m{s}\033[0m") if sys.stdout.isatty() else (lambda s: s)
+    tf = open(TFVARS).read().splitlines()
+    tf_names = {m.group(1) for l in tf if (m := re.search(r'name\s*=\s*"([^"]+)"', l))}
+
+    rows = []
+    for n in state["apps"]:
+        a, p = registry[n], (registry[n].get("process") or {})
+        vh = set(a.get("vhosts") or [])
+        doms = sorted(t for t in tf_names if t.replace(".", "-") in vh)
+        rows.append((n, p.get("type", "static"), ", ".join(p.get("pm2", [])) or "—",
+                     ", ".join(doms) or "—"))
+    head = ("app", "type", "pm2 processes", "domains")
+    w = [max(len(r[i]) for r in rows + [head]) for i in range(4)]
+    print()
+    print("  " + "  ".join(bold(h.ljust(w[i])) for i, h in enumerate(head)))
+    print("  " + "  ".join("─" * x for x in w))
+    for r in rows:
+        print("  " + "  ".join(c.ljust(w[i]) for i, c in enumerate(r)))
+
+    targets = set(state["domains"] + state["aliases"])
+    flips = [m.group(1) for l in tf
+             if (m := re.search(r'name\s*=\s*"([^"]+)"', l)) and m.group(1) in targets
+             and (f'host = "{src}"' in l or f'"{src}{DOMAIN_SUFFIX}"' in l)]
+    print()
+    print(f"  {bold('dns flips')} ({len(flips)}):  " + (", ".join(flips) or "already flipped"))
+    if state["aliases"]:
+        print(f"  {bold('deploy aliases')}:  " + ", ".join(state["aliases"]))
+    if state["rsync_dirs"]:
+        print(f"  {bold('rsync dirs')} ({len(state['rsync_dirs'])}):  " + " ".join(state["rsync_dirs"]))
+    plan = " → ".join(n for n, _ in steps)
+    print(f"  {bold('steps')}:  " + plan.replace("deploy", f"deploy[{dst}]")
+                                        .replace("reconcile-src", f"reconcile-src[{src}]"))
 
 def prep_dst():
     """A returning DST may hold FROZEN pm2 processes under the moving names —
@@ -279,9 +312,12 @@ steps = [("flip", flip), ("prep-dst", prep_dst), ("rsync", rsync), ("deploy", de
          ("smoke-local", smoke_local), ("dns", dns), ("smoke-public", smoke_public),
          ("reconcile-src", reconcile_src), ("smoke-final", smoke_public)]
 
-print(f"move: {', '.join(state['apps'])}  {src} -> {dst}"
+print(f"move: {src} → {dst}   {len(state['apps'])} apps"
       + (f"  (resuming after: {', '.join(state['done'])})" if state["done"] else ""))
-if not dry: save()
+preview()
+if dry:
+    print("\ndry-run: nothing written"); sys.exit(0)
+save()
 for name, fn in steps:
     if name in state["done"]:
         print(f"[done] {name}"); continue
