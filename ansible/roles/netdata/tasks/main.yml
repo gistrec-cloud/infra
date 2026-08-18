@@ -20,8 +20,8 @@
     dest: /etc/apt/sources.list.d/netdata-stable.sources
     content: |
       Types: deb
-      URIs: http://repository.netdata.cloud/repos/stable/{{ ansible_distribution | lower }}/
-      Suites: {{ ansible_distribution_release }}/
+      URIs: http://repository.netdata.cloud/repos/stable/{{ ansible_facts.distribution | lower }}/
+      Suites: {{ ansible_facts.distribution_release }}/
       Signed-By: /usr/share/keyrings/netdata-archive-keyring.asc
       By-Hash: Yes
       Enabled: Yes

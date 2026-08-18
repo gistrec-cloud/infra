@@ -13,13 +13,27 @@
     dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
 
+# apt_repository-era file — with the .sources below both would duplicate the source.
+- name: Remove the pre-deb822 Docker source
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/docker.list
+    state: absent
+
+- name: Install python3-debian (deb822_repository needs it)
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Add Docker apt repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}
-      signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
-    filename: docker
+  ansible.builtin.deb822_repository:
+    name: docker
+    uris: https://download.docker.com/linux/ubuntu
+    suites: "{{ ansible_facts.distribution_release }}"
+    components: stable
+    architectures: "{{ 'amd64' if ansible_facts.architecture == 'x86_64' else ansible_facts.architecture }}"
+    signed_by: /etc/apt/keyrings/docker.asc
     state: present
 
 # present, not latest: engine upgrades stay deliberate (apt on the host).
