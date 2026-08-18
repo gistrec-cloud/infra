@@ -11,20 +11,32 @@
     dest: /etc/apt/keyrings/nodesource.asc
     mode: "0644"
 
-# A hand-installed NodeSource source with a different Signed-By makes apt
-# refuse to read sources at all (bit us on germany-01, 2026-07-18).
-- name: Remove legacy hand-installed NodeSource source
+# Legacy leftovers: the apt_repository-era .list (this role, pre-deb822) and a
+# hand-installed keyring whose different Signed-By makes apt refuse to read
+# sources at all (bit us on germany-01, 2026-07-18). nodesource.sources itself
+# is now OWNED by the deb822 task below, which overwrites any hand-installed one.
+- name: Remove legacy NodeSource source leftovers
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
-    - /etc/apt/sources.list.d/nodesource.sources
+    - /etc/apt/sources.list.d/nodesource.list
     - /usr/share/keyrings/nodesource.gpg
 
+- name: Install python3-debian (deb822_repository needs it)
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Add NodeSource apt repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_{{ nodeapp_nodejs_major }}.x nodistro main"
-    filename: nodesource
+  ansible.builtin.deb822_repository:
+    name: nodesource
+    uris: "https://deb.nodesource.com/node_{{ nodeapp_nodejs_major }}.x"
+    suites: nodistro
+    components: main
+    signed_by: /etc/apt/keyrings/nodesource.asc
     state: present
 
 - name: Install Node.js
