@@ -8,9 +8,11 @@
 # Idempotent: we only (re)configure when replication is not already running, so
 # a normal converge is a no-op. GET_SOURCE_PUBLIC_KEY=1 lets caching_sha2 auth
 # succeed without TLS — the tunnel is the encryption.
+# No -N: it strips field names even in \G output (8.0.46), and the gates below
+# match on "Replica_IO_Running: Yes" — with -N they never match.
 - name: Read current replication status
   ansible.builtin.command:
-    cmd: docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -e "SHOW REPLICA STATUS\G"'
+    cmd: docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "SHOW REPLICA STATUS\G"'
   register: mysql_replica_status
   changed_when: false
   no_log: true
@@ -24,7 +26,7 @@
         SOURCE_HOST='{{ mysql_replication_source_host }}',
         SOURCE_PORT={{ mysql_replication_source_port }},
         SOURCE_USER='{{ mysql_replication_user }}',
-        SOURCE_PASSWORD='{{ mysql_replication_password }}',
+        SOURCE_PASSWORD='{{ mysql_replication_password | replace("\\", "\\\\") | replace("'", "''") }}',
         SOURCE_AUTO_POSITION=1,
         GET_SOURCE_PUBLIC_KEY=1;
       START REPLICA;
@@ -54,7 +56,7 @@
 # password, and Last_IO_Error / Last_SQL_Error must be visible on failure.
 - name: Verify replication threads are running
   ansible.builtin.command:
-    cmd: docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -e "SHOW REPLICA STATUS\G"'
+    cmd: docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "SHOW REPLICA STATUS\G"'
   register: mysql_replica_verify
   until:
     - "'Replica_IO_Running: Yes' in mysql_replica_verify.stdout"
@@ -63,3 +65,16 @@
   delay: 3
   changed_when: false
   when: mysql_replica_config is not skipped
+
+# Runtime instead of cnf (see server.cnf.j2), AFTER replication is up: the seed
+# load needs a writable server. PERSIST survives restarts; promotion flips it
+# off (SET PERSIST ... = OFF) per the README. Unconditional: idempotent, and
+# gating on the configure task would skip it on an already-running replica.
+- name: Enforce read-only on the standby
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ mysql_container_name }} sh -c
+      'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot
+      -e "SET PERSIST read_only = ON; SET PERSIST super_read_only = ON"'
+  changed_when: false
+  no_log: true
