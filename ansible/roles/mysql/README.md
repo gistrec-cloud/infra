@@ -88,6 +88,10 @@ docker exec mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" \
   --set-gtid-purged=ON -uroot' | gzip > /tmp/seed.sql.gz
 # Copy /tmp/seed.sql.gz to the replica, then load it:
 gunzip -c seed.sql.gz | docker exec -i mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot'
+# FLUSH PRIVILEGES after the load: the dump writes mysql.user as table rows,
+# invisible to the in-memory account cache until flushed — replicated
+# ALTER USER / GRANT statements fail with 1396 otherwise (russia-03, 2026-08-19).
+docker exec mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "FLUSH PRIVILEGES"'
 # Now `make deploy` to db-02 (or just re-run) — tasks/replica.yml runs
 # CHANGE REPLICATION SOURCE + START REPLICA. Verify:
 docker exec mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "SHOW REPLICA STATUS\G"' \

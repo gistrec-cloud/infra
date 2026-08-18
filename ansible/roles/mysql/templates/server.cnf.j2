@@ -44,9 +44,8 @@ binlog_expire_logs_seconds = {{ mysql_binlog_expire_seconds }}
 {% endif %}
 {% if mysql_role == 'replica' %}
 relay_log                  = relay-bin
-# Standby: block ALL writes (including from privileged users) so nothing diverges
-# from the source. The replication applier thread is exempt. Promotion flips this
-# off — see the role README.
-read_only                  = ON
-super_read_only            = ON
+# read_only/super_read_only deliberately NOT here: in the cnf they apply to the
+# entrypoint's temp server too, so a fresh init can't even create root (caught
+# on russia-03, 2026-08-19), and the seed load needs a writable server anyway.
+# replica.yml SET PERSISTs them once replication is configured.
 {% endif %}
