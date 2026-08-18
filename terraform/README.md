@@ -8,6 +8,7 @@ Each subdirectory is an independent root module with its own state (independent 
 | `aws/`    | AWS          | Lambda functions + Function URLs |
 | `yandex/` | Yandex Cloud | Object Storage, Managed MySQL, Compute, Cloud Function |
 | `hetzner/`| Hetzner Cloud| Existing `finland-01` Compute server |
+| `timeweb/`| Timeweb Cloud| `russia-03` server + its floating IPv4 |
 
 Run Terraform inside a module directory (`cd terraform/aws && terraform init`).
 
