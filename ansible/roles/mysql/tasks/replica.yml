@@ -72,6 +72,9 @@
 # gating on the configure task would skip it on an already-running replica.
 - name: Enforce read-only on the standby
   ansible.builtin.command:
-    cmd: docker exec {{ mysql_container_name }} sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "SET PERSIST read_only = ON; SET PERSIST super_read_only = ON"'
+    cmd: >-
+      docker exec {{ mysql_container_name }} sh -c
+      'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot
+      -e "SET PERSIST read_only = ON; SET PERSIST super_read_only = ON"'
   changed_when: false
   no_log: true
