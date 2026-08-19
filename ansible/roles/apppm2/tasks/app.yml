@@ -53,16 +53,34 @@
   register: apppm2_venv
   when: apppm2_app.value.process.runtime | default('') == 'python'
 
+# Gated on a success marker, not `apppm2_venv is changed`: a venv whose pip
+# failed once otherwise skips the install forever (caught on russia-03).
+- name: Check the venv install marker — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}/.pip-ok"
+  register: apppm2_pip_ok
+  when: apppm2_app.value.process.runtime | default('') == 'python'
+
+# pip_args: registry override for pyproject apps (e.g. "-e ." — trade-lab).
 - name: Pip install requirements — {{ apppm2_app.key }}
   ansible.builtin.command:
-    cmd: "{{ apppm2_app.value.process.venv | default('.venv') }}/bin/pip install -r requirements.txt"
+    cmd: "{{ apppm2_app.value.process.venv | default('.venv') }}/bin/pip install {{ apppm2_app.value.process.pip_args | default('-r requirements.txt') }}"
     chdir: "{{ apppm2_dir }}"
   become: true
   become_user: "{{ admin_user }}"
   changed_when: true
+  register: apppm2_pip
   when:
     - apppm2_app.value.process.runtime | default('') == 'python'
-    - apppm2_venv is changed
+    - apppm2_venv is changed or not apppm2_pip_ok.stat.exists
+
+- name: Mark the venv installed — {{ apppm2_app.key }}
+  ansible.builtin.file:
+    path: "{{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}/.pip-ok"
+    state: touch
+  become: true
+  become_user: "{{ admin_user }}"
+  when: apppm2_pip is not skipped
 
 - name: Npm ci — {{ apppm2_app.key }}
   ansible.builtin.command:

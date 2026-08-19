@@ -20,6 +20,13 @@
     shell: /bin/bash
     state: present
 
+# Ubuntu ≥21.04 creates 750 homes; nginx serves registry static bundles from
+# this home, so it needs the traverse bit (caught on russia-03).
+- name: World-traversable admin home
+  ansible.builtin.file:
+    path: "/home/{{ admin_user }}"
+    mode: "0755"
+
 - name: Allow the admin user to use sudo without a password
   ansible.builtin.copy:
     dest: "/etc/sudoers.d/{{ admin_user }}"
