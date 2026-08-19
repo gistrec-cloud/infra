@@ -28,10 +28,17 @@
 #     runtime: python | node   # venv + pip requirements / npm ci (clone type)
 #     venv: .venv              # python venv dir, relative to dir
 #     repo_dir: <path>         # clone destination when the repo root is above dir
+#     npm: true                # npm deps for a non-node runtime (python app
+#                              # spawning node helpers from node_modules)
+#     dirs: [paths]            # untracked runtime dirs (journals/logs/state),
+#                              # relative to dir — created before install
 #     ecosystem: <file>        # pm2 file, relative to dir (default ecosystem.config.js)
 #     pm2: [names]             # pm2 process names to ensure exist (env from 1P first)
 #     build: <shell>           # clone type: runs after install+env (next build / prisma generate)
 #     build_creates: <path>    # skip build when this path (rel. to dir) exists — idempotent/resume-safe
+#     bootstrap:               # one-shot DR commands after install+env+build;
+#                              # creates (rel. to dir) is the REQUIRED skip-gate
+#       - {name: <label>, command: <shell>, creates: <path>}
 #   static:                    # appstatic role — built bundle the vhost serves
 #     build: <shell>           # runs in dir when root is missing (fresh host / DR)
 #     root: <path under dir>

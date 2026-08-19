@@ -42,6 +42,17 @@
     mode: "0755"
   when: apppm2_app.value.process.type == 'artifact'
 
+# Untracked runtime dirs (journals, logs, state): clone/CI never create them,
+# and cron `>> data/logs/...` fails on the missing path (trade-lab, 2026-08-19).
+- name: Runtime directories — {{ apppm2_app.key }}
+  ansible.builtin.file:
+    path: "{{ apppm2_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"
+  loop: "{{ apppm2_app.value.process.dirs | default([]) }}"
+
 # ── runtime ──
 - name: Python venv — {{ apppm2_app.key }}
   ansible.builtin.command:
@@ -81,14 +92,27 @@
   become_user: "{{ admin_user }}"
   when: apppm2_pip is not skipped
 
-- name: Npm ci — {{ apppm2_app.key }}
+# `npm: true` covers non-node runtimes that spawn node helpers from
+# node_modules (askads: python backend spawns MCP servers per request).
+# npm ci needs a lockfile; without one fall back to npm install.
+- name: Check for a package lockfile — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_dir }}/package-lock.json"
+  register: apppm2_npm_lock
+  when: >-
+    apppm2_app.value.process.runtime | default('') == 'node'
+    or apppm2_app.value.process.npm | default(false)
+
+- name: Npm install — {{ apppm2_app.key }}
   ansible.builtin.command:
-    cmd: npm ci
+    cmd: "npm {{ 'ci' if apppm2_npm_lock.stat.exists | default(false) else 'install' }} --no-audit --no-fund"
     chdir: "{{ apppm2_dir }}"
     creates: "{{ apppm2_dir }}/node_modules"
   become: true
   become_user: "{{ admin_user }}"
-  when: apppm2_app.value.process.runtime | default('') == 'node'
+  when: >-
+    apppm2_app.value.process.runtime | default('') == 'node'
+    or apppm2_app.value.process.npm | default(false)
 
 # ── env files from the 1Password dotenv backups ──
 # .env -> "dotenv <app>"; .env.en -> "dotenv <app>-en"; prod.env -> "dotenv <app>-prod"
@@ -141,6 +165,32 @@
   become_user: "{{ admin_user }}"
   changed_when: true
   when: apppm2_app.value.process.build is defined
+
+# One-shot DR bootstrap: rematerialise runtime data code cannot derive
+# (trade-lab db-restore rebuilds data/journal from the MySQL mirror).
+# `creates` is the idempotence gate — refuse entries without it, or the
+# command would rerun every converge.
+- name: Refuse bootstrap entries without a creates sentinel — {{ apppm2_app.key }}
+  ansible.builtin.fail:
+    msg: >-
+      {{ apppm2_app.key }}: bootstrap '{{ item.name | default(item.command) }}'
+      has no `creates`.
+  loop: "{{ apppm2_app.value.process.bootstrap | default([]) }}"
+  loop_control:
+    label: "{{ item.name | default(item.command) }}"
+  when: item.creates is not defined
+
+- name: Bootstrap — {{ apppm2_app.key }} # noqa: command-instead-of-shell
+  ansible.builtin.shell:
+    cmd: "{{ item.command }}"
+    chdir: "{{ apppm2_dir }}"
+    creates: "{{ apppm2_dir }}/{{ item.creates }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: true
+  loop: "{{ apppm2_app.value.process.bootstrap | default([]) }}"
+  loop_control:
+    label: "{{ item.name | default(item.command) }}"
 
 - name: Bin directory for control scripts — {{ apppm2_app.key }}
   ansible.builtin.file:
