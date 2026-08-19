@@ -9,6 +9,9 @@
 #   dir:  <path under the login user's home; "." = home itself>
 #   env:  [env files in dir]          # default: [.env]; explicit [] = none
 #                                     # (static sites, system endpoints)
+#   auth_users: true                  # app reads <dir>/auth-users (login hash
+#                                     # lines) — restored from 1P Document
+#                                     # "auth-users <name>", backed up alongside env
 #   repo: <github repo — documentation>
 #   notes: <free text>
 #   cron: [cron jobs the app needs — reconciled by the appcron role, keyed
