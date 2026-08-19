@@ -144,9 +144,7 @@
       apppm2_deploy_keys | length == 0
       or '/etc/ssh/deploy_keys' in apppm2_sshd_effective.stdout | default('')
 
-# Fresh hosts (Ubuntu 24.04) ship python3 without the venv module. The build
-# deps cover apps whose pip installs compile native wheels (mysqlclient has no
-# Linux wheels — needs pkg-config + MySQL headers; caught on russia-03).
+# Build deps: mysqlclient has no Linux wheels — needs pkg-config + MySQL headers.
 - name: Venv support + build deps for python apps
   ansible.builtin.apt:
     name:

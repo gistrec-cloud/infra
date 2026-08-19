@@ -20,8 +20,7 @@
     shell: /bin/bash
     state: present
 
-# Ubuntu ≥21.04 creates 750 homes; nginx serves registry static bundles from
-# this home, so it needs the traverse bit (caught on russia-03).
+# Ubuntu ≥21.04 creates 750 homes; nginx needs the traverse bit for registry static.
 - name: World-traversable admin home
   ansible.builtin.file:
     path: "/home/{{ admin_user }}"

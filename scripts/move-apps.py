@@ -283,8 +283,7 @@ def reconcile_src():
 def require_source_manifests():
     """Refuse a move that cannot distinguish managed from manual SRC state."""
     if dry or dead_src or not reachable(src): return
-    # After reconcile-src the manifests are legitimately gone — a resume that
-    # only has smoke-final left must not demand them (caught on russia-03).
+    # reconcile-src legitimately removes them — don't demand them on a resume.
     if "reconcile-src" in state["done"]: return
     required = []
     if state["pm2"]:
