@@ -150,6 +150,32 @@
   when: apppm2_env_refresh | default(false) or not item.stat.exists
   no_log: true
 
+# ── dashboard logins from the 1Password auth-users backups ──
+# `auth_users: true` -> Document "auth-users <app>": hash lines the app reads
+# per login (usage-beacon/fleet-auth/budget-explorer, hashes copy-compatible).
+# Same restore-only contract as the env files above — the r1→r3 move lost
+# them (runtime file outside git). Password change: edit on host + backup-envs.sh.
+- name: Check the auth-users file — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_dir }}/auth-users"
+  register: apppm2_authusers
+  when: apppm2_app.value.auth_users | default(false)
+
+- name: Auth-users from 1Password — {{ apppm2_app.key }}
+  ansible.builtin.copy:
+    content: >-
+      {{ lookup('ansible.builtin.pipe',
+                'op document get ' ~ ('auth-users ' ~ apppm2_app.key) | quote
+                ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
+    dest: "{{ apppm2_dir }}/auth-users"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  when:
+    - apppm2_app.value.auth_users | default(false)
+    - apppm2_env_refresh | default(false) or not apppm2_authusers.stat.exists
+  no_log: true
+
 # After env restore: a Next.js build bakes NEXT_PUBLIC_* and `prisma generate`
 # reads the datasource. shell (not command): build strings chain with && / |.
 # Idempotent via build_creates (e.g. .next) so it fires on a cold host /

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Back up every registered app .env into 1Password (one Document per env
-# file), so a dead host never takes app secrets with it. What to back up
+# Back up every registered app .env (and auth-users login file, knob
+# auth_users: true) into 1Password (one Document per file), so a dead host
+# never takes app secrets with it. What to back up
 # comes from ansible/apps.yml — the registry survives any single host; the
 # hosts themselves are only audited for env-looking files that are NOT
 # registered (drift = warning + non-zero exit).
@@ -81,15 +82,18 @@ render_conn() { # <host> — "ip|user|keyfile", cached per host
   printf '%s' "$sshc_line"
 }
 
-# Registry -> one line per env file: "app<TAB>host<TAB>relative-path"
+# Registry -> one line per secret file: "app<TAB>host<TAB>relative-path"
 ENTRIES=$(python3 - "$REG" <<'PY'
 import sys, yaml
 apps = (yaml.safe_load(open(sys.argv[1])) or {}).get("apps") or {}
 for name, a in apps.items():
     d = a.get("dir", ".")
     # env defaults to [.env]; an EXPLICIT `env: []` means "no env files"
-    # (static sites and system endpoints).
-    for e in (a.get("env") if "env" in a else [".env"]):
+    # (static sites and system endpoints). auth_users adds the login file.
+    files = list(a.get("env") if "env" in a else [".env"])
+    if a.get("auth_users"):
+        files.append("auth-users")
+    for e in files:
         rel = e if d == "." else f"{d}/{e}"
         print(f"{name}\t{a['host']}\t{rel}")
 PY
@@ -130,12 +134,13 @@ while IFS=$'\t' read -r app host rel; do
   in_filter "$host" || continue
 
   # Item name: the app, plus a suffix when it has several env files
-  # (.env.en -> -en, prod.env -> -prod).
+  # (.env.en -> -en, prod.env -> -prod); auth-users gets its own prefix.
   base="${rel##*/}"
   case "$base" in
-    .env)   title="dotenv $app" ;;
-    .env.*) title="dotenv $app-${base#.env.}" ;;
-    *)      title="dotenv $app-${base%.env}" ;;
+    auth-users) title="auth-users $app"; fname="$app.auth-users" ;;
+    .env)   title="dotenv $app";               fname="$app.env" ;;
+    .env.*) title="dotenv $app-${base#.env.}"; fname="$app-${base#.env.}.env" ;;
+    *)      title="dotenv $app-${base%.env}";  fname="$app-${base%.env}.env" ;;
   esac
 
   if $list_only; then
@@ -184,7 +189,7 @@ while IFS=$'\t' read -r app host rel; do
     action="updated"
   else
     if ! id=$(cat "$TMP" | op document create - --vault "$VAULT" \
-        --title "$title" --file-name "${title#dotenv }.env" --tags "$TAG" \
+        --title "$title" --file-name "$fname" --tags "$TAG" \
         --format json | python3 -c 'import json,sys
 d=json.load(sys.stdin); print(d.get("uuid") or d.get("id"))'); then
       echo "FAIL $title — op document create failed" >&2
@@ -209,12 +214,12 @@ done <<<"$ENTRIES"
 
 $list_only && exit 0
 
-# ── Audit pass: env-looking files on the fleet that the registry misses ──
+# ── Audit pass: env-looking + auth-users files the registry misses ──
 # (single-quoted on purpose — $HOME and the pipeline expand on the remote host)
 # shellcheck disable=SC2016
 FIND_CMD='
 { pm2 jlist 2>/dev/null | python3 -c "import json,sys; [print(p[\"pm2_env\"][\"pm_cwd\"] + \"/.env\") for p in json.load(sys.stdin)]" 2>/dev/null || true
-  find "$HOME" -maxdepth 3 \( -name ".env" -o -name ".env.*" -o -name "*.env" \) \
+  find "$HOME" -maxdepth 3 \( -name ".env" -o -name ".env.*" -o -name "*.env" -o -name "auth-users" \) \
     -not -name "*.example" -not -name "*.bak" -not -name "*.save" \
     -not -name "*.backup-*" -not -path "*/node_modules/*" 2>/dev/null || true
 } | sort -u | while read -r f; do [ -f "$f" ] && echo "$f"; done'
