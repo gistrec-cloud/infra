@@ -283,6 +283,8 @@ def reconcile_src():
 def require_source_manifests():
     """Refuse a move that cannot distinguish managed from manual SRC state."""
     if dry or dead_src or not reachable(src): return
+    # reconcile-src legitimately removes them — don't demand them on a resume.
+    if "reconcile-src" in state["done"]: return
     required = []
     if state["pm2"]:
         required.append(f"{REMOTE_STATE_DIR}/apppm2.json")
