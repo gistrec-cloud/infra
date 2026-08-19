@@ -78,6 +78,7 @@
   ansible.builtin.file:
     path: "{{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}/.pip-ok"
     state: touch
+    mode: "0644"
   become: true
   become_user: "{{ admin_user }}"
   when: apppm2_pip is not skipped
