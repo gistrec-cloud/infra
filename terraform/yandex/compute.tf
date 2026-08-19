@@ -4,17 +4,11 @@
 # it is huge and externally mutated, so it is adopted as-is rather than managed.
 
 locals {
-  instances = {
-    # hostname / disk_name keep their pre-rename values: changing either forces
-    # VM recreation (hostname) or touches immutable initialize_params (disk).
-    "russia-01" = {
-      memory    = 4
-      image_id  = "fd8n7dushkonnbvt3lpc"
-      disk_size = 65
-      disk_name = "projects"
-      hostname  = "projects"
-    }
-  }
+  # russia-01 (hostname "projects", the last YC instance) RETIRED 2026-08-19:
+  # apps/netdata-parent/prober moved to russia-03 (Timeweb), journal+env
+  # evacuated, canary stop passed. Empty map keeps the resource block for
+  # future instances.
+  instances = {}
 }
 
 resource "yandex_compute_instance" "this" {
