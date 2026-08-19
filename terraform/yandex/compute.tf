@@ -4,10 +4,6 @@
 # it is huge and externally mutated, so it is adopted as-is rather than managed.
 
 locals {
-  # russia-01 (hostname "projects", the last YC instance) RETIRED 2026-08-19:
-  # apps/netdata-parent/prober moved to russia-03 (Timeweb), journal+env
-  # evacuated, canary stop passed. Empty map keeps the resource block for
-  # future instances.
   instances = {}
 }
 
