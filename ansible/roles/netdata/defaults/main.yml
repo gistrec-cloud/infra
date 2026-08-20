@@ -48,8 +48,23 @@ netdata_httpcheck_jobs: []
 # backup scripts touch a `.last-success` marker). Entries: { name, path }.
 netdata_filecheck_files: []
 
-# Custom health.d alarm files (empty list = nothing copied). Paths relative to
-# the playbook dir; each file lands in /etc/netdata/health.d/<basename>.
+# go.d ping jobs (empty list = file untouched) — link-quality probes: RTT /
+# jitter / packet-loss charts per pinged host. Probe each peer on BOTH paths,
+# the wg tunnel IP (what replication and the tg proxy experience) and the
+# public IP: same physical route, but DPI treats WireGuard UDP and clean ICMP
+# differently — a diverging pair means "the tunnel is throttled, not the
+# route". Job-name prefixes are load-bearing (health.d alarms match on
+# _collect_job): link_* on the parent, uplink_* on the reverse-watch host —
+# distinct prefixes for the same no-double-notify reason as health_*/watch_*.
+#   name:         collector job name
+#   host:         IP/hostname to ping
+#   update_every: seconds between probe rounds, default 5
+netdata_ping_jobs: []
+
+# Custom health.d alarm files (empty list = nothing copied). Entries: a path
+# relative to the playbook dir (lands in /etc/netdata/health.d/<basename>) or
+# { src, dest } — a dest named after a stock health.d file shadows the stock
+# copy (how fleet thresholds replace stock ping/mysql alarms without dupes).
 netdata_health_files: []
 
 # Metrics streaming (parent/child). The shared API key (a UUID) comes from the
