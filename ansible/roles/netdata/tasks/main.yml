@@ -161,6 +161,29 @@
   notify: Restart netdata
   when: netdata_httpcheck_jobs | length > 0
 
+# Link-quality probes (RTT / jitter / packet loss per pinged host). ICMP needs
+# no setup: the deb grants go.d.plugin cap_net_raw, and the firewall role
+# accepts icmp fleet-wide. go.d re-reads job configs only at startup.
+- name: Configure go.d ping probes (link quality)
+  ansible.builtin.template:
+    src: ping.conf.j2
+    dest: /etc/netdata/go.d/ping.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_ping_jobs | length > 0
+
+# no_log: the DSN carries the monitoring user's password.
+- name: Configure go.d mysql (replication monitoring)
+  ansible.builtin.template:
+    src: mysql.conf.j2
+    dest: /etc/netdata/go.d/mysql.conf
+    owner: root
+    group: netdata
+    mode: "0640"
+  no_log: true
+  notify: Restart netdata
+  when: netdata_mysql_jobs | length > 0
+
 # Cert-expiry watchdog for tls-role hosts: reads lineages ON DISK (network
 # checks through the Cloudflare proxy would show the edge cert, not ours).
 # The tls role grants netdata traverse-only ACLs on the lineage dirs; the
@@ -182,12 +205,18 @@
   notify: Restart netdata
   when: netdata_filecheck_files | length > 0
 
+# Entries are either a path (dest = its basename) or { src, dest }. A dest
+# matching a stock health.d filename (ping.conf, mysql.conf) SHADOWS the stock
+# file — netdata's edit-config precedence — which is how per-fleet thresholds
+# replace stock ones instead of duplicating their alarms.
 - name: Install custom health alarm files
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/{{ item }}"
-    dest: "/etc/netdata/health.d/{{ item | basename }}"
+    src: "{{ playbook_dir }}/{{ item.src | default(item, true) }}"
+    dest: "/etc/netdata/health.d/{{ item.dest | default((item.src | default(item, true)) | basename, true) }}"
     mode: "0644"
   loop: "{{ netdata_health_files }}"
+  loop_control:
+    label: "{{ item.src | default(item, true) }}"
   notify: Restart netdata
 
 # alarm-notify.sh re-reads this file on every notification — no restart needed.
