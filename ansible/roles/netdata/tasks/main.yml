@@ -172,18 +172,6 @@
   notify: Restart netdata
   when: netdata_ping_jobs | length > 0
 
-# no_log: the DSN carries the monitoring user's password.
-- name: Configure go.d mysql (replication monitoring)
-  ansible.builtin.template:
-    src: mysql.conf.j2
-    dest: /etc/netdata/go.d/mysql.conf
-    owner: root
-    group: netdata
-    mode: "0640"
-  no_log: true
-  notify: Restart netdata
-  when: netdata_mysql_jobs | length > 0
-
 # Cert-expiry watchdog for tls-role hosts: reads lineages ON DISK (network
 # checks through the Cloudflare proxy would show the edge cert, not ours).
 # The tls role grants netdata traverse-only ACLs on the lineage dirs; the

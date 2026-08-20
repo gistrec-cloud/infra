@@ -61,14 +61,6 @@ netdata_filecheck_files: []
 #   update_every: seconds between probe rounds, default 5
 netdata_ping_jobs: []
 
-# go.d mysql jobs (empty list = file untouched) — replication monitoring on
-# the replica. The monitoring user is created on the PRIMARY (mysql_users)
-# and arrives on replicas via replication; REPLICATION CLIENT unlocks the
-# slave-status charts. The DSN carries its password (vault) → 0640 + no_log.
-#   name: collector job name
-#   dsn:  go-sql-driver DSN, e.g. netdata:pass@tcp(127.0.0.1:3306)/
-netdata_mysql_jobs: []
-
 # Custom health.d alarm files (empty list = nothing copied). Entries: a path
 # relative to the playbook dir (lands in /etc/netdata/health.d/<basename>) or
 # { src, dest } — a dest named after a stock health.d file shadows the stock
