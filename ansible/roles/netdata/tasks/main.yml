@@ -192,6 +192,17 @@
   notify: Restart netdata
   when: netdata_ping_jobs | length > 0
 
+# App /metrics scraping (Prometheus exposition) — value alarms in health.d
+# bind to the prometheus.<job>.* contexts. go.d re-reads job configs only at
+# startup, hence the full restart.
+- name: Configure go.d prometheus scraping (app /metrics)
+  ansible.builtin.template:
+    src: prometheus.conf.j2
+    dest: /etc/netdata/go.d/prometheus.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_prometheus_jobs | length > 0
+
 # Cert-expiry watchdog for tls-role hosts: reads lineages ON DISK (network
 # checks through the Cloudflare proxy would show the edge cert, not ours).
 # The tls role grants netdata traverse-only ACLs on the lineage dirs; the
@@ -216,10 +227,16 @@
 # Entries are either a path (dest = its basename) or { src, dest }. A dest
 # matching a stock health.d filename (ping.conf, mysql.conf) SHADOWS the stock
 # file — netdata's edit-config precedence — which is how per-fleet thresholds
-# replace stock ones instead of duplicating their alarms.
+# replace stock ones instead of duplicating their alarms. { remote: true }
+# entries copy from a path ON THE HOST — app-repo-owned alarm files keep
+# their single source of truth in the app's deployed checkout.
 - name: Install custom health alarm files
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/{{ item.src | default(item, true) }}"
+    src: >-
+      {{ (item.src | default(item, true))
+         if (item.remote | default(false))
+         else playbook_dir ~ '/' ~ (item.src | default(item, true)) }}
+    remote_src: "{{ item.remote | default(false) }}"
     dest: "/etc/netdata/health.d/{{ item.dest | default((item.src | default(item, true)) | basename, true) }}"
     mode: "0644"
   loop: "{{ netdata_health_files }}"
