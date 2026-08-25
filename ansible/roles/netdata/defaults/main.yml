@@ -70,10 +70,21 @@ netdata_filecheck_files: []
 #   update_every: seconds between probe rounds, default 5
 netdata_ping_jobs: []
 
+# go.d prometheus scrape jobs (empty list = file untouched) — app /metrics
+# endpoints in Prometheus exposition format. Netdata auto-charts every
+# scraped series as prometheus.<job>.<metric>; value alarms in health.d
+# bind to those contexts, so job names are load-bearing.
+#   name: collector job name (referenced by health.d alarm `on:` lines)
+#   url:  /metrics endpoint to scrape
+netdata_prometheus_jobs: []
+
 # Custom health.d alarm files (empty list = nothing copied). Entries: a path
 # relative to the playbook dir (lands in /etc/netdata/health.d/<basename>) or
 # { src, dest } — a dest named after a stock health.d file shadows the stock
 # copy (how fleet thresholds replace stock ping/mysql alarms without dupes).
+# { src, remote: true } copies from a path ON THE HOST instead — for alarm
+# files owned by an app repo (single source of truth in the app's checkout;
+# re-run the play after an app deploy that changes them).
 netdata_health_files: []
 
 # Metrics streaming (parent/child). The shared API key (a UUID) comes from the
