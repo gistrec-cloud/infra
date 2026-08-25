@@ -6,6 +6,15 @@ netdata_bind_to: "127.0.0.1"
 # [global] hostname). Empty = keep the machine hostname.
 netdata_hostname: ""
 
+# Self-hosted registry. `announce` is the base URL alarm-notify.sh builds its
+# alert deep-links from AND where dashboards register browser visits; empty =
+# netdata.conf untouched = the public registry.my-netdata.io, which cannot
+# resolve private agents (every Telegram link is a dead end). `enable` turns
+# THIS host into the registry — one per fleet, the parent behind the dashboard
+# vhost: registry-alert-redirect.html resolves machine-guid → URL against it.
+netdata_registry_announce: ""
+netdata_registry_enable: false
+
 # pm2 process-down alerting (empty list = feature off, files untouched).
 # One apps.plugin group per app; health.d/pm2.conf fires CRITICAL when a group
 # has had zero processes for 30s+. Entries are DERIVED from nodeapp_node_apps

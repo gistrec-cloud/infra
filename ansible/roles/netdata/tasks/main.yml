@@ -70,6 +70,26 @@
   notify: Restart netdata
   when: netdata_hostname | length > 0
 
+- name: Announce the fleet registry (alert links + browser registration)
+  community.general.ini_file:
+    path: /etc/netdata/netdata.conf
+    section: registry
+    option: "registry to announce"
+    value: "{{ netdata_registry_announce }}"
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_registry_announce | length > 0
+
+- name: Serve the fleet registry (parent only)
+  community.general.ini_file:
+    path: /etc/netdata/netdata.conf
+    section: registry
+    option: enabled
+    value: "yes"
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_registry_enable
+
 # no_log: the rendered config carries the streaming API key.
 - name: Configure metrics streaming (parent/child)
   ansible.builtin.template:
