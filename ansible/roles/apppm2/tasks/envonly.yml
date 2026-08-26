@@ -26,14 +26,16 @@
   loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
 
 - name: Env files from 1Password — {{ apppm2_app.key }}
-  ansible.builtin.copy:
-    content: >-
+  vars:
+    apppm2_env_doc: >-
       {{ lookup('ansible.builtin.pipe',
                 'op document get ' ~
                 ('dotenv ' ~ apppm2_app.key ~
                  ('' if item.item == '.env' else '-' ~
                   (item.item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
-                | quote ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
+                | quote ~ ' --vault "Gistrec Cloud"') }}
+  ansible.builtin.copy:
+    content: "{{ apppm2_env_doc }}\n"
     dest: "{{ apppm2_dir }}/{{ item.item }}"
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"

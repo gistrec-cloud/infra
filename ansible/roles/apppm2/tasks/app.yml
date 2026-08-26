@@ -118,6 +118,9 @@
 # .env -> "dotenv <app>"; .env.en -> "dotenv <app>-en"; prod.env -> "dotenv <app>-prod"
 # The pipe lookup strips trailing newlines — put exactly one back, or every
 # host file (ending with \n, as text files do) reports a permanent diff.
+# The newline must sit in a double-quoted YAML scalar: inside the folded `>-`
+# block below it would be the two literal characters \ and n, which land in
+# the file and corrupt the last variable's value (gistrec-cloud-bot, 2026-08-26).
 #
 # Restore-only: every op lookup runs in its own forked worker, which 1Password
 # treats as a NEW client — one Touch ID per file, on every converge. Secrets
@@ -132,14 +135,16 @@
   loop: "{{ apppm2_app.value.env if apppm2_app.value.env is defined else ['.env'] }}"
 
 - name: Env files from 1Password — {{ apppm2_app.key }}
-  ansible.builtin.copy:
-    content: >-
+  vars:
+    apppm2_env_doc: >-
       {{ lookup('ansible.builtin.pipe',
                 'op document get ' ~
                 ('dotenv ' ~ apppm2_app.key ~
                  ('' if item.item == '.env' else '-' ~
                   (item.item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
-                | quote ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
+                | quote ~ ' --vault "Gistrec Cloud"') }}
+  ansible.builtin.copy:
+    content: "{{ apppm2_env_doc }}\n"
     dest: "{{ apppm2_dir }}/{{ item.item }}"
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
@@ -162,11 +167,13 @@
   when: apppm2_app.value.auth_users | default(false)
 
 - name: Auth-users from 1Password — {{ apppm2_app.key }}
-  ansible.builtin.copy:
-    content: >-
+  vars:
+    apppm2_authusers_doc: >-
       {{ lookup('ansible.builtin.pipe',
                 'op document get ' ~ ('auth-users ' ~ apppm2_app.key) | quote
-                ~ ' --vault "Gistrec Cloud"') ~ '\n' }}
+                ~ ' --vault "Gistrec Cloud"') }}
+  ansible.builtin.copy:
+    content: "{{ apppm2_authusers_doc }}\n"
     dest: "{{ apppm2_dir }}/auth-users"
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
