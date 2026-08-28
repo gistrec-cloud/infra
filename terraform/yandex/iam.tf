@@ -3,6 +3,8 @@
 # `..._iam_binding`/`..._iam_policy`, which would delete any binding not listed here.
 # Service-account grants reference the adopted SAs; personal userAccount grants take
 # their ids from a gitignored variable.
+# glucose-bot gets storage.editor, not storage.uploader: it deletes the photos of a
+# cancelled draft, and uploader can only write — the delete would fail silently.
 
 locals {
   # role → service-account (logical key in service_accounts.tf)
@@ -11,6 +13,7 @@ locals {
     "search-api.webSearch.user|wordstat"         = { role = "search-api.webSearch.user", sa = "wordstat" }
     "storage.editor|clear-transcript-bot"        = { role = "storage.editor", sa = "clear-transcript-bot" }
     "ai.speechkit-stt.user|clear-transcript-bot" = { role = "ai.speechkit-stt.user", sa = "clear-transcript-bot" }
+    "storage.editor|glucose-bot"                 = { role = "storage.editor", sa = "glucose-bot" }
     "storage.admin|recepter-s3"                  = { role = "storage.admin", sa = "recepter-s3" }
     "storage.editor|aleksandravoo"               = { role = "storage.editor", sa = "aleksandravoo" }
     "monitoring.admin|recepter-monitoring"       = { role = "monitoring.admin", sa = "recepter-monitoring" }
