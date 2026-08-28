@@ -11,6 +11,7 @@ locals {
     "aleksandravoo"        = { description = null, labels = { project = "aleksandravoo" } }
     "clear-transcript-bot" = { description = "Storage + SpeechKit", labels = null }
     "dnd-crime"            = { description = null, labels = null }
+    "glucose-bot"          = { description = "Storage", labels = { project = "glucose-bot" } }
     "wordstat"             = { description = null, labels = null }
     "mysql-backup"         = { description = "MySQL off-site backup uploader (write-only)", labels = { role = "mysql-backup" } }
     "recepter"             = { description = null, labels = null }
