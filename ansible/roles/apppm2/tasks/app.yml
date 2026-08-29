@@ -33,6 +33,50 @@
     - apppm2_app.value.repo is defined
     - not (apppm2_code.stat.exists | default(true))
 
+# Updating a checkout is opt-in AND per app. A converge that silently
+# fast-forwarded every clone app would ship whatever sits on each default
+# branch tip — reviewed or not — across the whole fleet, which is why the
+# clone above is a one-shot. Naming the app makes the deploy a decision:
+#   -e apppm2_code_refresh=glucose-bot
+#   -e apppm2_code_refresh=glucose-bot,askads-ru
+- name: Check for a git checkout — {{ apppm2_app.key }}
+  ansible.builtin.stat:
+    path: "{{ apppm2_home }}/{{ apppm2_app.value.process.repo_dir | default(apppm2_app.value.dir) }}/.git"
+  register: apppm2_git
+  when:
+    - apppm2_app.value.process.type == 'clone'
+    - apppm2_app.key in (apppm2_code_refresh | default('')).split(',')
+
+# Named an app that is an rsync copy without .git (aleksandravoo,
+# budget-explorer)? Say so, rather than letting the git module fail obscurely.
+- name: Refuse to refresh a checkout that is not a git clone — {{ apppm2_app.key }}
+  ansible.builtin.fail:
+    msg: >-
+      {{ apppm2_app.key }}: asked to refresh the code, but there is no .git —
+      this deployment is an rsync copy or a CI artifact, and its updates are
+      owned by whatever put it there.
+  when:
+    - apppm2_app.value.process.type == 'clone'
+    - apppm2_app.key in (apppm2_code_refresh | default('')).split(',')
+    - not (apppm2_git.stat.exists | default(false))
+
+# force: false (the default) on purpose — local edits on the host are somebody
+# mid-debug, and discarding them silently is worse than a failed converge.
+- name: Update the repository — {{ apppm2_app.key }} # noqa: latest
+  ansible.builtin.git:
+    repo: "git@github.com:{{ apppm2_app.value.repo }}.git"
+    dest: "{{ apppm2_home }}/{{ apppm2_app.value.process.repo_dir | default(apppm2_app.value.dir) }}"
+    update: true
+    accept_newhostkey: true
+  become: true
+  become_user: "{{ admin_user }}"
+  register: apppm2_pull
+  when:
+    - apppm2_app.value.process.type == 'clone'
+    - apppm2_app.value.repo is defined
+    - apppm2_app.key in (apppm2_code_refresh | default('')).split(',')
+    - apppm2_git.stat.exists | default(false)
+
 - name: Application directory for CI artifacts — {{ apppm2_app.key }}
   ansible.builtin.file:
     path: "{{ apppm2_dir }}"
@@ -65,10 +109,25 @@
   when: apppm2_app.value.process.runtime | default('') == 'python'
 
 # Marker, not `venv is changed`: one failed pip otherwise skips the install forever.
-- name: Check the venv install marker — {{ apppm2_app.key }}
+# The marker holds the sha256 of requirements.txt rather than just existing: a
+# bare marker made a CHANGED requirements.txt invisible, so adding a dependency
+# deployed an app that could not import it (GlucoseBot, anthropic, 2026-08).
+# Content keeps the original property too — a failed pip writes no marker, so
+# the install is retried rather than skipped forever.
+- name: Hash the requirements — {{ apppm2_app.key }}
   ansible.builtin.stat:
-    path: "{{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}/.pip-ok"
+    path: "{{ apppm2_dir }}/requirements.txt"
+    checksum_algorithm: sha256
+  register: apppm2_reqs
+  when: apppm2_app.value.process.runtime | default('') == 'python'
+
+# Absent marker = never installed; failed_when: false keeps that from being an
+# error, and the default('') below reads it as "nothing installed yet".
+- name: Read the venv install marker — {{ apppm2_app.key }}
+  ansible.builtin.slurp:
+    src: "{{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}/.pip-ok"
   register: apppm2_pip_ok
+  failed_when: false
   when: apppm2_app.value.process.runtime | default('') == 'python'
 
 - name: Pip install requirements — {{ apppm2_app.key }}
@@ -81,12 +140,14 @@
   register: apppm2_pip
   when:
     - apppm2_app.value.process.runtime | default('') == 'python'
-    - apppm2_venv is changed or not apppm2_pip_ok.stat.exists
+    - apppm2_venv is changed
+      or (apppm2_pip_ok.content | default('') | b64decode | trim)
+         != (apppm2_reqs.stat.checksum | default(''))
 
 - name: Mark the venv installed — {{ apppm2_app.key }}
-  ansible.builtin.file:
-    path: "{{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}/.pip-ok"
-    state: touch
+  ansible.builtin.copy:
+    dest: "{{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}/.pip-ok"
+    content: "{{ apppm2_reqs.stat.checksum | default('') }}\n"
     mode: "0644"
   become: true
   become_user: "{{ admin_user }}"
@@ -267,6 +328,27 @@
     - apppm2_app.value.process.pm2 | default([]) | length > 0
     - apppm2_eco.stat.exists | default(false)
     - apppm2_missing | length > 0
+  notify: Save pm2 process list
+
+# The task above only starts what is MISSING, so a process that is already
+# running keeps its old code in memory: a pulled repo and a reinstalled venv
+# would sit on disk unused until somebody restarted it by hand. Reload exactly
+# when something it runs actually changed — not on every converge, which would
+# bounce every app on the host for nothing.
+- name: Reload pm2 after a code or dependency change — {{ apppm2_app.key }}
+  ansible.builtin.command:
+    cmd: >-
+      pm2 startOrReload {{ apppm2_app.value.process.ecosystem | default('ecosystem.config.js') }}
+      --only {{ apppm2_app.value.process.pm2 | join(',') }}
+    chdir: "{{ apppm2_dir }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  changed_when: true
+  when:
+    - apppm2_app.value.process.pm2 | default([]) | length > 0
+    - apppm2_eco.stat.exists | default(false)
+    - (apppm2_pull is defined and apppm2_pull is changed)
+      or (apppm2_pip is defined and apppm2_pip is changed)
   notify: Save pm2 process list
 
 - name: Warn when pm2 apps are declared without an ecosystem file — {{ apppm2_app.key }}
