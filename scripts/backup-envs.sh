@@ -6,8 +6,8 @@
 # hosts themselves are only audited for env-looking files that are NOT
 # registered (drift = warning + non-zero exit).
 #
-# Idempotent: re-run after any secret change — items are updated in place,
-# keeping item history.
+# Idempotent: re-run after any secret change — changed items are updated in
+# place (keeping item history), unchanged ones are skipped.
 #
 # Usage:
 #   scripts/backup-envs.sh            # everything in apps.yml
@@ -163,6 +163,16 @@ while IFS=$'\t' read -r app host rel; do
     continue
   fi
   id="$ids" # one item id, or empty when the Document doesn't exist yet
+
+  # 1P already holds these exact bytes — skip the re-upload (no version churn);
+  # a failed get falls through to a normal re-upload.
+  if [ -n "$id" ]; then
+    stored=$(op document get "$id" --vault "$VAULT" | shasum -a 256 | cut -d' ' -f1) || stored=""
+    if [ "$stored" = "$want" ]; then
+      echo "OK   $title (unchanged, sha256 verified)"
+      continue
+    fi
+  fi
 
   if ! "${sshc[@]}" "cat \"\$HOME/$rel\"" > "$TMP"; then
     echo "FAIL $title — ssh dropped while downloading ~/$rel from $host" >&2
