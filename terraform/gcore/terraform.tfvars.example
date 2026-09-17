@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored). Токен сюда НЕ кладётся — он приезжает
+# из окружения как TF_VAR_gcore_permanent_api_token (.envrc → 1Password).
+
+host_ips = {
+  "finland-01" = "203.0.113.10"
+  "russia-03"  = "198.51.100.20"
+}
