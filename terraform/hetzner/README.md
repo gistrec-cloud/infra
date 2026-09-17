@@ -1,7 +1,8 @@
 # terraform/hetzner — Hetzner Cloud
 
-Adopts the existing `finland-01` server into Terraform. This is an independent
-root module with its own state and blast radius.
+Manages `finland-01`, the fleet's only Hetzner server — adopted from the cloud,
+not created here. An independent root module with its own state and blast
+radius; provider `hetznercloud/hcloud ~> 1.66`.
 
 ## Existing server
 
@@ -11,53 +12,30 @@ root module with its own state and blast radius.
 
 ## Authentication
 
-Create a Hetzner Cloud API token for the project and expose it without writing
-the value to the repository:
+The project API token lives in 1Password; the gitignored root `.envrc` exports
+it via direnv:
 
 ```bash
-export HCLOUD_TOKEN="$(op read 'op://Gistrec Cloud/hetzner-cloud/credential')"
+export HCLOUD_TOKEN="$(op read 'op://Gistrec Cloud/hetzner-token/password')"
 ```
 
-The item/field path above is the expected convention; adjust it if the
-1Password item uses another name. The provider reads `HCLOUD_TOKEN` directly.
+The provider reads `HCLOUD_TOKEN` directly — the module takes no variables, so
+there is no `terraform.tfvars`.
 
-## Safe adoption
+## Adoption — done
 
-The server already exists. Never run a normal `apply` before the generated
-configuration has been reconciled with the live resource.
+The server was imported, not created: it has been in state since `a7e9758`
+(2026-07-16), the tracked `server.tf` is its configuration, and `terraform plan`
+reports `No changes`. Anything else means the config drifted from the live
+server — fix the config, never apply blindly.
 
-```bash
-cd terraform/hetzner
-terraform init
-
-cat > import.tf <<'EOF'
-import {
-  to = hcloud_server.finland_01
-  id = "151586283"
-}
-EOF
-
-terraform plan -generate-config-out=generated.tf
-```
-
-Both `import.tf` and `generated.tf` are gitignored. Review the generated server
-resource, move the intentional settings into a tracked `server.tf`, and add:
-
-```hcl
-lifecycle {
-  prevent_destroy = true
-  ignore_changes  = [ssh_keys, user_data]
-}
-```
-
-`ssh_keys` and cloud-init data are creation-time bootstrap inputs; changing the
-former can propose server replacement. Iterate until the plan is strictly:
-
-```text
-1 to import, 0 to add, 0 to change, 0 to destroy
-```
-
-Only then apply the import and verify the next plan says `No changes`.
+`finland-01` is protected twice over: `delete_protection` / `rebuild_protection`
+on the Hetzner side (added in `7c66129`; these also block deletion from the
+console) and `prevent_destroy` on the Terraform side. `ssh_keys` and `user_data`
+sit under `ignore_changes` — they were creation-time bootstrap inputs only
+(Ansible owns the in-guest SSH configuration now) and changing them can propose
+server replacement. Import the *next* Hetzner resource that turns up the same
+way — the generic `import {}` recipe is in [`../IMPORT.md`](../IMPORT.md).
 
 Provider authentication and server import behavior are documented in the
 [hcloud provider](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs)

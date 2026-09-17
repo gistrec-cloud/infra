@@ -4,8 +4,8 @@
 
 Infrastructure as code for the **gistrec-cloud** fleet.
 
-- **Ansible** configures what lives *inside* the servers — base hardening, firewall, nginx, registry-driven apps (pm2 / static / docker / cron), monitoring.
-- **Terraform** manages cloud resources — DNS (Cloudflare), AWS Lambda, and Yandex Cloud (Object Storage, Managed MySQL, Compute, Cloud Functions).
+- **Ansible** configures what lives *inside* the servers — base hardening, firewall, nginx, registry-driven apps (pm2 / static / docker / cron), self-hosted databases, monitoring.
+- **Terraform** manages cloud resources — DNS (Cloudflare + Porkbun), AWS Lambda, the Hetzner and Timeweb servers, and Yandex Cloud (Object Storage, Cloud Functions, IAM/Lockbox).
 
 The repository is deliberately split into **code** (public, here) and **live data** (private, never committed): real inventory, IPs, tokens and state stay out of git. Everything you see here uses placeholders — copy the `*.example` files, fill them locally, and they are already covered by `.gitignore`.
 
@@ -13,8 +13,8 @@ The repository is deliberately split into **code** (public, here) and **live dat
 
 ```
    registrar (reg.ru / godaddy)          ┌──────────────┐
-   nameservers delegated to  ──────────► │  Cloudflare  │   DNS as code
-                                         │     DNS      │   (terraform/)
+   nameservers delegated to  ──────────► │  Cloudflare  │   DNS as code (terraform/dns —
+                                         │     DNS      │   Cloudflare + Porkbun zones)
                                          └──────┬───────┘
                                                 │  A / CNAME
                     ┌───────────────────────────┼─────────────────────────────┐
@@ -31,9 +31,10 @@ The repository is deliberately split into **code** (public, here) and **live dat
                                   │  app SQL
                                   ▼
                         ┌───────────────────┐
-                        │   Managed MySQL   │   Yandex Cloud (terraform/yandex) — planned move
-                        │  (Yandex Cloud)   │   to the self-hosted mysql role (Docker,
-                        └───────────────────┘   GTID primary/replica over the wg0 mesh)
+                        │   MySQL 8.0       │   ansible/roles/mysql — GTID primary in Docker on
+                        │  (self-hosted)    │   finland-01, promotable replica on russia-03,
+                        └───────────────────┘   replication over wg0; 3306 public (TLS + auth)
+                                                — managed Yandex cluster destroyed 2026-07-21
 ```
 
 ## Layout
@@ -46,8 +47,9 @@ infra/
 │   ├── site.yml                  # wires roles to host groups
 │   ├── apps.yml                  # (gitignored) deployed-apps registry — what runs where
 │   ├── inventory/hosts.yml       # (gitignored) real hosts — copy from .example
-│   ├── group_vars/               # non-secret defaults + vault for secrets
+│   ├── group_vars/               # non-secret defaults + vault; db.yml (gitignored) = MySQL registry
 │   ├── host_vars/                # per-host knobs (opt-in roles, wg IPs, …)
+│   ├── files/                    # netdata alarms + (gitignored) vhosts, CI control scripts
 │   └── roles/
 │       ├── common/               # users, SSH hardening, base packages
 │       ├── firewall/             # nftables + fail2ban
@@ -65,24 +67,28 @@ infra/
 │       ├── wireguard/            # private encrypted mesh between fleet hosts
 │       ├── chrony/               # opt-in time sync
 │       ├── breakglass/           # emergency rescue user, keys outside home dirs
+│       ├── clickhouse/           # self-hosted ClickHouse (Docker), TLS ports + S3 backups
 │       └── mysql/                # self-hosted MySQL (Docker), primary/replica
-├── terraform/                    # cloud resources as code (one root module per provider)
-│   ├── dns/                      # Cloudflare DNS records (host_ips: fleet IPs live once)
-│   ├── aws/                      # Lambda functions + Function URLs
+├── terraform/                    # cloud resources as code (independent root modules, one state each)
+│   ├── dns/                      # Cloudflare + Porkbun DNS records (host_ips: fleet IPs live once)
+│   ├── aws/                      # Lambda functions + Function URLs + IAM/EventBridge schedule
 │   ├── hetzner/                  # Hetzner Cloud server (finland-01)
 │   ├── timeweb/                  # Timeweb Cloud server (russia-03) + floating IPv4
-│   └── yandex/                   # Object Storage, Managed MySQL, Compute, Cloud Function
-└── docs/runbooks/                # operational procedures (move-apps, break-glass)
+│   ├── yandex/                   # Object Storage, Cloud Function, IAM/Lockbox
+│   ├── yandex-budget-explorer/   # own YC folder: Cloud Functions + Lockbox + timer trigger
+│   └── yandex-vk-ads-tool/       # own YC folder: Object Storage (landing bucket)
+├── docs/runbooks/                # operational procedures (move-apps, break-glass)
+└── scripts/                      # backup + migration helpers (backup-envs, move-apps)
 ```
 
 ## Roles
 
 | Role       | What it does                                                            |
 |------------|-------------------------------------------------------------------------|
-| `common`   | Admin user, SSH key auth + sshd hardening, base packages, timezone      |
-| `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth)  |
+| `common`   | Admin user, SSH key auth + sshd hardening, base packages, system hostname (`common_hostname`) |
+| `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth, nginx-honeypot on web hosts) |
 | `nginx`    | Install nginx, reconcile vhosts from the apps registry                  |
-| `tls`      | Per-zone wildcard Let's Encrypt certs via DNS-01 (Cloudflare) — any host can serve any domain |
+| `tls`      | Per-zone wildcard Let's Encrypt certs via DNS-01 (Cloudflare, plus vendored hooks for Porkbun-hosted zones) — any host can serve any domain |
 | `nodeapp`  | Early Node.js/pm2 runtime bootstrap; legacy host-vars apps deploy later |
 | `apppm2`   | Reconcile registry PM2 apps: bootstrap desired names, delete previously managed stale names |
 | `appstatic`| Registry-driven static bundles — built on fresh hosts, served by vhosts |
@@ -91,10 +97,11 @@ infra/
 | `registry_manifest` | Internal helper shared by registry roles to load and persist ownership boundaries |
 | `docker_runtime` | Internal Docker Engine and Compose bootstrap shared by container roles |
 | `container_tls` | Internal container-readable TLS lifecycle primitives |
-| `netdata`  | Install netdata, bind to localhost, Telegram alert when a pm2 app dies  |
+| `netdata`  | Install netdata, bind to localhost, child→parent streaming, Telegram/Pushover alarms |
 | `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
 | `chrony`   | Opt-in time sync: chrony replaces systemd-timesyncd (clock-stepping hypervisors) |
 | `breakglass`| Emergency `rescue` user (YubiKey keys in root-owned `/etc/ssh/rescue_keys`) — survives home wipes |
+| `clickhouse` | Self-hosted ClickHouse in Docker; public TLS ports (9440/8443), nightly dumps + off-site S3 |
 | `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
 
 ## App registry & moves

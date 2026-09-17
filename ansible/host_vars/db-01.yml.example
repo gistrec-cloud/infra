@@ -1,5 +1,5 @@
 ---
-# Copy to db-01.yml (gitignored). db-01 = MySQL PRIMARY (e.g. russia-01).
+# Copy to db-01.yml (gitignored). db-01 = MySQL PRIMARY (e.g. finland-01).
 # Merge with any web/nodeapp vars if the host also serves apps.
 
 # ─── WireGuard mesh ───

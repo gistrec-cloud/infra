@@ -12,6 +12,9 @@ ansible/apps.yml
 # but 3306 is public, so a list of valid logins is free recon (keep only *.example)
 ansible/group_vars/db.yml
 
+# Remote-state backend config (bucket + key names are data, not code)
+terraform/*/backend.tf
+
 # Real nginx vhosts (verbatim server blocks with real domains; keep only *.example)
 ansible/files/vhosts/*.conf
 

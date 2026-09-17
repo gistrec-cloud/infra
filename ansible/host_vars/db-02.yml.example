@@ -1,6 +1,6 @@
 ---
 # Copy to db-02.yml (gitignored). db-02 = MySQL REPLICA / promotable standby
-# (e.g. germany-01). It pulls all data from the primary over WireGuard.
+# (e.g. russia-03). It pulls all data from the primary over WireGuard.
 
 # ─── WireGuard mesh ───
 wireguard_ip: 10.10.0.2

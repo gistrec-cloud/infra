@@ -14,17 +14,18 @@ primary); the data is a small derived stats set (`stats_daily` ≈ 24k rows).
   (native-secure **9440**, HTTPS **8443**) carry the public endpoint, presenting
   the `*.clickhouse.<zone>` LE cert (copied into a container-readable dir, hot
   re-copied + `SYSTEM RELOAD CONFIG`'d by a certbot renewal hook).
-- Users are declared in `users.d` (hot-reloaded); the vault plaintext is hashed to
+- Users are declared in `users.d`; the vault plaintext is hashed to
   `password_sha256_hex` on the host — the clear value never lands on disk.
 - Creates databases idempotently (`CREATE DATABASE IF NOT EXISTS`). Table DDL and
   data belong to the app / the data migration, not this role.
 - Nightly per-database logical backup (DDL + `Native` data per MergeTree table) →
-  tar.gz, age-encrypted + uploaded off-site, driven by a systemd timer.
+  tar.gz, driven by a systemd timer; age-encrypted + uploaded off-site when
+  `clickhouse_backup_offsite_enabled`.
 
 ## Endpoints
 
 - `primary.clickhouse.<zone>` → the primary's WireGuard IP (fleet apps dial it over
-  the tunnel; e.g. VkAdsTool on russia-01 → `9440`, `CLICKHOUSE_SECURE=true`).
+  the tunnel; e.g. VkAdsTool on russia-03 → `9440`, `CLICKHOUSE_SECURE=true`).
 - `public.clickhouse.<zone>` → the host's public IP, for any off-mesh consumer.
   Both are covered by the `*.clickhouse.<zone>` SAN on the zone's LE lineage.
 
@@ -61,10 +62,11 @@ loopback or a private IP (their wire carries credentials in clear).
 
 ## Migrating data in (dump → load → verify)
 
-`scripts/migrate-clickhouse-data.sh` copies each database's schema + data from a
-source host into this server over SSH + `docker exec`, then verifies row counts.
-Deploy the role first (empty databases + users), then run it. Manual equivalent
-for one table:
+`scripts/migrate-clickhouse-data.sh` did the russia-02 → finland-01 copy (schema +
+data over SSH + `docker exec`, then row-count verification). Its hosts and
+databases are hardcoded and russia-02 is gone (2026-07-21) — for a new move deploy
+the role first (empty databases + users), then edit the script's endpoints. Manual
+equivalent for one table:
 
 ```bash
 # schema (base tables before dependent views):
@@ -78,8 +80,9 @@ ssh SRC "docker exec clickhouse clickhouse-client -q \"SELECT * FROM \\\`db\\\`.
 ## Rotating a password
 
 Users are declared in `users.d` from the vault. Rotate by editing the vault entry
-and re-deploying — the templated `users.d/zz-users.xml` is hot-reloaded (no
-restart). (Unlike MySQL's `IF NOT EXISTS`, a changed hash *is* applied here.)
+and re-deploying — a changed `users.d/zz-users.xml` notifies the recreate handler,
+so the container comes back with the new hash. (Unlike MySQL's `IF NOT EXISTS`, a
+changed hash *is* applied here.)
 
 ## Backups & restore
 

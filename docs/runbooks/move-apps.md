@@ -32,11 +32,11 @@ else derives: `web` membership from the registry, certs from the tls role,
 CI target from the `deploy.*` alias (trusted via accept-new — no CI variables
 to touch, DndCrime#15).
 
-After first deploying the ownership-manifest version of the roles, run one
-normal `site.yml` converge before the next move. That initial run records the
-currently managed PM2 processes and vhosts without deleting anything; later
-runs can then distinguish stale registry objects from hand-managed ones. The
-move script checks these source manifests before changing either config.
+$SRC must have had one normal `site.yml` converge under the ownership-manifest
+roles: that run records the currently managed PM2 processes and vhosts without
+deleting anything, so later runs can distinguish stale registry objects from
+hand-managed ones. The move script checks these source manifests before
+changing either config, and prints the converge command when they are missing.
 
 ## Rollback
 
@@ -48,9 +48,9 @@ passed the public smoke checks.
 ## First use: germany-01 → finland-01 (2026-07)
 
 The specifics on top of the generic procedure (`SRC=germany-01
-DST=finland-01`):
+DST=finland-01`) — a record of that move, not current fleet state:
 
-- **Prerequisite PRs** (merge before Phase 0): this repo — nodeapp
+- **Prerequisite PRs** (merged before the move): this repo — nodeapp
   `nodeapp_install` gate, pm2 boot resurrection, apppm2 python3-venv;
   gistrec/askads — `askads-cloud` ecosystem app on **8078** +
   deploy.sh host parametrization; katrinaver/DndCrime —
@@ -67,21 +67,19 @@ DST=finland-01`):
   10.10.0.4.
 - **Smoke domains**: askads.cloud, mcp.askads.cloud,
   dnd-crime.gistrec.cloud, dnd-crime-staging.gistrec.cloud — all
-  Cloudflare-proxied, so the DNS flip is instant.
+  Cloudflare-proxied back then, so that flip was instant. Nothing in
+  the fleet is proxied since 2026-09-17: a flip now converges at the
+  record's TTL (`ttl = 1` = CF automatic), and `smoke-public` waits up
+  to ~10 min for it.
 - **External pointers** (DndCrime):
 
-  DEPLOY_HOST is permanently `deploy.dnd-crime.gistrec.cloud` (grey
-  CNAME in `terraform/dns`) — a move flips only that CNAME. The
-  hostkey needs a per-move refresh; pipe WITHOUT `--body` (`--body -`
-  stores a literal dash):
-
-  ```sh
-  ssh-keyscan -t ed25519 deploy.dnd-crime.gistrec.cloud 2>/dev/null \
-    | gh variable set DEPLOY_HOSTKEY --repo katrinaver/DndCrime
-  ```
-
-  then `gh workflow run` prod + staging. askads: flip the cloud host
-  default in `deploy.sh` — one line.
+  DEPLOY_HOST is permanently `deploy.dnd-crime.gistrec.cloud` (a CNAME
+  in `terraform/dns`) — a move flips only that CNAME, and both deploy
+  workflows take the new host on trust (`StrictHostKeyChecking
+  accept-new`, DndCrime#15), so no CI variable needs touching; the
+  `DEPLOY_HOSTKEY` variable still sitting in that repo is an unused
+  leftover. Then `gh workflow run` prod + staging. askads: flip the
+  cloud host default in `deploy.sh` — one line.
 - **Freeze list** on germany-01: `pm2 stop askads dnd-crime-api
   dnd-crime-api-staging`.
 - **Open questions** (decide separately): `recovery` — two Go
@@ -93,4 +91,5 @@ DST=finland-01`):
   firewall allow-rules dropped (russia-01/russia-02/finland-01), host_vars
   deleted, inventory host + static `web` group removed. germany-02's netdata
   stream was repointed off the germany-01 proxy straight to the russia-01
-  parent first (verified arriving from its 109.122.198.50 source IP).
+  parent first (verified arriving from its 109.122.198.50 source IP); that
+  parent moved to russia-03 when russia-01 was retired 2026-08-19.
