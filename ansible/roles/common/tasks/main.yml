@@ -12,6 +12,32 @@
     update_cache: true
     cache_valid_time: 3600
 
+# Both images ship preserve_hostname: false — without this the rename reverts at reboot.
+- name: Stop cloud-init from re-applying the provider hostname
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-preserve-hostname.cfg
+    content: "preserve_hostname: true\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when: common_hostname | length > 0
+
+# Before the rename: sudo warns "unable to resolve host" on any gap.
+- name: Resolve the new hostname locally
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1 {{ common_hostname }} {{ common_hostname.split('.')[0] }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: common_hostname | length > 0
+
+- name: Set the system hostname
+  ansible.builtin.hostname:
+    name: "{{ common_hostname }}"
+  when: common_hostname | length > 0
+
 - name: Ensure admin user exists
   ansible.builtin.user:
     name: "{{ admin_user }}"
