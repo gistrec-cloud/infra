@@ -1,7 +1,11 @@
 # Adopting existing resources (import)
 
-These modules are written **greenfield** (they create resources from scratch). The cloud resources
-already exist, so adopt them with `terraform import` instead of letting Terraform recreate them.
+Most of what these modules manage already existed in the cloud, so the modules are written to
+**adopt** it (`terraform import` / `import {}` blocks) rather than create it. The recipes below
+record how the AWS and Yandex footprints were adopted, and what to do when a new resource turns up.
+`terraform/hetzner` was adopted the same way (see its README); `terraform/dns` started from
+imported Cloudflare records but creates new ones outright; `terraform/timeweb` is the full
+exception — it created `russia-03` itself.
 
 ## The one rule
 
@@ -9,7 +13,7 @@ already exist, so adopt them with `terraform import` instead of letting Terrafor
 > 0 to destroy`** (beyond the import itself). Any `~` (change) or `-/+` (replace) means your HCL
 > diverges from reality — fix the config first, or Terraform will mutate/recreate live resources.
 
-Work **one resource at a time**, safest-first (compute / function / bucket before the database).
+Work **one resource at a time**, safest-first (bucket / function before a server or a database).
 
 ## Prerequisites
 
@@ -23,6 +27,9 @@ yc config list                    # confirm Yandex auth
 
 ## AWS (`terraform/aws`)
 
+All three live functions (`openai-relay`, `anthropic-relay`, `yandex-rating-counter`) and their
+execution roles are adopted — the recipe below is for the next function that turns up.
+
 ### 1. Discover
 ```bash
 aws lambda list-functions --region eu-central-1 --query 'Functions[].FunctionName' --output text
@@ -30,19 +37,19 @@ aws lambda list-functions --region eu-central-1 --query 'Functions[].FunctionNam
 aws lambda get-function-configuration --function-name <name> --region eu-central-1 --query 'Role'
 ```
 
-### 2. Adjust config for adoption
-The module attaches every function to one shared role. Real functions have their own roles, so
-`plan` will want to change `role`. Before applying, point each function at its **existing** role
-ARN (add a per-function `role` and reference it) — or import those roles too. Do **not** apply a
-role change you did not intend.
+### 2. Point the function at its existing role
+`main.tf` resolves a function's role itself: explicit `role_arn` > the per-function role from
+[`aws/roles.tf`](aws/roles.tf) (matched by function name) > the shared `lambda_exec`, which is
+created only when some function has neither. Give a new function one of the first two and import
+its role too. Do **not** apply a `role` change you did not intend.
 
 ### 3. Import (id = function name)
 ```bash
 cd terraform/aws
 cp terraform.tfvars.example terraform.tfvars   # fill real names/region
 terraform init
-terraform import 'aws_lambda_function.this["openai-relay"]'      openai-relay
-terraform import 'aws_lambda_function_url.this["openai-relay"]'  openai-relay
+terraform import 'aws_lambda_function.this["<name>"]'      <name>
+terraform import 'aws_lambda_function_url.this["<name>"]'  <name>   # only if it has a Function URL
 ```
 
 ### 4. Verify
@@ -60,21 +67,25 @@ module's gitignored `terraform.tfvars`):
 
 | Folder | Module | Resources |
 |--------|--------|-----------|
-| `default` (`b1gyyyyyyyyy-default`) | [`terraform/yandex`](yandex) | 71 |
-| `budget-explorer` (`b1gyyyyyyyyyy-budget`) | [`terraform/yandex-budget-explorer`](yandex-budget-explorer) | 10 at adoption (16 now — IAM grants were TF-created later) |
+| `default` (`b1gyyyyyyyyy-default`) | [`terraform/yandex`](yandex) | 71 at adoption (41 now — MySQL and both VMs destroyed; glucose-bot and the `realm-status` deploy added) |
+| `budget-explorer` (`b1gyyyyyyyyyy-budget`) | [`terraform/yandex-budget-explorer`](yandex-budget-explorer) | 10 at adoption (20 now — IAM grants and the Anthropic-relay secrets were TF-created later) |
 | `vk-ads-tool` (`b1gyyyyyyyyyyy-vkads`) | [`terraform/yandex-vk-ads-tool`](yandex-vk-ads-tool) | 1 |
 
-Apps are split across folders (e.g. `budget-explorer`/`vk-ads-tool` data lives in the shared
-MySQL cluster in `default`, their functions/buckets in their own folders). The recipe below
-documents the `default` folder; the two sibling modules were adopted the same way.
+Apps are split across folders: `budget-explorer`/`vk-ads-tool` keep their own functions and buckets,
+everything else sits in `default`. Relational data is no longer in this cloud at all — the shared
+managed MySQL cluster in `default` was destroyed 2026-07-21 once every database had moved to the
+self-hosted primary on finland-01 (see the tombstone in [`yandex/mysql.tf`](yandex/mysql.tf)). The
+recipe below documents the `default` folder; the two sibling modules were adopted the same way.
 
 ## `terraform/yandex` (default folder) — DONE ✅
 
-The Yandex footprint has already been adopted: **71 resources** (8 service accounts, 3 Lockbox
-secrets, 1 MySQL cluster + 15 databases + 18 users, 5 buckets, 2 compute instances, 18 folder IAM
-bindings, 1 Cloud Function) are in state and `terraform plan` reports `No changes`. The module was
-rewritten from the greenfield single-app shape into `for_each` maps over a `locals` inventory — see
-[`yandex/README.md`](yandex/README.md).
+The Yandex footprint has already been adopted: **41 resources** (11 service accounts, 3 Lockbox
+secrets + 3 secret IAM members, 6 buckets + 1 bucket IAM binding, 14 folder IAM grants, 1 Cloud
+Function + its trigger and IAM binding) are in state and `terraform plan` reports `No changes`.
+Adoption covered **71**: the managed MySQL cluster (1 cluster + 15 databases + 18 users) was
+destroyed 2026-07-21, and both compute instances went with russia-02 (2026-07-21) and russia-01
+(2026-08-19). The module was rewritten from the greenfield single-app shape into `for_each` maps
+over a `locals` inventory — see [`yandex/README.md`](yandex/README.md).
 
 ### How it was done (reproducible recipe)
 
@@ -92,17 +103,19 @@ rewritten from the greenfield single-app shape into `for_each` maps over a `loca
    `import.tf` using `for_each` import blocks keyed to match the resources.
 4. **Adopt** — never apply until the plan is import-only:
    ```bash
-   terraform plan     # must read: "52 to import, 0 to add, 0 to change, 0 to destroy"
+   terraform plan     # must read: "<N> to import, 0 to add, 0 to change, 0 to destroy"
    terraform apply    # imports into state; makes NO cloud changes when 0 to change
    terraform plan     # verify: No changes
    ```
 
 ### Adoption decisions worth knowing
 
-- **MySQL users** carry `lifecycle { ignore_changes = [password] }` + a placeholder password —
-  without it the first `apply` rotates all 18 production passwords.
+- **MySQL users** — while the managed cluster existed — carried `lifecycle { ignore_changes =
+  [password] }` + a placeholder password; without it the first `apply` would have rotated all 18
+  production passwords.
 - **Compute** uses `ignore_changes = [metadata]` (metadata is huge and `private_ui_modified_at`
-  changes whenever the VM is opened in the console).
+  changes whenever the VM is opened in the console). The `instances` map is empty since russia-01
+  was destroyed 2026-08-19; the block stays for the next VM.
 - **Buckets** use `ignore_changes = [lifecycle_rule, logging]` (managed over the S3 API).
 - **Folder IAM** uses additive `yandex_resourcemanager_folder_iam_member` (one role↔member each),
   **not** the authoritative `_iam_binding`/`_iam_policy` that would delete any grant not in config.

@@ -32,8 +32,12 @@ terraform apply
   `cloudflare_zone_ids`). A `validation` block rejects `proxied = true` on record
   types Cloudflare cannot proxy, and MX records are supported via the optional
   `priority` field.
+- `proxied` still works, but no record sets it: since 2026-09-17 the whole fleet
+  is grey (CF's edge degrades from RF and, for the EU hosts, only adds a foreign
+  hop in front of an already foreign origin). Side effect: the fail2ban → CF IP
+  Access Rules arm is dead weight — bans are held by nftables on the real IPs.
 - Fleet IPs live once, in the `host_ips` map; A records point at a host by name
-  (`host = "russia-01"`) instead of a literal `content` IP. Moving an app to
+  (`host = "russia-03"`) instead of a literal `content` IP. Moving an app to
   another VPS is flipping `host` on its records; replacing a VPS behind the same
   name is editing one `host_ips` entry. Off-fleet targets keep literal `content`.
 - A/AAAA/CNAME records are keyed by `zone:type:name`, so a `host`/content flip

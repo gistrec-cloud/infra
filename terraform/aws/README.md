@@ -1,13 +1,16 @@
 # terraform/aws — Lambda functions
 
-Manages AWS Lambda functions (configuration only — application code ships via a separate S3 artifact
-pipeline, so no `.zip` lives in this repo or in state). Provider `hashicorp/aws ~> 6.0`.
+Manages the Lambda footprint: three functions (`openai-relay`, `anthropic-relay`,
+`yandex-rating-counter`), the two public Function URLs, the per-function IAM roles and customer-managed
+policies (`roles.tf`) and the hourly EventBridge Scheduler timer (`schedules.tf`). Configuration only —
+application code ships via a separate S3 artifact pipeline, so no `.zip` lives in this repo or in
+state. Provider `hashicorp/aws ~> 6.0`.
 
 ## Usage
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars      # gitignored
-export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
+aws login                                         # session creds; `direnv reload` re-exports them
 terraform init && terraform plan
 ```
 
@@ -19,12 +22,14 @@ endpoint** — anyone who learns it can invoke the function (and run up your bil
 enforce auth inside the function (or front it with CloudFront/WAF), and never publish the URL — the
 `function_urls` output is marked `sensitive`.
 
-## Adopting the existing functions
+## Adoption — done
 
-The relays already exist — import instead of recreating (import id = function name):
+Everything above was imported, not created: the three functions, their URLs, roles, policies and the
+scheduler have been in state since 2026-07-14 (PR #5). One committed change is still unapplied —
+`roles.tf` scopes the `lambda-yandex-rating-counter` policy down from `lambda:*` to
+`lambda:InvokeFunction` (PR #48, 2026-07-20) — so `terraform plan` shows that one policy update in
+place and nothing else.
 
-```bash
-terraform import 'aws_lambda_function.this["openai-relay"]' openai-relay
-```
-
-Iterate the config until `terraform plan` shows no changes, then Terraform owns them as code.
+Import the *next* function that turns up the same way (id = function name) — recipe in
+[`../IMPORT.md`](../IMPORT.md); `main.tf` resolves its role itself, so never apply a `role` change you
+did not intend.

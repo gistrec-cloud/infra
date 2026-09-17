@@ -20,18 +20,19 @@ The path shares fate with nothing:
 On any trusted machine. macOS note: the system ssh lacks security-key
 support — use Homebrew OpenSSH. On the laptop the key stub already
 exists as `~/.ssh/breakglass_sk`; on a fresh machine re-derive it from
-the YubiKey first:
+the YubiKey first and move the new stub to that path:
 
 ```sh
-ssh-keygen -K                        # asks the YubiKey PIN, writes id_*_rk* stubs
+ssh-keygen -K                        # YubiKey PIN; writes id_*_rk* stubs into $PWD
 ssh -i ~/.ssh/breakglass_sk \
     -o IdentityAgent=none -o IdentitiesOnly=yes \
     rescue@<host>.vps.gistrec.cloud  # touch the key when it blinks
 sudo -i                              # no password
 ```
 
-Last resort if sshd itself is dead: the provider console (Hetzner /
-Yandex Cloud / the germany panels) — independent of everything above.
+Last resort if sshd itself is dead: the provider console (Hetzner
+for finland-01, Timeweb Cloud for russia-03; germany-02 is not ours,
+so its console is the owner's) — independent of everything above.
 
 ## Provisioning
 
@@ -49,7 +50,8 @@ control.
 
 - **Quarterly test**: log in as `rescue` on one host with the YubiKey
   and run `sudo -i`. Last verified: 2026-07-18, live login as `rescue`
-  right after the role's first rollout.
+  right after the role's first rollout — before russia-03 joined the
+  fleet (2026-08-18), so run the next test there.
 - **Rotate / revoke**: edit `breakglass_ssh_keys` in the inventory,
   re-run `ansible-playbook site.yml --tags breakglass`.
 - **Losing the YubiKey** loses break-glass only — normal 1P-managed
