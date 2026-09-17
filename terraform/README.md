@@ -5,7 +5,7 @@ Each subdirectory is an independent root module with its own state (independent 
 | Module                    | Provider             | Manages |
 |---------------------------|----------------------|---------|
 | `dns/`                    | Cloudflare + Porkbun | DNS records for the fleet |
-| `gcore/`                  | Gcore                | `glucose.gistrec.cloud` — the one subdomain delegated off Cloudflare, for geo-routing |
+| `gcore/`                  | Gcore                | Geo-routing: names delegated off Cloudflare so RF clients get an RF origin and everyone else the EU one |
 | `aws/`                    | AWS                  | Lambda functions + Function URLs, per-function IAM roles, hourly EventBridge Scheduler timer |
 | `yandex/`                 | Yandex Cloud         | `default` folder: Object Storage, IAM (service accounts + role grants), Lockbox, Cloud Function + timer trigger |
 | `hetzner/`                | Hetzner Cloud        | Existing `finland-01` cloud server |

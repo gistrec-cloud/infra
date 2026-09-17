@@ -1,9 +1,11 @@
-# gcore — geo-routed DNS for `glucose.gistrec.cloud`
+# gcore — geo-routed DNS
 
-The one fleet hostname Cloudflare does not answer for. Russian ISPs throttle
-foreign origins, so RF clients must land on an RF address; everyone else should
-stay on the EU one. Cloudflare only geo-steers on its paid Load Balancing, so
-this single subdomain is delegated to Gcore instead of moving the whole zone:
+The names Cloudflare does not answer for. Russian ISPs throttle foreign origins,
+so RF clients must land on an RF address while everyone else stays on the EU one.
+Cloudflare geo-steers only on its paid Load Balancing, so such names are
+delegated to Gcore one subdomain at a time — the parent zone stays where it is.
+
+Delegated so far: `glucose.gistrec.cloud`.
 
 ```
 gistrec.cloud (Cloudflare)
