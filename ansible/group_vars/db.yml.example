@@ -1,0 +1,26 @@
+---
+# Реестр баз и пользователей MySQL-кластера. Реальный файл — db.yml, он
+# gitignored: имена баз и логинов складываются в список валидных учёток к
+# публичному 3306, а репозиторий открытый. Восстанавливается из 1Password
+# (Document «infra repo-private files», см. scripts/backup-repo-files.sh).
+#
+# Живёт в group_vars группы `db`, а не в host_vars конкретной машины: список
+# баз — свойство кластера, а не хоста. Роль mysql применяет эти списки только
+# там, где mysql_role != replica, так что на реплике они игнорируются, а схема
+# и пользователи приезжают репликацией. В день промоушена standby в primary
+# реестр не придётся переносить руками.
+
+# Бэкапы снимает только primary, и правило переживает промоушен.
+mysql_backup_enabled: "{{ mysql_role | default('primary') != 'replica' }}"
+
+mysql_databases:
+  - app
+  - app-test
+
+# Пароли — только ссылки на ansible-vault, литералов тут не бывает.
+# database: "*" → GRANT ALL ON *.* WITH GRANT OPTION (персональный админ).
+mysql_users:
+  - { name: admin, password: "{{ vault_mysql_admin }}", database: "*", privileges: "ALL", grant_option: true }
+  - { name: app, password: "{{ vault_mysql_app }}", database: app, privileges: "ALL" }
+  # -ro: аналитика с ноутбука, без DDL.
+  - { name: app-ro, password: "{{ vault_mysql_app_ro }}", database: app, privileges: "SELECT" }

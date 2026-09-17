@@ -23,31 +23,7 @@ mysql_server_id: 1
 mysql_innodb_buffer_pool_size: "1G"        # whole fleet dataset is <1 GB → all cached
 mysql_replication_password: "{{ vault_mysql_replication_password }}"
 
-# All 16 databases from terraform/yandex/mysql.tf (the managed cluster we replace).
-mysql_databases:
-  - askads
-  - budget-explorer
-  - clear-transcript-bot
-  - clear-transcript-bot-test
-  - dnd-crime
-  - dnd-crime-staging
-  - eve-contracts
-  - food-scraper
-  - libre
-  - linkreach
-  - loquia
-  - realmctl
-  - recepter
-  - vk-ads-tool
-  - vk-ads-tool-test
-  - wordpress
-
-# One entry per app user (mirror the grants in mysql.tf). Passwords from the
-# vault. Shown abbreviated — add the rest the same way (incl. the -ro / -test
-# users and the netdata `stats` user with its global permissions).
-mysql_users:
-  - { name: askads,               password: "{{ vault_mysql_askads }}",    database: askads,               privileges: "ALL" }
-  - { name: clear-transcript-bot, password: "{{ vault_mysql_ctb }}",       database: clear-transcript-bot, privileges: "ALL" }
-  - { name: wordpress,            password: "{{ vault_mysql_wordpress }}", database: wordpress,            privileges: "ALL" }
-  # ... budget-explorer, dnd-crime(+staging), eve-contracts, food-scraper,
-  #     libre, linkreach, loquia(+ro), realmctl, recepter, vk-ads-tool(+test).
+# mysql_databases / mysql_users здесь НЕ задаются: реестр кластера живёт в
+# group_vars/db.yml и применяется на любом хосте группы `db`, у которого
+# mysql_role != replica. Так при промоушене standby в primary список баз не
+# нужно переносить между host_vars.
