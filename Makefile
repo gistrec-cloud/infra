@@ -2,11 +2,15 @@ ANSIBLE_DIR := ansible
 TF_DIR      := terraform/dns
 VAULT_ARGS  ?=
 
-.PHONY: help ping check deploy lint tf-init tf-plan tf-apply
+.PHONY: help hooks ping check deploy lint tf-init tf-plan tf-apply
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+
+hooks: ## Install the pre-commit hooks (gitleaks, linters, public-IP check)
+	pre-commit install
+	@echo "bypass a single commit with --no-verify"
 
 ping: ## Check SSH connectivity to all hosts
 	cd $(ANSIBLE_DIR) && ansible all -m ping $(VAULT_ARGS)
