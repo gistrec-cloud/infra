@@ -60,8 +60,7 @@
       pm2 startup systemd -u {{ admin_user }} --hp /home/{{ admin_user }}
     creates: "/etc/systemd/system/pm2-{{ admin_user }}.service"
 
-# pm2 never rotates ~/.pm2/logs — the pm2-logrotate module caps them
-# (codifies what russia-01 runs hand-installed).
+# pm2 never rotates ~/.pm2/logs — the pm2-logrotate module caps them.
 - name: Install the pm2-logrotate module
   ansible.builtin.command:
     cmd: pm2 install pm2-logrotate
