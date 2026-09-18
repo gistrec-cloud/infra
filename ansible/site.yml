@@ -145,6 +145,13 @@
     - role: breakglass
       when: breakglass_managed | default(false)
       tags: [breakglass]
+    # Одноузловой k3s. После firewall и breakglass: роль дописывает точечные
+    # ufw-правила и рассчитывает, что базовый набор хоста уже на месте.
+    # germany-02 — третье согласованное исключение к его «только netdata»
+    # (2026-09-19): ufw не переписывается, добавляются лишь правила кластера.
+    - role: k3s
+      when: k3s_managed | default(false)
+      tags: [k3s]
     - role: netdata
       tags: [netdata]
     # App cron jobs come from the apps registry — per app, so a job moves
