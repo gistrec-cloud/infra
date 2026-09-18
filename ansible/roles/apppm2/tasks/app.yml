@@ -116,6 +116,9 @@
 
 # ── env files from the 1Password dotenv backups ──
 # .env -> "dotenv <app>"; .env.en -> "dotenv <app>-en"; prod.env -> "dotenv <app>-prod"
+# env_item borrows another app's items instead: one service on two hosts is two
+# registry entries but one set of secrets, and duplicating them into a second
+# 1P item would mean rotating both or silently running on stale ones.
 # The pipe lookup strips trailing newlines — put exactly one back, or every
 # host file (ending with \n, as text files do) reports a permanent diff.
 # The newline must sit in a double-quoted YAML scalar: inside the folded `>-`
@@ -139,7 +142,7 @@
     apppm2_env_doc: >-
       {{ lookup('ansible.builtin.pipe',
                 'op document get ' ~
-                ('dotenv ' ~ apppm2_app.key ~
+                ('dotenv ' ~ (apppm2_app.value.env_item | default(apppm2_app.key)) ~
                  ('' if item.item == '.env' else '-' ~
                   (item.item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
                 | quote ~ ' --vault "Gistrec Cloud"') }}
