@@ -57,17 +57,25 @@ allow-правил не получает.
 | `k3s_api_allow_interface` | `""` | Интерфейс, с которого API открыт без учёта адреса источника — меш |
 | `k3s_api_allow_from` | `[]` | Публичные адреса, которым открыт API. Пусто = наружу не открыт |
 | `k3s_api_revoke_from` | `[]` | Адреса, у которых доступ снимается (ufw не сверяет состояние сам) |
+| `k3s_tls_san_extra` | `[]` | Доп. имена в сертификате API — например `127.0.0.1` для доступа через `ssh -L` |
 | `k3s_version` | `""` | Пусто = stable на момент установки; задать для воспроизводимого апгрейда |
 | `k3s_cluster_cidr` / `k3s_service_cidr` | `10.42.0.0/16` / `10.43.0.0/16` | Проверяются на пересечение с маршрутами |
 | `k3s_disable` | `[traefik, servicelb]` | Компоненты, которые заняли бы чужие порты |
 
 ## kubectl с ноутбука
 
+Когда API открыт только в меше (`k3s_api_allow_interface`), ноутбук до него не
+достаёт — в сетку он не входит. Ходим через проброс до любого узла меша:
+
 ```bash
-ssh <host> sudo cat /etc/rancher/k3s/k3s.yaml > ~/.kube/germany-02.yaml
-sed -i '' "s#https://127.0.0.1:6443#https://<k3s_node_ip>:6443#" ~/.kube/germany-02.yaml
-KUBECONFIG=~/.kube/germany-02.yaml kubectl get nodes
+ssh <mesh-host> sudo cat /etc/rancher/k3s/k3s.yaml > ~/.kube/k3s.yaml
+ssh -L 6443:<k3s_node_ip в меше>:6443 -N <mesh-host> &
+KUBECONFIG=~/.kube/k3s.yaml kubectl get nodes
 ```
+
+Конфиг с хоста уже указывает на `https://127.0.0.1:6443`, поэтому править его
+не нужно — но `127.0.0.1` должен быть в `k3s_tls_san_extra`, иначе проверка
+имени в сертификате не пройдёт.
 
 Файл содержит клиентский сертификат администратора — обращаться как с паролем.
 
