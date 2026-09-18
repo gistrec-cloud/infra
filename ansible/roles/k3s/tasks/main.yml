@@ -59,6 +59,7 @@
     group: root
     mode: "0600"
   register: k3s_config
+  notify: Restart k3s
 
 - name: Fetch the installer
   ansible.builtin.get_url:
