@@ -26,3 +26,14 @@ repos:
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: detect-private-key
+
+  # gitleaks ловит секреты по форме; адрес хоста на секрет не похож, а выдаёт
+  # не меньше. Скрипт сам читает индекс, поэтому имена файлов ему не нужны.
+  - repo: local
+    hooks:
+      - id: no-public-ips
+        name: no public IPv4 in tracked files
+        entry: python3 scripts/check-staged-ips.py
+        language: system
+        pass_filenames: false
+        always_run: true

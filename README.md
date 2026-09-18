@@ -9,6 +9,8 @@ Infrastructure as code for the **gistrec-cloud** fleet.
 
 The repository is deliberately split into **code** (public, here) and **live data** (private, never committed): real inventory, IPs, tokens and state stay out of git. Everything you see here uses placeholders — copy the `*.example` files, fill them locally, and they are already covered by `.gitignore`.
 
+Run **`make hooks`** after cloning. Alongside gitleaks and the linters it installs a check that refuses any public IPv4 in a tracked file: `.gitignore` protects whole files, this catches the address pasted into a comment or a README.
+
 ## Architecture
 
 ```
@@ -78,7 +80,7 @@ infra/
 │   ├── yandex-budget-explorer/   # own YC folder: Cloud Functions + Lockbox + timer trigger
 │   └── yandex-vk-ads-tool/       # own YC folder: Object Storage (landing bucket)
 ├── docs/runbooks/                # operational procedures (move-apps, break-glass)
-└── scripts/                      # backup + migration helpers (backup-envs, move-apps)
+└── scripts/                      # backups (envs, repo-private files), move-apps, pre-commit checks
 ```
 
 ## Roles
@@ -148,7 +150,7 @@ See the `Makefile` for the full list of targets (`make help`).
 
 - **No secrets in git.** Tokens, keys and real inventory are `.gitignore`d; only `*.example` templates are tracked.
 - **Secrets at rest** are encrypted with `ansible-vault`. Even encrypted, the real vault stays private in this setup.
-- **`gitleaks`** runs as a pre-commit hook so nothing sensitive slips into history.
+- **`gitleaks`** runs as a pre-commit hook so nothing sensitive slips into history. A second local hook (`scripts/check-staged-ips.py`) refuses public IPv4 literals in tracked files — gitleaks matches secrets by shape, and a host address does not look like one while giving away just as much. Allowed ranges (Cloudflare edge, RFC 5737 documentation) are listed in `scripts/allowed-public-ips.txt`; fleet addresses belong in the gitignored inventory and host_vars.
 - **SSH is key-only** and root login is disabled by the `common` role. A pre-flight `assert` refuses to disable password auth unless at least one key is present in `vault_admin_ssh_keys`, so the playbook fails fast instead of locking you out.
 - **Firewall is default-drop** (nftables); only SSH / 80 / 443 and explicitly listed ports are open, and fail2ban bans via nftables to match.
 
