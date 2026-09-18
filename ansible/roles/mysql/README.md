@@ -133,6 +133,11 @@ the internet, guarded by auth + TLS. The old primary rejoins as a replica:
 cleanly via GTID if its data survived, otherwise seed it first (above). Make the
 flip durable in git afterwards.
 
+Backups need no edit: `mysql_backup_enabled`, the off-site S3/age settings and
+the `backup_marker_stale` filecheck markers all live in `group_vars/db.yml` and
+key off `mysql_role`, so they follow the flip on both hosts. Re-run the play on
+the demoted host too — otherwise its frozen `.last-success` keeps alarming.
+
 ## Rotating a password
 
 `CREATE USER IF NOT EXISTS` never overwrites an existing password. Rotate by hand:

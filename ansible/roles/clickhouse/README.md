@@ -62,11 +62,11 @@ loopback or a private IP (their wire carries credentials in clear).
 
 ## Migrating data in (dump → load → verify)
 
-`scripts/migrate-clickhouse-data.sh` did the russia-02 → finland-01 copy (schema +
-data over SSH + `docker exec`, then row-count verification). Its hosts and
-databases are hardcoded and russia-02 is gone (2026-07-21) — for a new move deploy
-the role first (empty databases + users), then edit the script's endpoints. Manual
-equivalent for one table:
+The russia-02 → finland-01 copy ran from a one-shot script, deleted once both its
+endpoints were destroyed — a hardcoded IP that Yandex has since reassigned is a
+loaded gun, not a tool. Deploy the role first (empty databases + users), then copy
+table by table; base tables before dependent views, so an insert into a source
+table never double-writes through a MaterializedView:
 
 ```bash
 # schema (base tables before dependent views):

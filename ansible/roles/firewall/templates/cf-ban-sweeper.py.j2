@@ -10,6 +10,7 @@
 import datetime
 import json
 import syslog
+import urllib.error
 import urllib.request
 
 TOKEN = "{{ firewall_cf_api_token }}"
@@ -45,11 +46,24 @@ while True:
     page += 1
 
 deleted = 0
+failures = []
 for rule_id in stale:
     try:
         req("%s/%s" % (BASE, rule_id), method="DELETE")
         deleted += 1
-    except Exception:
-        pass  # already deleted by a peer host's sweeper
+    except urllib.error.HTTPError as e:
+        # 404 = a peer host's sweeper won the race, which is the normal case and
+        # not a failure. Everything else (403 on a revoked or under-scoped token,
+        # 5xx) means the net is not catching anything — do NOT swallow it, or the
+        # safety net degrades to a silent no-op with no signal anywhere.
+        if e.code != 404:
+            failures.append("%s: HTTP %d" % (rule_id, e.code))
+    except Exception as e:
+        failures.append("%s: %s" % (rule_id, e))
+
 if deleted:
     syslog.syslog("cf-ban-sweeper: deleted %d orphaned fail2ban rules" % deleted)
+if failures:
+    syslog.syslog(
+        "cf-ban-sweeper: %d of %d deletions failed, orphaned rules remain (%s)"
+        % (len(failures), len(stale), "; ".join(failures[:5])))
