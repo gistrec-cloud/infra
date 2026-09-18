@@ -30,15 +30,13 @@
     state: started
 
 # ── legacy netfilter-persistent layer ──
-# russia-01 predates this role and still runs iptables-persistent: at boot
-# netfilter-persistent replays /etc/iptables/rules.v4 into `ip filter`, a table
-# nothing here manages. Both it and our `inet filter` hook input at priority
-# filter and are evaluated independently, so a DROP there outvotes the ACCEPT
-# we deploy — the ruleset looks correct while the packet dies. Until 2026-08-08
-# that file held a catch-all `--dport 19999 -j DROP` behind a whitelist of
-# long-dead IPs; it had eaten 10956 packets and kept every netdata child from
-# reaching the parent. Swept by port, not wholesale: the file's *nat section is
-# Docker's own snapshot and must survive.
+# No fleet host runs iptables-persistent since russia-01 was destroyed
+# (2026-08-19), so these tasks are a no-op today. Kept as a trap for adopted
+# hosts: netfilter-persistent replays /etc/iptables/rules.v4 into `ip filter`,
+# which is evaluated independently of our `inet filter` — a DROP there outvotes
+# our ACCEPT and the ruleset looks correct while the packet dies. That is
+# exactly how a stale `--dport 19999 -j DROP` kept every netdata child off the
+# parent until 2026-08-08. Swept by port: the file's *nat section is Docker's.
 - name: Check whether the legacy persisted iptables ruleset exists
   ansible.builtin.stat:
     path: /etc/iptables/rules.v4

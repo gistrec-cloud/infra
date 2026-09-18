@@ -11,11 +11,7 @@ timezone: Europe/Moscow
 infra_registry_state_dir: /var/lib/gistrec-infra
 
 # --- common role ---
-# Admin/app user = the actual SSH login user per host (gistrec / vk-ads-tool),
-# retiring the separate "deploy" service account (Phase 2). nodeapp_node_apps is
-# empty so the nodeapp role is skipped; the real apps run under the login user
-# (managed outside this repo). The leftover deploy user still lingers on the hosts
-# until removed there — see the userdel/pm2-deploy cleanup step.
+# Apps run under the SSH login user, not a separate service account.
 admin_user: "{{ ansible_user }}"
 ssh_port: 22
 ssh_permit_root_login: "no"
@@ -42,11 +38,10 @@ netdata_hostname: "{{ inventory_hostname }}"
 netdata_registry_announce: "https://stats.gistrec.cloud"
 
 # --- Cloudflare edge ranges (www.cloudflare.com/ips, synced 2026-07-19) ---
-# Single source for two consumers: the nginx realip snippet (restore the real
-# client IP behind the CF proxy) and the fail2ban ignoreip safety net. Without
-# realip the honeypot jail bans $remote_addr = the CF edge node — a self-DoS
-# for every proxied vhost on the host (87 of 122 live bans on russia-01 were
-# CF edges when this landed).
+# Two consumers: the nginx realip snippet and the fail2ban ignoreip safety net.
+# Without realip the honeypot jail bans the CF edge node instead of the client —
+# a self-DoS on every proxied vhost. No record is proxied today (2026-09-17),
+# but the guard stays: one grey→orange toggle brings the trap straight back.
 cloudflare_edge_ranges:
   - 173.245.48.0/20
   - 103.21.244.0/22

@@ -11,7 +11,7 @@
 #
 # Usage:
 #   scripts/backup-envs.sh            # everything in apps.yml
-#   scripts/backup-envs.sh russia-01  # only apps on the named host(s)
+#   scripts/backup-envs.sh russia-03  # only apps on the named host(s)
 #   scripts/backup-envs.sh --list     # show the plan, read nothing
 #
 # Hosts/users/keys come from the gitignored ansible inventory; the app layout

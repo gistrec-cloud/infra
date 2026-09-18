@@ -64,10 +64,9 @@
       {{ apps | default({}) | dict2items
          | map(attribute='value.deploy_keys', default=[]) | flatten }}
 
-# Gate the sshd surgery on "has or ever had CI keys": a host that never had
-# them (russia-01/-02 today, and foreign germany-02 by omission) keeps stock
-# sshd; once the file exists it stays managed, so emptying the registry
-# still revokes the last key.
+# Gate the sshd surgery on "has or ever had CI keys" — a host that never had
+# them keeps stock sshd. Once the file exists it stays managed, so emptying the
+# registry still revokes the last key.
 - name: Probe for a previously deployed CI key file
   ansible.builtin.stat:
     path: /etc/ssh/deploy_keys

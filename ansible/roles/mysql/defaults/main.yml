@@ -15,10 +15,8 @@ mysql_docker_packages:
 mysql_image: "mysql:8.0"
 mysql_container_name: mysql
 
-# Host layout. Data lives on a bind mount — the russia-01 boot disk is
-# auto_delete (see terraform/yandex/compute.tf), so treat this directory as
-# disposable and lean on the nightly backup below. A dedicated persistent disk
-# is a Phase 2 concern once prod databases move here.
+# Host layout. Data lives on a bind mount on the boot disk — disposable by
+# design, the nightly backup below is what actually protects it.
 mysql_base_dir: /opt/mysql
 mysql_data_dir: "{{ mysql_base_dir }}/data"
 mysql_conf_dir: "{{ mysql_base_dir }}/conf.d"
