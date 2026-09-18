@@ -1,14 +1,19 @@
-# Geo-маршрутизация glucose.gistrec.cloud: из РФ — на russia-03, отовсюду
-# ещё — на finland-01. Обе копии отдают одно и то же (см. apps.yml: glucose /
-# glucose-mirror); в РФ снимок приезжает по wg-тоннелю кроном.
+# Geo-маршрутизация: из РФ — на russia-03, отовсюду ещё — на finland-01.
+# Список имён в geo_names (terraform.tfvars).
 #
-# Делегирован ОДИН поддомен, а не вся зона: NS-записи для glucose.gistrec.cloud
-# стоят в Cloudflare (terraform/dns), остальное gistrec.cloud остаётся там же.
-# Сертификат это не трогает — *.gistrec.cloud покрывает имя, а DNS-01 для
-# wildcard проходит в родительской зоне.
+# Что отдаёт РФ-адрес, зависит от сервиса: glucose собирает страницу сам из
+# локальной реплики, остальные проксируют на finland-01 по wg (apps.yml, *-rf).
+# Для развязки это неважно — важно лишь, что клиент приходит на российский IP.
+#
+# Делегируются ОТДЕЛЬНЫЕ поддомены, а не зона целиком: NS-записи стоят в
+# Cloudflare (terraform/dns), остальное gistrec.cloud остаётся там. Сертификат
+# это не трогает — *.gistrec.cloud покрывает имена, а DNS-01 для wildcard
+# проходит в родительской зоне.
 
-resource "gcore_dns_zone" "glucose" {
-  name = "glucose.gistrec.cloud"
+resource "gcore_dns_zone" "this" {
+  for_each = toset(var.geo_names)
+
+  name = each.value
 
   # SOA-поля проставляет Gcore; без этого план вечно хотел бы их обнулить.
   lifecycle {
@@ -16,9 +21,11 @@ resource "gcore_dns_zone" "glucose" {
   }
 }
 
-resource "gcore_dns_zone_record" "glucose_apex" {
-  zone   = gcore_dns_zone.glucose.name
-  domain = gcore_dns_zone.glucose.name
+resource "gcore_dns_zone_record" "apex" {
+  for_each = gcore_dns_zone.this
+
+  zone   = each.value.name
+  domain = each.value.name
   type   = "A"
   # Пол времени переключения: быстрее истечения кэша резолвера ни geo, ни
   # healthcheck до клиента не дойдут. 30 — минимум плана DNS Pro.
