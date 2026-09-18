@@ -5,19 +5,21 @@ so RF clients must land on an RF address while everyone else stays on the EU one
 Cloudflare geo-steers only on its paid Load Balancing, so such names are
 delegated to Gcore one subdomain at a time — the parent zone stays where it is.
 
-Delegated so far: `glucose.gistrec.cloud`.
+Which names are delegated is data — `geo_names` in `terraform.tfvars`. Adding one
+is a line there plus its two NS records in `terraform/dns`.
 
 ```
 gistrec.cloud (Cloudflare)
-  └── glucose.gistrec.cloud  NS → ns1.gcorelabs.net, ns2.gcdn.services
+  └── <name>.gistrec.cloud  NS → ns1.gcorelabs.net, ns2.gcdn.services
         └── A  94.228.125.88  countries = ["ru"]   → russia-03
             A  62.238.12.36   default              → finland-01
 ```
 
-Both origins serve the same page — `glucose` on finland-01 renders the snapshot,
-`glucose-mirror` on russia-03 pulls it over the wg tunnel every 2 minutes (both
-in `ansible/apps.yml`). The TLS wildcard `*.gistrec.cloud` still covers the name
-and its DNS-01 still runs in the parent zone, so delegation costs no cert work.
+What the RF address serves differs per service, and the routing does not care:
+`glucose` renders its own page there from the local replica, the rest proxy back
+to finland-01 over wg (`ansible/apps.yml`, the `*-rf` entries). The TLS wildcard
+`*.gistrec.cloud` still covers every name and its DNS-01 still runs in the parent
+zone, so delegation costs no cert work.
 
 ## Filter pipeline
 

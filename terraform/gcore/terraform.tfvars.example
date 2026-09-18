@@ -5,3 +5,7 @@ host_ips = {
   "finland-01" = "203.0.113.10"
   "russia-03"  = "198.51.100.20"
 }
+
+geo_names = [
+  "app.example.com",
+]

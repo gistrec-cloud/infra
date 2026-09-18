@@ -21,3 +21,11 @@ variable "rf_countries" {
   type        = list(string)
   default     = ["ru"]
 }
+
+variable "geo_names" {
+  description = <<-EOT
+    FQDN, делегированные сюда под geo-развязку. Каждое становится отдельной
+    зоной у Gcore; NS на них прописываются в родительской зоне (terraform/dns).
+  EOT
+  type        = list(string)
+}
