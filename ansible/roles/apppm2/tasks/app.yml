@@ -116,9 +116,8 @@
 
 # ── env files from the 1Password dotenv backups ──
 # .env -> "dotenv <app>"; .env.en -> "dotenv <app>-en"; prod.env -> "dotenv <app>-prod"
-# env_item borrows another app's items instead: one service on two hosts is two
-# registry entries but one set of secrets, and duplicating them into a second
-# 1P item would mean rotating both or silently running on stale ones.
+# env_item borrows another app's items: one service on two hosts is two registry
+# entries but one set of secrets, and a duplicate would need rotating twice.
 # The pipe lookup strips trailing newlines — put exactly one back, or every
 # host file (ending with \n, as text files do) reports a permanent diff.
 # The newline must sit in a double-quoted YAML scalar: inside the folded `>-`

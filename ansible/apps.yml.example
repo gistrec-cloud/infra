@@ -9,14 +9,13 @@
 #   dir:  <path under the login user's home; "." = home itself>
 #   env:  [env files in dir]          # default: [.env]; explicit [] = none
 #                                     # (static sites, system endpoints)
+#   env_item: <other app>             # env-файлы из items другого приложения
+#                                     # (сервис на двух хостах — один набор)
 #   auth_users: true                  # app reads <dir>/auth-users (login hash
 #                                     # lines) — restored from 1P Document
 #                                     # "auth-users <name>", backed up alongside env
 #   repo: <github repo — documentation>
 #   notes: <free text>
-#   env_item: <other app>    # брать env-файлы из items ЧУЖОГО приложения:
-#                            # один сервис на двух хостах = две записи реестра,
-#                            # но один набор секретов
 #   cron: [cron jobs the app needs — reconciled by the appcron role, keyed
 #          "<app>: <name>"; removing/moving one deletes the old managed marker;
 #          minute/hour/day/month/weekday default to "*"]
