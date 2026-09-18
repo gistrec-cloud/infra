@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# k3s читает это при старте; менять через роль, не руками.
+node-ip: {{ k3s_node_ip }}
+node-external-ip: {{ k3s_node_ip }}
+advertise-address: {{ k3s_node_ip }}
+tls-san:
+  - {{ k3s_node_ip }}
+
+https-listen-port: {{ k3s_api_port }}
+cluster-cidr: {{ k3s_cluster_cidr }}
+service-cidr: {{ k3s_service_cidr }}
+
+disable:
+{% for c in k3s_disable %}
+  - {{ c }}
+{% endfor %}
+
+kubelet-arg:
+{% if not k3s_fail_swap_on %}
+  - fail-swap-on=false
+{% endif %}
+  - address={{ k3s_node_ip }}

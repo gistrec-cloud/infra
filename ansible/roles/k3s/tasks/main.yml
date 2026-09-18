@@ -1,0 +1,94 @@
+---
+- name: Require an explicit node address
+  ansible.builtin.assert:
+    that: k3s_node_ip | length > 0
+    fail_msg: >-
+      k3s_node_ip must be set — it becomes the certificate SAN, the kubeconfig
+      endpoint and the ufw destination. Guessing it would publish the API on
+      whichever address the installer picked.
+
+# Подсети подов и сервисов живут в общей таблице маршрутизации. На хосте, где
+# уже есть чей-то VPN, совпадение увело бы чужой трафик в кластер.
+- name: Collect existing routes
+  ansible.builtin.command: ip -4 route show table all
+  register: k3s_routes
+  changed_when: false
+  # Читает и только читает: без этого --check пропустил бы таск, оставив
+  # проверку ниже без данных — и она бы «прошла», ничего не проверив.
+  check_mode: false
+
+# Сравниваем по первым двум октетам: оба CIDR — /16, а маршруты чужого VPN
+# приезжают как /32 в таблице local, так что точное совпадение сети их не ловит.
+- name: Refuse to overlap an existing route
+  ansible.builtin.assert:
+    that: k3s_cidr_prefix not in k3s_routes.stdout
+    fail_msg: "{{ item }} overlaps a route already on this host — pick another CIDR."
+  vars:
+    k3s_cidr_prefix: "{{ item.split('.')[0] }}.{{ item.split('.')[1] }}."
+  loop:
+    - "{{ k3s_cluster_cidr }}"
+    - "{{ k3s_service_cidr }}"
+
+- name: Configuration directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# Пишем ДО установки: установщик стартует k3s сразу, и без конфига первый запуск
+# поднял бы traefik и раздал сертификат не на тот адрес.
+- name: Render the k3s configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  register: k3s_config
+
+- name: Fetch the installer
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /usr/local/share/k3s-install.sh
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install k3s
+  ansible.builtin.command:
+    cmd: /usr/local/share/k3s-install.sh
+  environment:
+    INSTALL_K3S_SKIP_SELINUX_RPM: "true"
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  args:
+    creates: /usr/local/bin/k3s
+
+# ── ufw ──
+# Хост держит default deny incoming и FORWARD DROP, и мы их не трогаем: правила
+# ниже точечные. Без route-правил flannel дописал бы свои ACCEPT в конец
+# FORWARD, а `ufw reload` их снёс бы — сломав наши поды, не чужой сервис.
+- name: Allow pod traffic out through the FORWARD chain
+  community.general.ufw:
+    rule: allow
+    route: true
+    src: "{{ k3s_cluster_cidr }}"
+
+- name: Allow pod traffic in through the FORWARD chain
+  community.general.ufw:
+    rule: allow
+    route: true
+    dest: "{{ k3s_cluster_cidr }}"
+
+# Сокет апи-сервера намеренно на 0.0.0.0 (см. README). Ограничение — здесь:
+# dest пинит адрес, так что на соседском IP порт остаётся закрытым.
+- name: Allow the API port from operator addresses only
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+    dest: "{{ k3s_node_ip }}"
+    port: "{{ k3s_api_port }}"
+    proto: tcp
+    comment: "k3s API (ansible)"
+  loop: "{{ k3s_api_allow_from }}"
