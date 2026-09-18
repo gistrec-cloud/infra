@@ -39,10 +39,13 @@ Run **`make hooks`** after cloning. Alongside gitleaks and the linters it instal
                                                 — managed Yandex cluster destroyed 2026-07-21
 
               ┌───────────────────┐
-              │  k3s (single node)│   ansible/roles/k3s — off to one side: it runs on a host
-              │  API :6443        │   shared with someone else's service, outside wg0 and
-              │  flannel + kubelet│   outside the firewall role. The existing ufw stays as it
-              └───────────────────┘   is; the API is reachable only from operator addresses
+              │  k3s (single node)│   ansible/roles/k3s — on a host shared with someone else's
+              │  API :6443        │   service, so the firewall role never runs there: the
+              │  flannel + kubelet│   existing ufw stays, and the role only adds its own narrow
+              └─────────┬─────────┘   rules. Joined wg0 as 10.10.0.2 (as `wg-fleet` — the
+                        │             neighbour holds wg0…wg19), which is how the API reaches
+                        └──── wg ───► kubectl and how its metrics reach the netdata parent.
+                                      6443 is open on the tunnel only, closed to the internet.
 ```
 
 ## Layout

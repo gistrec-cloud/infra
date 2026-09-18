@@ -7,8 +7,18 @@
       endpoint and the ufw destination. Guessing it would publish the API on
       whichever address the installer picked.
 
+- name: Check whether k3s is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+  check_mode: false
+
 # Подсети подов и сервисов живут в общей таблице маршрутизации. На хосте, где
 # уже есть чей-то VPN, совпадение увело бы чужой трафик в кластер.
+#
+# Только до установки: потом маршруты в этих подсетях создаёт сам кластер
+# (cni0, flannel.1), и проверка начала бы ловить саму себя — второй прогон
+# роли падал.
 - name: Collect existing routes
   ansible.builtin.command: ip -4 route show table all
   register: k3s_routes
@@ -16,6 +26,7 @@
   # Читает и только читает: без этого --check пропустил бы таск, оставив
   # проверку ниже без данных — и она бы «прошла», ничего не проверив.
   check_mode: false
+  when: not k3s_binary.stat.exists
 
 # Сравниваем по первым двум октетам: оба CIDR — /16, а маршруты чужого VPN
 # приезжают как /32 в таблице local, так что точное совпадение сети их не ловит.
@@ -28,6 +39,7 @@
   loop:
     - "{{ k3s_cluster_cidr }}"
     - "{{ k3s_service_cidr }}"
+  when: not k3s_binary.stat.exists
 
 - name: Configuration directory
   ansible.builtin.file:
@@ -81,14 +93,34 @@
     route: true
     dest: "{{ k3s_cluster_cidr }}"
 
-# Сокет апи-сервера намеренно на 0.0.0.0 (см. README). Ограничение — здесь:
-# dest пинит адрес, так что на соседском IP порт остаётся закрытым.
-- name: Allow the API port from operator addresses only
+# Сокет апи-сервера намеренно на 0.0.0.0 (см. README). Ограничение — здесь.
+- name: Allow the API port over the mesh interface
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: "{{ k3s_api_allow_interface }}"
+    to_port: "{{ k3s_api_port | string }}"
+    proto: tcp
+    comment: "k3s API over the mesh (ansible)"
+  when: k3s_api_allow_interface | length > 0
+
+# dest пинит адрес, так что на соседском IP порт остаётся закрытым и здесь.
+- name: Allow the API port from operator addresses
   community.general.ufw:
     rule: allow
     src: "{{ item }}"
     dest: "{{ k3s_node_ip }}"
-    port: "{{ k3s_api_port }}"
+    port: "{{ k3s_api_port | string }}"
     proto: tcp
     comment: "k3s API (ansible)"
   loop: "{{ k3s_api_allow_from }}"
+
+- name: Revoke API access the mesh replaced
+  community.general.ufw:
+    rule: allow
+    delete: true
+    src: "{{ item }}"
+    dest: "{{ k3s_node_ip }}"
+    port: "{{ k3s_api_port | string }}"
+    proto: tcp
+  loop: "{{ k3s_api_revoke_from }}"

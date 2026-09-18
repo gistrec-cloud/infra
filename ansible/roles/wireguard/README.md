@@ -25,15 +25,27 @@ membership is derived from that variable alone. A peer's public endpoint is its
 inventory `ansible_host`; its tunnel IP and public key live in its (gitignored)
 host_vars.
 
-| host       | wireguard_ip |
-|------------|--------------|
-| russia-03  | 10.10.0.3    |
-| finland-01 | 10.10.0.4    |
+| host       | wireguard_ip | interface  |
+|------------|--------------|------------|
+| germany-02 | 10.10.0.2    | `wg-fleet` |
+| russia-03  | 10.10.0.3    | `wg0`      |
+| finland-01 | 10.10.0.4    | `wg0`      |
 
-(Two nodes today, so each has exactly one peer. 10.10.0.1 was russia-01,
-destroyed 2026-08-19; 10.10.0.2 was russia-02, retired 2026-07-21 — both free
-for reuse. 10.10.0.3 was germany-01's until it was retired 2026-07-20;
-russia-03 took the address at its onboarding, 2026-08-18.)
+(10.10.0.1 is free — it was russia-01, destroyed 2026-08-19. 10.10.0.3 was
+germany-01's until it was retired 2026-07-20; russia-03 took the address at its
+onboarding, 2026-08-18. germany-02 joined 2026-09-19 and reused 10.10.0.2 from
+the retired russia-02.)
+
+**The interface name is per host, and peers never reference it** — only
+`wireguard_ip`, `wireguard_pubkey` and `ansible_host` cross the boundary. That
+is what lets germany-02 run `wg-fleet`: it is a shared machine whose other
+tenant already holds `wg0`…`wg19` as userspace TUN devices (the kernel does not
+see them as WireGuard, but the names are taken all the same). Deploying the
+`wg0` default there would have landed on top of them.
+
+That host also gets **no inbound 51820 rule** — its firewall is not ours to
+manage. `PersistentKeepalive` keeps conntrack warm, so the tunnel is dialled
+from its side and replies arrive as ESTABLISHED.
 
 ## One-time key generation (per host)
 
