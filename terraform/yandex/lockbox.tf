@@ -19,6 +19,16 @@ resource "yandex_lockbox_secret" "this" {
   labels              = each.value.labels
 }
 
+# Версии функция монтирует по id, и он обязателен. Захардкоженный id значит, что
+# после ротации функция продолжит расшифровывать старую версию, а удаление той
+# версии уронит apply. Читаем текущую — apply после ротации опубликует новую
+# версию функции сам.
+data "yandex_lockbox_secret" "this" {
+  for_each = yandex_lockbox_secret.this
+
+  secret_id = each.value.id
+}
+
 # The realm-status function's SA reads every secret in this file (all of them are
 # its own realmctl-* secrets). Grant payloadViewer per-secret rather than granting
 # lockbox.payloadViewer folder-wide, so the SA can decrypt only these payloads.

@@ -52,21 +52,22 @@ resource "yandex_function" "realm_status" {
     STARDEW_API_BASE_URL = "http://sv.makstashkevich.com:8080"
   }
 
+  # version_id — всегда текущая версия секрета, см. lockbox.tf.
   secrets {
     id                   = yandex_lockbox_secret.this["realmctl-telegram-token"].id
-    version_id           = "e6q2he0ggsgld4ukqcie"
+    version_id           = data.yandex_lockbox_secret.this["realmctl-telegram-token"].current_version[0].id
     key                  = "telegram-token"
     environment_variable = "TELEGRAM_BOT_TOKEN"
   }
   secrets {
     id                   = yandex_lockbox_secret.this["realmctl-mysql-password"].id
-    version_id           = "e6qtemr6p5f14k1u6l0q"
+    version_id           = data.yandex_lockbox_secret.this["realmctl-mysql-password"].current_version[0].id
     key                  = "mysql-password"
     environment_variable = "MYSQL_PASSWORD"
   }
   secrets {
     id                   = yandex_lockbox_secret.this["realmctl-stardew-api-token"].id
-    version_id           = "e6q23l5014cn0vsgjvp6"
+    version_id           = data.yandex_lockbox_secret.this["realmctl-stardew-api-token"].current_version[0].id
     key                  = "stardew-api-token"
     environment_variable = "STARDEW_API_TOKEN"
   }

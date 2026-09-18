@@ -24,6 +24,16 @@ resource "yandex_lockbox_secret" "this" {
   labels              = { project = "budget-explorer" }
 }
 
+# Версии функции монтируют по id, и он обязателен. Захардкоженный id значит, что
+# после ротации функция продолжит расшифровывать старую версию, а удаление той
+# версии уронит apply. Читаем текущую — apply после ротации опубликует новые
+# версии функций сам.
+data "yandex_lockbox_secret" "this" {
+  for_each = yandex_lockbox_secret.this
+
+  secret_id = each.value.id
+}
+
 # Grant payloadViewer per-secret rather than folder-wide, and only on the secrets
 # the functions actually mount (local.function_secrets in functions.tf) — nothing
 # mounts webhook-secret, so the SA gets no grant on it. The live folder-wide roles
