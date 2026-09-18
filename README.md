@@ -35,6 +35,12 @@ The repository is deliberately split into **code** (public, here) and **live dat
                         │  (self-hosted)    │   finland-01, promotable replica on russia-03,
                         └───────────────────┘   replication over wg0; 3306 public (TLS + auth)
                                                 — managed Yandex cluster destroyed 2026-07-21
+
+              ┌───────────────────┐
+              │  k3s (single node)│   ansible/roles/k3s — off to one side: it runs on a host
+              │  API :6443        │   shared with someone else's service, outside wg0 and
+              │  flannel + kubelet│   outside the firewall role. The existing ufw stays as it
+              └───────────────────┘   is; the API is reachable only from operator addresses
 ```
 
 ## Layout
@@ -68,7 +74,8 @@ infra/
 │       ├── chrony/               # opt-in time sync
 │       ├── breakglass/           # emergency rescue user, keys outside home dirs
 │       ├── clickhouse/           # self-hosted ClickHouse (Docker), TLS ports + S3 backups
-│       └── mysql/                # self-hosted MySQL (Docker), primary/replica
+│       ├── mysql/                # self-hosted MySQL (Docker), primary/replica
+│       └── k3s/                  # single-node Kubernetes on a shared host, under its existing ufw
 ├── terraform/                    # cloud resources as code (independent root modules, one state each)
 │   ├── dns/                      # Cloudflare + Porkbun DNS records (host_ips: fleet IPs live once)
 │   ├── aws/                      # Lambda functions + Function URLs + IAM/EventBridge schedule
@@ -103,6 +110,7 @@ infra/
 | `breakglass`| Emergency `rescue` user (YubiKey keys in root-owned `/etc/ssh/rescue_keys`) — survives home wipes |
 | `clickhouse` | Self-hosted ClickHouse in Docker; public TLS ports (9440/8443), nightly dumps + off-site S3 |
 | `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
+| `k3s`      | Single-node Kubernetes on a host shared with a third party: adds narrow ufw rules instead of replacing the firewall, API limited to operator addresses |
 
 ## App registry & moves
 
