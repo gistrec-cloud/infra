@@ -9,20 +9,26 @@
 
 resource "gcore_dns_zone" "glucose" {
   name = "glucose.gistrec.cloud"
+
+  # SOA-поля проставляет Gcore; без этого план вечно хотел бы их обнулить.
+  lifecycle {
+    ignore_changes = [contact, expiry, nx_ttl, primary_server, refresh, retry, serial]
+  }
 }
 
 resource "gcore_dns_zone_record" "glucose_apex" {
   zone   = gcore_dns_zone.glucose.name
   domain = gcore_dns_zone.glucose.name
   type   = "A"
-  # TTL — пол времени переключения: правило geo и будущий healthcheck доходят
-  # до клиента не быстрее, чем истечёт кэш резолвера. 120 — не выбор, а
-  # минимум free-плана (меньше API отдаёт 400).
+  # Пол времени переключения, и он же минимум free-плана: ниже API отдаёт 400.
   ttl = 120
 
-  # Порядок фильтров — конвейер: geodns оставляет записи, подходящие клиенту,
-  # default подставляет запасную, если не подошла ни одна, first_n режет до
-  # одной. Без default клиент из страны вне правил не получил бы ничего.
+  # Конвейер: geodns отбирает подходящие клиенту, default спасает тех, кому не
+  # подошло ничего, first_n режет до одной.
+  #
+  # is_healthy нет: аккаунту healthcheck'и недоступны — API отвечает 200 и молча
+  # выбрасывает и фильтр, и meta.failover (проверено прямым PUT). Когда появятся,
+  # ставить его ПЕРВЫМ: после geodns он оставил бы РФ-клиента с пустым ответом.
   filter {
     type = "geodns"
   }

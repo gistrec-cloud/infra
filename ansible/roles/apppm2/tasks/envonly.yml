@@ -30,7 +30,7 @@
     apppm2_env_doc: >-
       {{ lookup('ansible.builtin.pipe',
                 'op document get ' ~
-                ('dotenv ' ~ apppm2_app.key ~
+                ('dotenv ' ~ (apppm2_app.value.env_item | default(apppm2_app.key)) ~
                  ('' if item.item == '.env' else '-' ~
                   (item.item | regex_replace('^\.env\.', '') | regex_replace('\.env$', ''))))
                 | quote ~ ' --vault "Gistrec Cloud"') }}
