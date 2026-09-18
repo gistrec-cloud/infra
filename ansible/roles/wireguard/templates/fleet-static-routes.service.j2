@@ -1,0 +1,21 @@
+[Unit]
+# {{ ansible_managed }}
+Description=Fleet egress pinned to {{ wireguard_egress_src }}
+# networking.service (ifupdown) must have run first: it adds the secondary
+# address to the interface, and `src` requires that address to already exist.
+After=networking.service
+# Hold network.target until the routes are in: otherwise netdata, the tunnel or
+# anything else can open a connection from the primary address first, and the
+# peer's firewall — which keys on this one — drops it.
+Before=network.target network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+{% for peer in groups['all'] | difference([inventory_hostname]) | sort
+   if hostvars[peer].wireguard_ip is defined %}
+ExecStart=/usr/sbin/ip route replace {{ hostvars[peer].ansible_host }} via {{ wireguard_egress_gateway }} dev {{ wireguard_egress_device }} onlink src {{ wireguard_egress_src }}
+{% endfor %}
+
+[Install]
+WantedBy=multi-user.target
