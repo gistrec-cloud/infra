@@ -19,3 +19,13 @@ wireguard_private_key: "{{ lookup('vars', 'vault_wg_privkey_' ~ (inventory_hostn
 # (Hetzner, Timeweb) — the Yandex 1:1 NAT this was written for went with
 # russia-01 (2026-08-19). Kept: cheap, and it also holds stateful-firewall state.
 wireguard_keepalive: 25
+
+# Хост с несколькими адресами на интерфейсе уходит к пирам с того, который
+# выберет ядро, — а правила у пиров привязаны к его ansible_host. Если адреса
+# расходятся, рукопожатие молча дропается на той стороне.
+# Пусто = выключено (у хоста один адрес, выбирать не из чего).
+# Заполнено = юнит fleet-static-routes.service прибивает маршрут до КАЖДОГО пира
+# к этому источнику, так что новый пир покрывается сам.
+wireguard_egress_src: ""
+wireguard_egress_gateway: "{{ ansible_default_ipv4.gateway | default('') }}"
+wireguard_egress_device: "{{ ansible_default_ipv4.interface | default('') }}"

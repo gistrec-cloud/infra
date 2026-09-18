@@ -6,6 +6,12 @@
 # every AllowedIPs is a /32 inside the already-connected /24. First provision
 # is safe — tasks enable/start wg-quick before handlers flush, so the
 # interface exists by the time this runs.
+- name: Reapply fleet static routes
+  ansible.builtin.systemd:
+    name: fleet-static-routes.service
+    state: restarted
+    daemon_reload: true
+
 - name: Sync wireguard config
   # Capture the stripped config FIRST: with a bare process substitution a
   # failing `wg-quick strip` feeds syncconf an empty stream, which "succeeds"

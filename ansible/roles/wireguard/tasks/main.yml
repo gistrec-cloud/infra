@@ -31,3 +31,25 @@
     name: "wg-quick@{{ wireguard_interface }}"
     enabled: true
     state: started
+
+# Кодифицирует юнит, который до 2026-09-19 жил на germany-02 руками и покрывал
+# один адрес из трёх (остальные два — уничтоженные хосты). Из-за этого
+# рукопожатие до finland-01 уходило с другого адреса и дропалось у него на
+# фаерволе, пока до russia-03 тоннель работал.
+- name: Pin fleet egress to a single source address
+  ansible.builtin.template:
+    src: fleet-static-routes.service.j2
+    dest: /etc/systemd/system/fleet-static-routes.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: wireguard_egress_src | length > 0
+  notify: Reapply fleet static routes
+
+- name: Enable the fleet egress pin
+  ansible.builtin.systemd:
+    name: fleet-static-routes.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: wireguard_egress_src | length > 0
