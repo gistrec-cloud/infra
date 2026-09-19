@@ -9,17 +9,19 @@ Infrastructure as code for the **gistrec-cloud** fleet.
 
 The repository is deliberately split into **code** (public, here) and **live data** (private, never committed): real inventory, IPs, tokens and state stay out of git. Everything you see here uses placeholders — copy the `*.example` files, fill them locally, and they are already covered by `.gitignore`.
 
-Run **`make hooks`** after cloning. Alongside gitleaks and the linters it installs a check that refuses any public IPv4 in a tracked file: `.gitignore` protects whole files, this catches the address pasted into a comment or a README.
+Run **`brew install pre-commit && make hooks`** after cloning — nothing in `.pre-commit-config.yaml` runs without that binary, and its absence is silent. Alongside gitleaks and the linters it installs a check that refuses any public IPv4 in a tracked file: `.gitignore` protects whole files, this catches the address pasted into a comment or a README.
 
 ## Architecture
 
 ```
-   registrar (reg.ru / godaddy)          ┌──────────────┐
-   nameservers delegated to  ──────────► │  Cloudflare  │   DNS as code (terraform/dns —
-                                         │     DNS      │   Cloudflare + Porkbun zones)
-                                         └──────┬───────┘
-                                                │  A / CNAME
-                    ┌───────────────────────────┼─────────────────────────────┐
+   registrar (reg.ru / godaddy)          ┌──────────────┐          ┌──────────────┐
+   nameservers delegated to  ──────────► │  Cloudflare  │─── NS ──►│  Gcore  DNS  │  terraform/gcore —
+                                         │     DNS      │  for a   │  geo-routed  │  a few projects answer
+                                         └──────┬───────┘  few     └──────┬───────┘  with a different host
+                                                │  A/CNAME names          │  depending on visitor country,
+                                                │                         │  so latency-sensitive traffic
+                                                │                         │  lands on a nearby VPS
+                    ┌───────────────────────────┼─────────────────────────┴───┐
                     ▼                           ▼                             ▼
               ┌───────────┐               ┌───────────┐                 ┌───────────┐
               │  web-01   │               │  web-02   │                 │    ...    │
@@ -119,13 +121,24 @@ infra/
 
 ## App registry & moves
 
-"What runs where" lives in one gitignored file — `ansible/apps.yml` (copy from
-`apps.yml.example`): per app it names the host, dirs, env files (deployed from
-1Password), vhosts, processes, cron jobs and CI deploy keys. The app roles are
-driven entirely by this registry, and DNS points at hosts by name too (the
-`host_ips` map in `terraform/dns`), so moving an app to another VPS is flipping
-its `host:`, one playbook run and a one-word DNS change — the full procedure is
-[`docs/runbooks/move-apps.md`](docs/runbooks/move-apps.md).
+Moving an app to another VPS is **one command**, with no user-visible downtime:
+
+```sh
+scripts/move-apps.py --app <name> <DST>   # one app  (--dry-run to preview)
+scripts/move-apps.py <SRC> <DST>          # everything hosted on SRC
+```
+
+It flips the registry and DNS, copies the data, converges the target, smoke-tests
+it, applies DNS only if the plan is update-only, waits for that to propagate, and
+only then reconciles the source. Every step is idempotent and checkpointed, so a
+re-run resumes where it failed. Details: [`docs/runbooks/move-apps.md`](docs/runbooks/move-apps.md).
+
+That works because "what runs where" lives in one gitignored file —
+`ansible/apps.yml` (copy from `apps.yml.example`): per app it names the host,
+dirs, env files (deployed from 1Password), vhosts, processes, cron jobs and CI
+deploy keys. The app roles are driven entirely by this registry, and DNS points
+at hosts by name too (the `host_ips` map in `terraform/dns`), so a move is a
+one-word edit in two places — the script just does it safely and in order.
 
 ## Quickstart
 

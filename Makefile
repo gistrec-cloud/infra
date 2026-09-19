@@ -9,6 +9,18 @@ help: ## Show this help
 		awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
 hooks: ## Install the pre-commit hooks (gitleaks, linters, public-IP check)
+	@command -v pre-commit >/dev/null || { \
+		echo "pre-commit is not installed — the hooks in .pre-commit-config.yaml"; \
+		echo "(gitleaks, terraform_fmt, ansible-lint, detect-private-key, the"; \
+		echo "public-IP check) do NOT run without it. Install with:"; \
+		echo "    brew install pre-commit"; \
+		exit 1; }
+	@test ! -e .git/hooks/pre-commit || grep -q "pre-commit" .git/hooks/pre-commit || { \
+		echo "NOTE: .git/hooks/pre-commit is a hand-written hook, not the framework's."; \
+		echo "pre-commit install will replace it. scripts/check-staged-ips.py covers"; \
+		echo "every public IPv4, so a hand-rolled single-address guard is redundant."; \
+		cp .git/hooks/pre-commit .git/hooks/pre-commit.manual.bak; \
+		echo "Backed it up to .git/hooks/pre-commit.manual.bak"; }
 	pre-commit install
 	@echo "bypass a single commit with --no-verify"
 
