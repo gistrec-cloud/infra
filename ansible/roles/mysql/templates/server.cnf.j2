@@ -2,6 +2,7 @@
 [mysqld]
 innodb_buffer_pool_size = {{ mysql_innodb_buffer_pool_size }}
 max_connections         = {{ mysql_max_connections }}
+wait_timeout            = {{ mysql_wait_timeout }}
 
 # Match the managed cluster (terraform/yandex/mysql.tf) so behaviour is identical
 # — same strict sql_mode, same utf8mb4 defaults, same time zone (else SYSTEM
