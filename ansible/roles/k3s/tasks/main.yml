@@ -116,6 +116,16 @@
     comment: "k3s API (ansible)"
   loop: "{{ k3s_api_allow_from }}"
 
+- name: Allow NodePort services over the mesh interface
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: "{{ k3s_nodeport_interface }}"
+    to_port: "{{ k3s_nodeport_range }}"
+    proto: tcp
+    comment: "k3s NodePort over the mesh (ansible)"
+  when: k3s_nodeport_interface | length > 0
+
 - name: Revoke API access the mesh replaced
   community.general.ufw:
     rule: allow
