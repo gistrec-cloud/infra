@@ -19,8 +19,12 @@ disable:
   - {{ c }}
 {% endfor %}
 
-kubelet-arg:
+{# kubelet НЕ привязываем к адресу: k3s гоняет apiserver→kubelet через свой
+   туннель, а тот дозванивается на 127.0.0.1:10250 со стороны агента. С
+   address= kubelet уходит с петли, и ломаются logs, exec, port-forward
+   (502 Bad Gateway). Порт и так закрыт дефолтным deny в ufw — allow-правил
+   для 10250 роль не заводит. #}
 {% if not k3s_fail_swap_on %}
+kubelet-arg:
   - fail-swap-on=false
 {% endif %}
-  - address={{ k3s_node_ip }}
