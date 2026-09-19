@@ -126,7 +126,8 @@
     - role: firewall
       when: firewall_managed | default(false)
       tags: [firewall]
-    # Mesh membership = wireguard_ip in host_vars (germany-02 has none).
+    # Mesh membership = wireguard_ip in host_vars (all three hosts since
+    # 2026-09-19; germany-02 runs it as wg-fleet, its wg0 is the neighbour's).
     # After firewall, so the UDP port is open before the tunnel comes up.
     - role: wireguard
       when: wireguard_ip is defined

@@ -3,10 +3,11 @@
 node-ip: {{ k3s_node_ip }}
 node-external-ip: {{ k3s_node_ip }}
 advertise-address: {{ k3s_node_ip }}
+{# to_json, а не голая подстановка: YAML 1.1 превратил бы SAN `no` в false, а
+   строку с двоеточием — в отображение. #}
 tls-san:
-  - {{ k3s_node_ip }}
-{% for san in k3s_tls_san_extra %}
-  - {{ san }}
+{% for san in ([k3s_node_ip] + k3s_tls_san_extra) | unique %}
+  - {{ san | to_json }}
 {% endfor %}
 
 https-listen-port: {{ k3s_api_port }}

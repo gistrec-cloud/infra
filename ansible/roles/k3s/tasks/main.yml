@@ -1,4 +1,12 @@
 ---
+# Скаляр вместо списка Jinja перебрала бы посимвольно, и «127.0.0.1» дало бы
+# десять SAN из цифр и точек. YAML при этом валиден, так что ни check-yaml, ни
+# сам k3s не возразили бы.
+- name: Require k3s_tls_san_extra to be a list
+  ansible.builtin.assert:
+    that: k3s_tls_san_extra is sequence and k3s_tls_san_extra is not string
+    fail_msg: "k3s_tls_san_extra must be a list, got {{ k3s_tls_san_extra | type_debug }}"
+
 - name: Require an explicit node address
   ansible.builtin.assert:
     that: k3s_node_ip | length > 0
@@ -19,26 +27,18 @@
 # Только до установки: потом маршруты в этих подсетях создаёт сам кластер
 # (cni0, flannel.1), и проверка начала бы ловить саму себя — второй прогон
 # роли падал.
-- name: Collect existing routes
-  ansible.builtin.command: ip -4 route show table all
-  register: k3s_routes
-  changed_when: false
-  # Читает и только читает: без этого --check пропустил бы таск, оставив
-  # проверку ниже без данных — и она бы «прошла», ничего не проверив.
-  check_mode: false
-  when: not k3s_binary.stat.exists
-
-# Сравниваем по первым двум октетам: оба CIDR — /16, а маршруты чужого VPN
-# приезжают как /32 в таблице local, так что точное совпадение сети их не ловит.
+#
+# Скриптом, а не сравнением строк: маршрут 10.0.0.0/8 содержит обе подсети, но
+# подстроки «10.42.» в нём нет — именно такой маршрут и бывает у чужого VPN,
+# ради которого проверка затевалась. Промах в обратную сторону тоже реален:
+# адрес 110.42.0.1 содержит подстроку и блокировал бы свободную подсеть.
 - name: Refuse to overlap an existing route
-  ansible.builtin.assert:
-    that: k3s_cidr_prefix not in k3s_routes.stdout
-    fail_msg: "{{ item }} overlaps a route already on this host — pick another CIDR."
-  vars:
-    k3s_cidr_prefix: "{{ item.split('.')[0] }}.{{ item.split('.')[1] }}."
-  loop:
-    - "{{ k3s_cluster_cidr }}"
-    - "{{ k3s_service_cidr }}"
+  ansible.builtin.script:
+    cmd: check-cidr-overlap.py {{ k3s_cluster_cidr | quote }} {{ k3s_service_cidr | quote }}
+    executable: python3
+  changed_when: false
+  # Читает и только читает: без этого --check пропустил бы проверку целиком.
+  check_mode: false
   when: not k3s_binary.stat.exists
 
 - name: Configuration directory
@@ -124,4 +124,16 @@
     dest: "{{ k3s_node_ip }}"
     port: "{{ k3s_api_port | string }}"
     proto: tcp
+    # Та же форма правила, что у allow выше, включая comment: ufw сверяет
+    # запрос на удаление с разобранным кортежем, и правило с комментарием по
+    # запросу без него может не найтись — а `ufw delete` на несуществующее
+    # правило выходит с нулём, так что отзыв «прошёл бы», ничего не сняв.
+    comment: "k3s API (ansible)"
   loop: "{{ k3s_api_revoke_from }}"
+
+# Падение ЛЮБОЙ последующей роли отменяет отложенный рестарт, и конфиг на диске
+# остаётся новее процесса — молча, до ближайшей перезагрузки. На следующем
+# прогоне шаблон уже совпадает, notify не срабатывает, и расхождение
+# закрепляется. Так уже обжигались в nginx (дважды) и в mysql — флашим здесь.
+- name: Apply the pending k3s restart now
+  ansible.builtin.meta: flush_handlers
