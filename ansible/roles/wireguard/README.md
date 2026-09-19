@@ -9,9 +9,10 @@ became the replica.
 Everything else RF↔EU followed: the apps on russia-03 dial `primary.mysql`,
 `primary.clickhouse` (9440) and the shared `tg-bot-api` (8081) by name over wg0
 (all three A records point at 10.10.0.4), and netdata cross-probes peers'
-`/health` + pings the wg IPs. Netdata's own metric streaming does not — it goes
-to the parent's public IP, as does everything germany-02 does (no
-`wireguard_ip`, not a mesh member). Gating is mixed: 8081 is open only to
+`/health` + pings the wg IPs. Netdata's own metric streaming rides the tunnel
+too since 2026-09-19 — `stream.conf` carries no TLS and authenticates with a
+single API key, so every child now streams to the parent's wg IP and no public
+source is allowed on 19999. Gating is mixed: 8081 is open only to
 russia-03's wg IP, while MySQL and ClickHouse publish 3306 / 9440 / 8443 on
 0.0.0.0, guarded by auth + their LE certs (`*.mysql.gistrec.cloud`,
 `*.clickhouse.gistrec.cloud`) — exactly as the managed Yandex cluster was until
@@ -71,8 +72,9 @@ firewall_allow_udp:
 ```
 
 On a host with no managed firewall there is no rule for us to add — its own
-firewall decides. Moot today: both mesh members are managed, and the only
-unmanaged host (germany-02) is not in the mesh.
+firewall decides. That is germany-02's case: it joined the mesh 2026-09-19 but
+keeps `firewall_managed: false`, and no inbound 51820 rule was added to its ufw.
+`PersistentKeepalive` makes it dial out, so replies arrive as ESTABLISHED.
 
 ## Verify
 

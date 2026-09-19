@@ -115,7 +115,7 @@ infra/
 | `breakglass`| Emergency `rescue` user (YubiKey keys in root-owned `/etc/ssh/rescue_keys`) — survives home wipes |
 | `clickhouse` | Self-hosted ClickHouse in Docker; public TLS ports (9440/8443), nightly dumps + off-site S3 |
 | `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
-| `k3s`      | Single-node Kubernetes on a host shared with a third party: adds narrow ufw rules instead of replacing the firewall, API limited to operator addresses |
+| `k3s`      | Single-node Kubernetes on a host shared with a third party: adds narrow ufw rules instead of replacing the firewall, API reachable over the mesh only |
 
 ## App registry & moves
 
