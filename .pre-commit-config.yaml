@@ -12,11 +12,9 @@ repos:
       - id: terraform_fmt
       - id: terraform_validate
 
-  - repo: https://github.com/ansible/ansible-lint
-    rev: v24.7.0
-    hooks:
-      - id: ansible-lint
-        files: ^ansible/
+  # ansible-lint — только в CI: из корня репозитория он не видит
+  # ansible/ansible.cfg с относительным vault_password_file, а запуск из нужного
+  # каталога стоит Touch ID на каждый коммит в ansible/.
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
