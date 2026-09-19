@@ -38,6 +38,18 @@ mysql_root_password: "{{ vault_mysql_root_password | mandatory }}"
 mysql_innodb_buffer_pool_size: "256M"
 mysql_max_connections: 100
 
+# Через сколько секунд простоя сервер закрывает соединение. Дефолт MySQL —
+# 28800, то есть восемь часов: брошенное соединение живёт до перезапуска
+# приложения. Замер 2026-09-19 на primary: 47 соединений, все спящие, у loquia
+# средний простой 31 минута — почти половина лимита занята ничем.
+#
+# ВАЖНО перед снижением: у клиента должен быть pool_pre_ping (SQLAlchemy) или
+# равноценная проверка живости. Иначе пул выдаст закрытое сервером соединение и
+# приложение получит «MySQL server has gone away» вместо тихого переоткрытия.
+# Пул особенно хрупок там, где соединение идёт через wg: 37 из 47 приходят с
+# russia-03, и простаивающий TCP через тоннель — ровно то, что рвётся при флапе.
+mysql_wait_timeout: 28800
+
 # ─── Runaway-query guard ───
 # SELECT timeout (ms) applied via init_connect, NOT as a global — see
 # server.cnf.j2 for why. 0 disables the guard entirely.
