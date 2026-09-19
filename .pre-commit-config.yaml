@@ -12,11 +12,20 @@ repos:
       - id: terraform_fmt
       - id: terraform_validate
 
-  - repo: https://github.com/ansible/ansible-lint
-    rev: v24.7.0
-    hooks:
-      - id: ansible-lint
-        files: ^ansible/
+  # ansible-lint здесь НЕ запускается — им владеет CI (.github/workflows/ci.yml),
+  # и только там он отрабатывает верно.
+  #
+  # Хук стоял на v24.7.0 и падал с ModuleNotFoundError: та версия несовместима
+  # с ansible-core, который к ней подтягивается. Это заметили только когда
+  # pre-commit наконец поставили — до того ни один хук из этого файла вообще не
+  # работал. Сломанный хук хуже отсутствующего: он приучает к --no-verify, а
+  # тот глушит заодно gitleaks и проверку IP.
+  #
+  # Свежая версия запускается, но из корня репозитория не видит ansible/ansible.cfg,
+  # а там vault_password_file = .vault_pass относительным путём. Без него vault
+  # не расшифровывается и сыплются syntax-check. Запуск из нужного каталога это
+  # чинит, но ценой обращения в 1Password — то есть Touch ID на каждый коммит,
+  # трогающий ansible/. CI стабает пароль и потому свободен от этой платы.
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
