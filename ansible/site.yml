@@ -153,6 +153,12 @@
     - role: k3s
       when: k3s_managed | default(false)
       tags: [k3s]
+    # VLESS-inbound. После firewall: роль проверяет, что её порт открыт, и
+    # падает, если нет — на default-drop хосте закрытый inbound снаружи
+    # неотличим от блокировки у провайдера.
+    - role: xray
+      when: xray_managed | default(false)
+      tags: [xray]
     - role: netdata
       tags: [netdata]
     # App cron jobs come from the apps registry — per app, so a job moves

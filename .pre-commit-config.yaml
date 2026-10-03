@@ -35,3 +35,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+      # gitleaks знает форму токенов известных сервисов; uuid и base64-ключ
+      # кривой на них не похожи, а паролем быть не перестают.
+      - id: no-key-material
+        name: no uuid / base64 key material in tracked files
+        entry: python3 scripts/check-staged-secrets.py
+        language: system
+        pass_filenames: false
+        always_run: true

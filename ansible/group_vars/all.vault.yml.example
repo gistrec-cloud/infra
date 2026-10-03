@@ -38,6 +38,17 @@ vault_admin_ssh_keys:
 # vault_mysql_backup_s3_key_id: "REPLACE_ME"
 # vault_mysql_backup_s3_secret: "REPLACE_ME"
 
+# ─── xray VLESS-inbound (xray role) ───
+# Needed on hosts with xray_managed: true. The uuid IS the password — one per
+# device, so a lost device is revoked by dropping its entry from xray_clients.
+#   xray x25519         → private key (server) + public key (client only)
+#   openssl rand -hex 8 → short id
+#   uuidgen             → one per client
+# vault_xray_reality_private_key: "REPLACE_ME"
+# vault_xray_short_id:            "REPLACE_ME"
+# vault_xray_uuid_macbook:        "REPLACE_ME"
+# vault_xray_uuid_phone:          "REPLACE_ME"
+
 # ─── Self-hosted ClickHouse (clickhouse role) ───
 # Needed on hosts with clickhouse_managed: true. One password per app user
 # (mirror clickhouse_users in host_vars). The role hashes these to sha256 on the
