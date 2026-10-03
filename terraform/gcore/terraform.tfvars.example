@@ -1,11 +1,10 @@
 # Copy to terraform.tfvars (gitignored). Токен сюда НЕ кладётся — он приезжает
 # из окружения как TF_VAR_gcore_permanent_api_token (.envrc → 1Password).
+#
+# Какие имена делегированы — НЕ здесь: список лежит в geo.json в корне
+# репозитория, общий с terraform/dns и ansible (см. geo.json.example).
 
 host_ips = {
   "finland-01" = "203.0.113.10"
   "russia-03"  = "198.51.100.20"
 }
-
-geo_names = [
-  "app.example.com",
-]

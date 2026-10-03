@@ -10,6 +10,11 @@ timezone: Europe/Moscow
 # stay untouched.
 infra_registry_state_dir: /var/lib/gistrec-infra
 
+# Двусторонние имена: geo.json в корне репозитория, общий с terraform/gcore
+# (зона и geo-запись) и terraform/dns (NS-пара). Здесь из него берётся сторона
+# хоста и прокси-фронты, которые nginx-роль собирает из шаблона.
+geo_registry: "{{ lookup('file', playbook_dir ~ '/../geo.json') | from_json }}"
+
 # --- common role ---
 # Apps run under the SSH login user, not a separate service account.
 admin_user: "{{ ansible_user }}"

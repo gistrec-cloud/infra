@@ -1,0 +1,65 @@
+{
+  "_": [
+    "Copy to geo.json (gitignored) — the names that answer with a different host",
+    "depending on where the visitor is. Read by THREE consumers, so it is plain",
+    "JSON rather than commented HCL or YAML: terraform/gcore (the Gcore zone and",
+    "its geo record), terraform/dns (the NS pair in the parent Cloudflare zone)",
+    "and the ansible nginx role (the generated proxy front on the far side).",
+    "",
+    "sides: the two web hosts the geo record picks between — RF clients get the",
+    "`rf` one, everyone else `world`. Both must be keys of host_ips (terraform)",
+    "and inventory hostnames (ansible).",
+    "",
+    "Per name:",
+    "  origin  where the application actually runs (one of the two sides).",
+    "  front   proxy = the OTHER side gets a generated vhost proxying to origin",
+    "          over wg; none = it already serves the name itself (its own copy,",
+    "          or the very same vhost file).",
+    "  geo     false for an apex name: a zone cannot be delegated by subdomain,",
+    "          so no Gcore zone and no NS pair — the A record stays in the",
+    "          parent DNS and only the front is generated.",
+    "  cert    letsencrypt lineage override. Default: the name minus its first",
+    "          label (apex names use themselves).",
+    "  notes   one line, lands in the generated vhost's header.",
+    "",
+    "Front knobs — all default to the role's generic behaviour; set them to",
+    "mirror whatever the origin vhost enforces, because through a front the",
+    "origin sees ONE client address (this host) for the whole far side:",
+    "  client_ip       false = the front strips X-Real-IP / X-Forwarded-For",
+    "                  instead of adding them. For an endpoint that must never",
+    "                  see client addresses — the origin passes an inbound",
+    "                  header straight into the app, so only the front can stop",
+    "                  it.",
+    "  max_body_size   overrides nginx_geo_front_max_body_size (default 100m).",
+    "                  Match the origin's cap, or an oversized body crosses the",
+    "                  mesh just to be refused there.",
+    "  rate_limit      e.g. \"10r/s\" — emits a per-IP limit_req on the front,",
+    "                  where the real address still exists. Without it the",
+    "                  origin's per-IP bucket becomes one shared bucket for the",
+    "                  entire far side. rate_limit_burst defaults to 20."
+  ],
+
+  "sides": {
+    "rf": "russia-03",
+    "world": "finland-01"
+  },
+
+  "names": {
+    "app.example.com": {
+      "origin": "finland-01",
+      "front": "proxy",
+      "notes": "дашборд, страница 185 КБ"
+    },
+    "static.example.com": {
+      "origin": "finland-01",
+      "front": "none",
+      "notes": "оба хоста несут один и тот же vhost и сами ходят в бакет"
+    },
+    "apex-example.ru": {
+      "origin": "finland-01",
+      "front": "proxy",
+      "geo": false,
+      "notes": "apex — geo невозможен, пока зона не делегирована целиком"
+    }
+  }
+}

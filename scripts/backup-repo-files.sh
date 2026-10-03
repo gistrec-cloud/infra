@@ -17,8 +17,9 @@
 #   scripts/backup-repo-files.sh          # back up + verify
 #   scripts/backup-repo-files.sh --list   # show what would go up
 #
-# Re-run after changing any of: inventory/host_vars, apps.yml, group_vars/db.yml,
-# the vault, vhosts, control scripts, terraform tfvars — and after EVERY terraform
+# Re-run after changing any of: inventory/host_vars, apps.yml, geo.json,
+# group_vars/db.yml, the vault, vhosts, control scripts, terraform tfvars —
+# and after EVERY terraform
 # apply (the state files are in here until they move to a remote backend).
 set -euo pipefail
 
@@ -35,6 +36,7 @@ cd "$(dirname "$0")/.."
 collect() {
   ls ansible/inventory/hosts.yml
   ls ansible/apps.yml
+  ls geo.json
   ls ansible/group_vars/*.vault.yml
   ls ansible/group_vars/db.yml
   ls ansible/.vault_pass

@@ -46,6 +46,12 @@ terraform apply
   name duplicates are legal there.
 - Record `name`s are FQDNs exactly as the Cloudflare API returns them — keeps
   imported state and config identical, so plans stay clean.
+- NS pairs for the geo-delegated names are **not** in `terraform.tfvars`: they
+  are derived in `main.tf` from `geo.json` at the repository root, the same file
+  `terraform/gcore` creates the zones from. One entry there delegates the name
+  and points it at Gcore; a hand-written pair could silently drift from the zone
+  list. Gcore's account nameservers are a constant here (`local.gcore_nameservers`)
+  — the zone resource does not expose them.
 
 ## Porkbun notes
 
