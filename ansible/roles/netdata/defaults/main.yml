@@ -53,6 +53,12 @@ netdata_pushover_roles: {}
 #   status_accepted: list of healthy HTTP codes, default [200]
 netdata_httpcheck_jobs: []
 
+# go.d portcheck jobs — живость TCP-порта без разбора протокола. Нужен там, где
+# httpcheck не годится: за портом не HTTP, или доведённое рукопожатие ушло бы к
+# чужому хосту. Entries: { name, host, ports (список), timeout, update_every }.
+# Падение любого из них = crit (files/portcheck_down.conf).
+netdata_portcheck_jobs: []
+
 # go.d filecheck jobs — file freshness; backs the backup-staleness alert (the
 # backup scripts touch a `.last-success` marker). Entries: { name, path }.
 netdata_filecheck_files: []

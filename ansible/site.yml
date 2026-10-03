@@ -35,7 +35,10 @@
     # Runs FIRST: the baseline play's firewall role gates its honeypot jail
     # on `web` membership — when this play sat after the apps play, those
     # tasks silently skipped on every run (caught 2026-07-19).
-    - name: Join `web` when the registry gives this host a vhost
+    #
+    # geo.json counts too: a host may carry nothing but a generated geo front
+    # (the far side of a two-sided name), and that still needs the web stack.
+    - name: Join `web` when the registry or geo.json gives this host a vhost
       ansible.builtin.group_by:
         key: web
       changed_when: false
@@ -48,6 +51,12 @@
             | selectattr('value.host', 'equalto', inventory_hostname)
             | map(attribute='value.vhosts', default=[])
             | flatten | length > 0)
+        or (inventory_hostname in (geo_registry.sides | default({})).values()
+            and (geo_registry.names | default({}) | dict2items
+                 | selectattr('value.front', 'defined')
+                 | selectattr('value.front', 'eq', 'proxy')
+                 | rejectattr('value.origin', 'eq', inventory_hostname)
+                 | length > 0))
 
 # op-backed inventory lookups are lazy — every evaluation re-runs `op`, one
 # Touch ID prompt each. Resolve each token once into localhost's facts; the

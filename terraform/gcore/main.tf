@@ -1,17 +1,31 @@
-# Geo-маршрутизация: из РФ — на russia-03, отовсюду ещё — на finland-01.
-# Список имён в geo_names (terraform.tfvars).
+# Geo-маршрутизация: из РФ — на РФ-сторону, отовсюду ещё — на мировую.
 #
-# Что отдаёт РФ-адрес, зависит от сервиса: glucose собирает страницу сам из
-# локальной реплики, остальные проксируют на finland-01 по wg (apps.yml, *-rf).
-# Для развязки это неважно — важно лишь, что клиент приходит на российский IP.
+# Список имён — geo.json в корне репозитория, общий с terraform/dns (NS-пары) и
+# с ansible (сгенерированный прокси-фронт на дальней стороне). Добавить сайт =
+# одна запись там; у модулей отдельные state'ы и общего backend'а нет, поэтому
+# данные они делят файлом, а не output'ом.
+#
+# Чем именно отвечает ближний адрес, зависит от сервиса (origin + front в
+# geo.json) — для развязки это неважно, важно лишь, что клиент приходит на
+# ближний IP.
 #
 # Делегируются ОТДЕЛЬНЫЕ поддомены, а не зона целиком: NS-записи стоят в
 # Cloudflare (terraform/dns), остальное gistrec.cloud остаётся там. Сертификат
 # это не трогает — *.gistrec.cloud покрывает имена, а DNS-01 для wildcard
-# проходит в родительской зоне.
+# проходит в родительской зоне. Отсюда и "geo": false у apex-имён: зону по
+# поддомену не делегировать, им geo недоступен до переезда зоны целиком.
+
+locals {
+  geo = jsondecode(file("${path.module}/../../geo.json"))
+
+  geo_zones = [
+    for name, cfg in local.geo.names : name
+    if try(cfg.geo, true)
+  ]
+}
 
 resource "gcore_dns_zone" "this" {
-  for_each = toset(var.geo_names)
+  for_each = toset(local.geo_zones)
 
   name = each.value
 
@@ -66,7 +80,7 @@ resource "gcore_dns_zone_record" "apex" {
   }
 
   resource_record {
-    content = var.host_ips["russia-03"]
+    content = var.host_ips[local.geo.sides.rf]
     enabled = true
 
     meta {
@@ -75,7 +89,7 @@ resource "gcore_dns_zone_record" "apex" {
   }
 
   resource_record {
-    content = var.host_ips["finland-01"]
+    content = var.host_ips[local.geo.sides.world]
     enabled = true
 
     # default = запасной ответ для всех, кого не поймало правило выше.

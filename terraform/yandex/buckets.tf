@@ -4,6 +4,9 @@
 # (needs a static key we deliberately don't mint) and are adopted as-is.
 # gistrec-cloud backup retention (mysql/+clickhouse/) = 365d, set out-of-band from
 # gistrec-cloud-lifecycle.json (uploader key can't prune; bucket lifecycle does).
+# gistrec-share backs share.gistrec.cloud (README). No expiry rule on purpose —
+# a shared link that 404s later is worse than a few idle megabytes; the 5 GiB
+# cap is the ceiling instead.
 # glucose-bot holds meal photos — private, and capped rather than unlimited: at
 # four 1024px JPEGs per meal it grows ~1 GiB a year, so 10 GiB is a decade of
 # headroom and still a ceiling on the bill. Its retention is a lifecycle rule set
@@ -22,6 +25,7 @@ locals {
     "clear-transcript-bot" = { max_size = 0, anonymous_read = false, folder_id = null, tags = { project = "clear-transcript-bot" } }
     "dnd-crime"            = { max_size = 53687091200, anonymous_read = true, folder_id = null, tags = {} }
     "gistrec-cloud"        = { max_size = 53687091200, anonymous_read = false, folder_id = null, tags = {} }
+    "gistrec-share"        = { max_size = 5368709120, anonymous_read = true, folder_id = var.folder_id, tags = {} }
     "glucose-bot"          = { max_size = 10737418240, anonymous_read = false, folder_id = var.folder_id, tags = { project = "glucose-bot" } }
     "recepter"             = { max_size = 0, anonymous_read = true, folder_id = null, tags = { project = "recepter" } }
   }

@@ -26,6 +26,11 @@ jobs:
         # without it every syntax-check ansible-lint runs errors out. Nothing
         # vault-encrypted is in the repo, so the value is never used.
         run: echo ci-dummy > ansible/.vault_pass
+      - name: Stub the geo registry
+        # The nginx role reads the gitignored geo.json (two-sided names, shared
+        # with terraform). The example has the same shape and no real data.
+        run: cp geo.json.example geo.json
+
       - name: Run ansible-lint
         working-directory: ansible
         run: ansible-lint
@@ -51,6 +56,12 @@ jobs:
           path: ${{ github.workspace }}/.terraform-plugin-cache
           key: tf-providers-${{ runner.os }}-${{ hashFiles('terraform/**/versions.tf') }}
           restore-keys: tf-providers-${{ runner.os }}-
+      - name: Stub the geo registry
+        # dns/ and gcore/ read the gitignored geo.json (two-sided names) with
+        # file() — without it `validate` errors before it checks anything. The
+        # example has the same shape and no real data.
+        run: cp ../geo.json.example ../geo.json
+
       - name: Check formatting
         run: terraform fmt -check -recursive
       - name: Validate each module

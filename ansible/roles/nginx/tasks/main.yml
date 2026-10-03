@@ -53,13 +53,45 @@
          | selectattr('value.vhosts', 'defined')
          | map(attribute='value.vhosts') | flatten | unique | sort }}
 
+# Двусторонние имена (geo_registry ← geo.json): приложение живёт на одной
+# стороне, вторая несёт прокси-фронт. Единственный шаблонизируемый vhost —
+# фронт не прикладной конфиг, а механика парка: копии отличались ровно именем,
+# и каждое новое имя стоило 52 строк копипасты.
+#
+# Пустая строка = хост не сторона развязки (germany-02) → фронтов нет.
+- name: Derive this host's side of the geo split
+  ansible.builtin.set_fact:
+    nginx_geo_side: >-
+      {{ nginx_geo.sides | dict2items
+         | selectattr('value', 'eq', inventory_hostname)
+         | map(attribute='key') | first | default('', true) }}
+
+- name: Derive the geo fronts this host carries
+  ansible.builtin.set_fact:
+    nginx_geo_fronts: >-
+      {{ [] if nginx_geo_side == '' else
+         (nginx_geo.names | dict2items(key_name='name', value_name='cfg')
+          | selectattr('cfg.front', 'defined')
+          | selectattr('cfg.front', 'eq', 'proxy')
+          | rejectattr('cfg.origin', 'eq', inventory_hostname)
+          | sort(attribute='name') | list) }}
+
+# regex_replace по '$' = приписать суффикс стороны. То же правило повторено в
+# dest у задачи деплоя ниже — менять оба разом, иначе файл поедет мимо манифеста.
+- name: Name the geo front files
+  ansible.builtin.set_fact:
+    nginx_geo_front_files: >-
+      {{ nginx_geo_fronts
+         | map(attribute='name') | map('replace', '.', '-')
+         | map('regex_replace', '$', '-' ~ nginx_geo_side) | list }}
+
 - name: Load the nginx ownership manifest
   ansible.builtin.import_role:
     name: registry_manifest
     tasks_from: load
   vars:
     registry_manifest_name: nginx-vhosts
-    registry_manifest_desired: "{{ nginx_vhost_files }}"
+    registry_manifest_desired: "{{ nginx_vhost_files + nginx_geo_front_files }}"
 
 # Remove the enabled link first, then its source file. Only verbatim registry
 # vhosts participate; legacy nginx_sites and hand-written unrelated files are
@@ -113,6 +145,29 @@
     # the same names — replace them with the symlink.
     force: true
   loop: "{{ nginx_vhost_files }}"
+  notify: Reload nginx
+
+# Те же имена файлов, что у копий, которые фронты заменили — без .conf, как и
+# verbatim-вхосты, иначе на хосте остался бы второй server-блок на то же имя.
+- name: Deploy geo front vhosts
+  ansible.builtin.template:
+    src: geo-front.conf.j2
+    dest: "/etc/nginx/sites-available/{{ item.name | replace('.', '-') }}-{{ nginx_geo_side }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ nginx_geo_fronts }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload nginx
+
+- name: Enable geo front vhosts
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item }}"
+    dest: "/etc/nginx/sites-enabled/{{ item }}"
+    state: link
+    force: true
+  loop: "{{ nginx_geo_front_files }}"
   notify: Reload nginx
 
 # BEFORE the vhost template: its 443 block references the lineage. certonly
@@ -247,13 +302,15 @@
 
 # Persist ownership only after the resulting nginx configuration validates. If
 # anything above fails, the previous manifest survives and cleanup is retried.
+# Тот же список, что на загрузке — иначе фронты выпадут из владения и имя,
+# снятое из geo.json, останется на хосте навсегда.
 - name: Save the nginx ownership manifest
   ansible.builtin.import_role:
     name: registry_manifest
     tasks_from: save
   vars:
     registry_manifest_name: nginx-vhosts
-    registry_manifest_desired: "{{ nginx_vhost_files }}"
+    registry_manifest_desired: "{{ nginx_vhost_files + nginx_geo_front_files }}"
 
 # Handlers normally flush at end of play — but a failure in a LATER role
 # aborts the host and silently drops the pending reload, leaving workers

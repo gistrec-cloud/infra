@@ -8,7 +8,8 @@ variable "host_ips" {
   description = <<-EOT
     Fleet hosts: inventory hostname => public IPv4. Duplicated from terraform/dns
     on purpose — the two modules have separate states and no remote backend to
-    share outputs through. Keep both in sync when a host moves.
+    share outputs through. Keep both in sync when a host moves. Must hold both
+    sides named in geo.json.
   EOT
   type        = map(string)
 }
@@ -20,12 +21,4 @@ variable "rf_countries" {
   EOT
   type        = list(string)
   default     = ["ru"]
-}
-
-variable "geo_names" {
-  description = <<-EOT
-    FQDN, делегированные сюда под geo-развязку. Каждое становится отдельной
-    зоной у Gcore; NS на них прописываются в родительской зоне (terraform/dns).
-  EOT
-  type        = list(string)
 }

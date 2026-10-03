@@ -5,8 +5,12 @@ so RF clients must land on an RF address while everyone else stays on the EU one
 Cloudflare geo-steers only on its paid Load Balancing, so such names are
 delegated to Gcore one subdomain at a time — the parent zone stays where it is.
 
-Which names are delegated is data — `geo_names` in `terraform.tfvars`. Adding one
-is a line there plus its two NS records in `terraform/dns`.
+Which names are delegated is data — `names` in `geo.json` at the repository root
+(see `geo.json.example`). That one file also drives the NS pair `terraform/dns`
+writes into the parent zone and the proxy vhost the `nginx` role generates on the
+far host, so adding a name is a single entry, not three edits that can drift
+apart. Entries marked `"geo": false` are apex names: they get the front only — a
+zone cannot be delegated one subdomain at a time.
 
 ```
 gistrec.cloud (Cloudflare)
@@ -47,8 +51,8 @@ terraform -chdir=terraform/gcore plan
 - **TTL floor is 120s on the free plan** (`400` below that). That floor is also
   the failover floor: no geo or health change reaches a client faster.
 - **`gcore_dns_zone` exposes no nameservers.** They are account-wide and fixed
-  (vanity NS are Enterprise-only), so the delegation records in `dns/` are
-  written by hand.
+  (vanity NS are Enterprise-only), so `dns/` carries them as a constant
+  (`local.gcore_nameservers`) rather than reading them back from a zone.
 - **NS and CNAME cannot coexist on a name**, so delegating meant deleting the old
   `glucose` CNAME in the same apply.
 - **No healthchecks yet.** If russia-03 dies, RF clients keep getting its

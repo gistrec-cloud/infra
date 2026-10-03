@@ -93,6 +93,7 @@ infra/
 │   ├── yandex-budget-explorer/   # own YC folder: Cloud Functions + Lockbox + timer trigger
 │   └── yandex-vk-ads-tool/       # own YC folder: Object Storage (landing bucket)
 ├── docs/runbooks/                # operational procedures (move-apps, break-glass)
+├── geo.json                      # (gitignored) two-sided names — read by terraform AND ansible
 └── scripts/                      # backups (envs, repo-private files), move-apps, pre-commit checks
 ```
 
@@ -102,7 +103,7 @@ infra/
 |------------|-------------------------------------------------------------------------|
 | `common`   | Admin user, SSH key auth + sshd hardening, base packages, system hostname (`common_hostname`) |
 | `firewall` | nftables default-drop ruleset + fail2ban jails (sshd, nginx-http-auth, nginx-honeypot on web hosts) |
-| `nginx`    | Install nginx, reconcile vhosts from the apps registry                  |
+| `nginx`    | Install nginx, reconcile vhosts from the apps registry, generate the geo fronts from `geo.json` |
 | `tls`      | Per-zone wildcard Let's Encrypt certs via DNS-01 (Cloudflare, plus vendored hooks for Porkbun-hosted zones) — any host can serve any domain |
 | `nodeapp`  | Early Node.js/pm2 runtime bootstrap; legacy host-vars apps deploy later |
 | `apppm2`   | Reconcile registry PM2 apps: bootstrap desired names, delete previously managed stale names |
@@ -141,6 +142,72 @@ dirs, env files (deployed from 1Password), vhosts, processes, cron jobs and CI
 deploy keys. The app roles are driven entirely by this registry, and DNS points
 at hosts by name too (the `host_ips` map in `terraform/dns`), so a move is a
 one-word edit in two places — the script just does it safely and in order.
+
+## Geo registry — two-sided names
+
+Russian ISPs shape *outbound* traffic to foreign origins: ТСПУ cuts the
+connection after the first ~14 KB, so a 32 KB landing page reaches an RF visitor
+truncated. The fix is to put a near address in front of the visitor and let the
+border crossing happen inside the wg mesh instead. That needs three things to
+agree — a Gcore zone with a geo record, an NS pair in the parent Cloudflare zone,
+and a proxy vhost on the host that does *not* run the app.
+
+All three come from **one gitignored file, `geo.json`** (copy from
+`geo.json.example`), read by `terraform/gcore`, `terraform/dns` and the `nginx`
+role. Adding a site is one entry:
+
+```json
+"flights.gistrec.cloud": { "origin": "finland-01", "front": "proxy" }
+```
+
+```
+geo.json
+  ├── terraform/gcore  → Gcore zone + A record: countries=["ru"] → rf side, default → world side
+  ├── terraform/dns    → NS pair for the name in its parent Cloudflare zone
+  └── ansible nginx    → proxy vhost on the far side (certs, headers, wg upstream)
+```
+
+`front: "none"` means the far side already serves the name itself — `glucose`
+renders its own page from the local MySQL replica, `share` carries the very same
+vhost file and reads the bucket directly. `"geo": false` marks an apex name: a
+zone cannot be delegated one subdomain at a time, so `clear-transcript-bot.ru`
+gets the front but no geo record until its whole zone moves to Gcore (which also
+needs DNS-01 hooks for Gcore, the way `tls` already vendors them for Porkbun).
+
+Measured 2026-10-03, worth knowing before enrolling a name: **both datacentre
+paths are clean in both directions** — from Hetzner and from russia-03 every
+fleet name returns in full (a 2.6 MB page in 0.7 s). The truncation lives on
+consumer ISP paths, which no fleet host can observe, so enrolment is a judgement
+call about who the visitors are, not something a probe decides.
+
+## Sharing one-off files
+
+`share.gistrec.cloud` serves files straight out of the public `gistrec-share`
+bucket (`terraform/yandex/buckets.tf`). nginx only proxies, so nothing lands on a
+host disk or in git — a share needs no deploy and no repository:
+
+```sh
+yc storage s3 cp ~/Downloads/report.html s3://gistrec-share/report.html
+# → https://share.gistrec.cloud/report.html
+```
+
+The object name is the URL path; nested prefixes work. Content-Type comes from
+the extension, which matters because the vhost sends
+`X-Content-Type-Options: nosniff` — a wrong type renders as text instead of a
+page. Anonymous listing is off, and objects have no expiry on purpose: a link
+someone was given should not rot. Pruning is manual, `yc storage s3 rm`.
+
+The name is delegated to Gcore for geo-routing (`terraform/gcore`): clients in
+Russia get russia-03, everyone else finland-01. Both hosts carry the *same* vhost
+file and reach the bucket themselves — there is no `*-rf` variant proxying to
+finland-01 over the mesh, because the bucket sits in `ru-central1` and russia-03
+reaches it directly. The detour would only add latency and a point of failure.
+
+`glucose` already serves one vhost from both hosts like this, so the fleet has
+three shapes, not two: it keeps a local copy of its data (the MySQL replica plus
+a cron render), a share keeps no state at all, and the fronts that really do
+proxy over the mesh — `pdf-v-excel`, `subtitry`, `flights`,
+`clear-transcript-bot` — do so because the application runs only on finland-01.
 
 ## Quickstart
 

@@ -5,6 +5,12 @@ nginx_sites: []
 
 # Set certbot_email (e.g. in host_vars) to enable Let's Encrypt issuance.
 
+# Двусторонние имена: geo_registry (group_vars/all.yml ← geo.json). Хост, не
+# несущий приложение, получает отсюда сгенерированный прокси-фронт.
+nginx_geo: "{{ geo_registry }}"
+nginx_geo_front_max_body_size: 100m
+nginx_geo_front_timeout: 300s
+
 # htpasswd files the verbatim vhosts reference (auth_basic_user_file):
 # path → content, vault refs in the gitignored inventory (all: vars:), e.g.
 #   /etc/nginx/.htpasswd: "{{ vault_htpasswd_stats }}"

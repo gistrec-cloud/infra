@@ -1,0 +1,86 @@
+{#- Прокси-фронт двустороннего имени. Данные — geo.json в корне репозитория. -#}
+{%- set labels = item.name.split('.') -%}
+{%- set cert = item.cfg.cert | default(labels[1:] | join('.') if labels | length > 2 else item.name, true) -%}
+{%- set origin = hostvars[item.cfg.origin].wireguard_ip -%}
+{%- set zone = 'geo_' ~ item.name | replace('.', '_') | replace('-', '_') -%}
+# ANSIBLE MANAGED (nginx-роль из geo.json) — правки на хосте затрутся.
+#
+# Фронт {{ item.name }} на {{ inventory_hostname }}{% if item.cfg.notes is defined %}: {{ item.cfg.notes }}{% endif %}.
+#
+{% if nginx_geo_side == 'rf' %}
+# Здесь ничего не хостится — всё уходит на {{ item.cfg.origin }} по wg. ТСПУ рвёт
+# соединение к иностранному origin после первых ~14 КБ; теперь клиент приходит
+# на российский адрес, и ТСПУ видит только РФ↔РФ.
+{% else %}
+# Здесь ничего не хостится — всё уходит на {{ item.cfg.origin }} по wg. Клиент
+# приходит на ближний адрес, а границу пересекает уже тоннель между хостами.
+{% endif %}
+#
+# Вторая копия приложения не нужна: замер за 30 дней дал 99.83% успешных
+# запросов по тоннелю без единой мёртвой пятиминутки.
+{% if item.cfg.rate_limit is defined %}
+#
+# Лимит здесь, а не только на origin: через фронт origin видит один адрес — этот
+# хост, и его per-IP ведро стало бы общим на всю дальнюю сторону. Настоящий
+# адрес клиента есть только тут.
+limit_req_zone $binary_remote_addr zone={{ zone }}:1m rate={{ item.cfg.rate_limit }};
+{% endif %}
+server {
+	listen 80;
+	listen [::]:80;
+
+	server_name {{ item.name }};
+
+	return 301 https://$host$request_uri;
+}
+
+server {
+	listen 443 ssl http2;
+	listen [::]:443 ssl http2;
+
+	server_name {{ item.name }};
+
+	ssl_certificate     /etc/letsencrypt/live/{{ cert }}/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/{{ cert }}/privkey.pem;
+
+	include             /etc/letsencrypt/options-ssl-nginx.conf;
+	ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+	include /etc/nginx/snippets/honeypot.conf;
+	include /etc/nginx/snippets/deny-dotfiles.conf;
+
+	# Таймауты считаются от байта до байта, а отдача бывает длинной.
+	client_max_body_size {{ item.cfg.max_body_size | default(nginx_geo_front_max_body_size, true) }};
+	proxy_read_timeout   {{ nginx_geo_front_timeout }};
+	proxy_send_timeout   {{ nginx_geo_front_timeout }};
+
+	location / {
+{% if item.cfg.rate_limit is defined %}
+		limit_req zone={{ zone }} burst={{ item.cfg.rate_limit_burst | default(20) }} nodelay;
+
+{% endif %}
+		proxy_pass https://{{ origin }};
+		# Имя, а не IP: иначе origin ответит сертификатом по умолчанию и TLS
+		# порвётся здесь, до всякого клиента.
+		proxy_ssl_server_name on;
+		proxy_ssl_name {{ item.name }};
+
+		proxy_set_header Host {{ item.name }};
+{% if item.cfg.client_ip | default(true) %}
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+{% else %}
+		# Адрес клиента дальше не идёт — приложение его видеть не должно.
+		# Пустое значение снимает заголовок, в том числе присланный клиентом:
+		# иначе origin пропустил бы его в приложение как есть.
+		proxy_set_header X-Real-IP "";
+		proxy_set_header X-Forwarded-For "";
+{% endif %}
+		proxy_set_header X-Forwarded-Proto https;
+
+		# Редирект приложения отдать клиенту как есть — не переписать Location
+		# и не пойти по нему самим (ctb так отдаёт подписанные S3-URL).
+		proxy_redirect off;
+		proxy_intercept_errors off;
+	}
+}

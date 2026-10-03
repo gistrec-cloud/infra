@@ -7,10 +7,42 @@ provider "cloudflare" {
 #
 # `host` indirection resolves here, BEFORE the for_each keys are built.
 locals {
-  dns_records = [
-    for r in var.dns_records :
-    merge(r, { content = r.host == null ? r.content : var.host_ips[r.host] })
+  # Делегирование в Gcore — не данные этого модуля: имена перечислены в geo.json
+  # (общий файл, см. terraform/gcore), а здесь из них выводится NS-пара в
+  # родительской зоне. Иначе одно новое имя стоило бы двух правок в двух файлах,
+  # и рассинхрон молча оставлял бы имя без делегирования.
+  #
+  # Аккаунтные NS Gcore: vanity-серверы только в Enterprise, зона их не отдаёт
+  # (gcore_dns_zone не выставляет nameservers), поэтому они здесь константой.
+  gcore_nameservers = ["ns1.gcorelabs.net", "ns2.gcdn.services"]
+
+  geo = jsondecode(file("${path.module}/../../geo.json"))
+
+  geo_ns_records = [
+    for pair in setproduct(
+      [for name, cfg in local.geo.names : name if try(cfg.geo, true)],
+      local.gcore_nameservers
+      ) : {
+      # Родительская зона = имя без первой метки. Делегировать можно только
+      # поддомен, так что у любого имени отсюда метка есть.
+      zone     = join(".", slice(split(".", pair[0]), 1, length(split(".", pair[0]))))
+      name     = pair[0]
+      type     = "NS"
+      content  = pair[1]
+      host     = null
+      ttl      = 1
+      proxied  = false
+      priority = null
+    }
   ]
+
+  dns_records = concat(
+    [
+      for r in var.dns_records :
+      merge(r, { content = r.host == null ? r.content : var.host_ips[r.host] })
+    ],
+    local.geo_ns_records,
+  )
 }
 
 resource "cloudflare_dns_record" "this" {
