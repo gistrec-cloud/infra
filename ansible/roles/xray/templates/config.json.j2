@@ -1,8 +1,5 @@
 // {{ ansible_managed }}
-{#
-  Конфиг собирается словарём и сериализуется целиком: ручная JSON-разметка в
-  шаблоне ломается на первой же запятой при пустом списке.
-#}
+{# Словарь + to_nice_json: ручная JSON-разметка ломается на пустых списках. #}
 {% set inbounds = [] %}
 {% if xray_reality_enabled %}
 {%   set clients = [] %}
@@ -29,10 +26,7 @@
      }) %}
 {% endif %}
 {% if xray_relay_enabled %}
-{#
-  БЕЗ sniffing: он подменил бы адрес назначения на имя из SNI, и реле
-  перестало бы попадать в свою цель. Переливаем байты, ничего не разбирая.
-#}
+{# Не добавлять sniffing: подменит адрес цели на имя из SNI (README). #}
 {%   set _ = inbounds.append({
        "tag": "relay",
        "listen": xray_listen,
@@ -47,10 +41,7 @@
 {% endif %}
 {% set rules = [] %}
 {% if xray_relay_enabled %}
-{#
-  Первым правилом: цель реле лежит в меше, то есть внутри 10.0.0.0/8, который
-  ниже уходит в blackhole. Без этой строки реле не работало бы вообще.
-#}
+{# Обязательно первым: цель реле внутри 10.0.0.0/8, который ниже в blackhole. #}
 {%   set _ = rules.append({"type": "field", "inboundTag": ["relay"], "outboundTag": "direct"}) %}
 {% endif %}
 {% set _ = rules.append({"type": "field", "ip": xray_blocked_cidrs, "outboundTag": "block"}) %}

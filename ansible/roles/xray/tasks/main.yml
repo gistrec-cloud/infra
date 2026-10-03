@@ -22,8 +22,7 @@
     quiet: true
   when: xray_reality_enabled
 
-# Скаляр вместо списка Jinja перебрала бы посимвольно, и serverNames стал бы
-# списком букв. JSON при этом валиден, и xray возразил бы только рукопожатием.
+# Скаляр Jinja перебрала бы посимвольно, а JSON остался бы валидным.
 - name: Require the list-shaped Reality parameters to be lists
   ansible.builtin.assert:
     that:
@@ -43,8 +42,6 @@
     quiet: true
   when: xray_relay_enabled
 
-# Порт открывает firewall из host_vars, а не роль: на хосте с default-drop
-# молча закрытый inbound выглядит как заблокированный провайдером.
 - name: Require every inbound port to be open in the host firewall
   ansible.builtin.assert:
     that:
@@ -94,8 +91,7 @@
         group: root
         mode: "0644"
 
-    # Только бинарь: geoip.dat/geosite.dat нужны правилам маршрутизации, а они
-    # живут на клиенте — серверный конфиг гео-категорий не упоминает.
+    # Только бинарь: geoip.dat/geosite.dat нужны клиентской маршрутизации.
     - name: Unpack the binary
       ansible.builtin.unarchive:
         src: "/usr/local/share/xray-{{ xray_version }}.zip"
@@ -122,9 +118,7 @@
     owner: root
     group: "{{ xray_user }}"
     mode: "0640"
-    # Ловит опечатку в имени поля Reality до рестарта: иначе xray стартует,
-    # молча проигнорировав неизвестный ключ, и диагноз сводится к «не
-    # подключается». В --check на новом хосте бинаря ещё нет.
+    # omit в --check: на новом хосте бинаря, который проверяет, ещё нет.
     validate: "{{ omit if ansible_check_mode else xray_bin ~ ' run -test -config %s' }}"
   notify: Restart xray
 

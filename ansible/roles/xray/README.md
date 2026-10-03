@@ -56,16 +56,22 @@ ClickHouse и меш wg0 — без этого правила клиент до�
 | переменная | смысл |
 |---|---|
 | `xray_managed` | включает роль (по умолчанию `false`) |
-| `xray_version`, `xray_archive_sha256` | пин релиза; sha256 берётся из `.dgst` рядом с архивом |
+| `xray_version`, `xray_archive_sha256` | пин релиза — без него пересборка хоста поставила бы другую сборку; sha256 берётся из `.dgst` рядом с архивом |
+| `xray_loglevel` | уровень журнала самого сервиса (`warning`) |
+| `xray_access_log` | `none` выключает; `""` включает запись в journald — см. «Отладка» |
 | `xray_listen`, `xray_port` | адрес и порт inbound |
+| `xray_reality_enabled` | поднимать VLESS-inbound (по умолчанию да) |
 | `xray_clients` | `[{name, uuid}]`; uuid и есть пароль — только из vault |
 | `xray_reality_dest` | `host:port` внешнего сайта для рукопожатия |
 | `xray_reality_server_names` | список SNI, которые принимает inbound |
 | `xray_reality_private_key` | приватный x25519 — из vault |
 | `xray_reality_short_ids` | список hex-строк, вторая половина пароля — из vault |
+| `xray_relay_enabled` | поднимать реле (по умолчанию нет) |
+| `xray_relay_port` | порт реле; по умолчанию равен `xray_port` |
+| `xray_relay_target_address`, `xray_relay_target_port` | куда переливать; адрес задавать в меше, порт по умолчанию 443 — тогда в клиентском профиле отличается только адрес сервера |
 | `xray_blocked_cidrs` | что клиентам недоступно |
 | `xray_block_smtp` | глушить исходящий 25 |
-| `xray_freedom_strategy` | семейство адресов для исходящих |
+| `xray_freedom_strategy` | семейство адресов для исходящих; `UseIPv4` предсказуемее, и капчу на дата-центровые `/64` раздают охотнее, чем на IPv4 |
 
 ## Генерация материала
 

@@ -82,7 +82,8 @@ infra/
 │       ├── breakglass/           # emergency rescue user, keys outside home dirs
 │       ├── clickhouse/           # self-hosted ClickHouse (Docker), TLS ports + S3 backups
 │       ├── mysql/                # self-hosted MySQL (Docker), primary/replica
-│       └── k3s/                  # single-node Kubernetes on a shared host, under its existing ufw
+│       ├── k3s/                  # single-node Kubernetes on a shared host, under its existing ufw
+│       └── xray/                 # opt-in VLESS+Reality inbound (personal VPN), optional relay mode
 ├── terraform/                    # cloud resources as code (independent root modules, one state each)
 │   ├── dns/                      # Cloudflare + Porkbun DNS records (host_ips: fleet IPs live once)
 │   ├── aws/                      # Lambda functions + Function URLs + IAM/EventBridge schedule
@@ -118,6 +119,7 @@ infra/
 | `clickhouse` | Self-hosted ClickHouse in Docker; public TLS ports (9440/8443), nightly dumps + off-site S3 |
 | `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
 | `k3s`      | Single-node Kubernetes on a host shared with a third party: adds narrow ufw rules instead of replacing the firewall, API reachable over the mesh only |
+| `xray`     | Opt-in VLESS+Reality inbound (personal VPN): pinned binary, config validated before restart, inbound port cross-checked against the host firewall. A relay mode forwards TCP to a far host over the mesh, so the client dials a near host while the Reality handshake terminates on the far one |
 
 ## App registry & moves
 
@@ -174,7 +176,7 @@ See the `Makefile` for the full list of targets (`make help`).
 
 - **No secrets in git.** Tokens, keys and real inventory are `.gitignore`d; only `*.example` templates are tracked.
 - **Secrets at rest** are encrypted with `ansible-vault`. Even encrypted, the real vault stays private in this setup.
-- **`gitleaks`** runs as a pre-commit hook so nothing sensitive slips into history. A second local hook (`scripts/check-staged-ips.py`) refuses public IPv4 literals in tracked files — gitleaks matches secrets by shape, and a host address does not look like one while giving away just as much. Allowed ranges (Cloudflare edge, RFC 5737 documentation) are listed in `scripts/allowed-public-ips.txt`; fleet addresses belong in the gitignored inventory and host_vars.
+- **`gitleaks`** runs as a pre-commit hook so nothing sensitive slips into history. Two more local hooks cover what it misses, because it matches secrets by the shape of known services' tokens: `scripts/check-staged-ips.py` refuses public IPv4 literals (a host address gives away just as much while looking nothing like a token — allowed ranges in `scripts/allowed-public-ips.txt`), and `scripts/check-staged-secrets.py` refuses uuids and base64 key material (an xray client uuid *is* the inbound's password, and a private x25519 key opens it outright). Both read only the added lines of the index, via the shared `scripts/staged_diff.py`. Real values belong in the gitignored inventory and host_vars, or in the vault.
 - **SSH is key-only** and root login is disabled by the `common` role. A pre-flight `assert` refuses to disable password auth unless at least one key is present in `vault_admin_ssh_keys`, so the playbook fails fast instead of locking you out.
 - **Firewall is default-drop** (nftables); only SSH / 80 / 443 and explicitly listed ports are open, and fail2ban bans via nftables to match.
 

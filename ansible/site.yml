@@ -153,9 +153,7 @@
     - role: k3s
       when: k3s_managed | default(false)
       tags: [k3s]
-    # VLESS-inbound. После firewall: роль проверяет, что её порт открыт, и
-    # падает, если нет — на default-drop хосте закрытый inbound снаружи
-    # неотличим от блокировки у провайдера.
+    # После firewall: роль сверяет свой порт с его правилами и падает, если закрыт.
     - role: xray
       when: xray_managed | default(false)
       tags: [xray]
