@@ -1,0 +1,63 @@
+// {{ ansible_managed }}
+{# Словарь + to_nice_json: ручная JSON-разметка ломается на пустых списках. #}
+{% set inbounds = [] %}
+{% if xray_reality_enabled %}
+{%   set clients = [] %}
+{%   for client in xray_clients %}
+{%     set _ = clients.append({"id": client.uuid, "email": client.name, "flow": "xtls-rprx-vision"}) %}
+{%   endfor %}
+{%   set _ = inbounds.append({
+       "tag": "vless-reality",
+       "listen": xray_listen,
+       "port": xray_port,
+       "protocol": "vless",
+       "settings": {"clients": clients, "decryption": "none"},
+       "streamSettings": {
+         "network": "tcp",
+         "security": "reality",
+         "realitySettings": {
+           "dest": xray_reality_dest,
+           "serverNames": xray_reality_server_names,
+           "privateKey": xray_reality_private_key,
+           "shortIds": xray_reality_short_ids
+         }
+       },
+       "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"]}
+     }) %}
+{% endif %}
+{% if xray_relay_enabled %}
+{# Не добавлять sniffing: подменит адрес цели на имя из SNI (README). #}
+{%   set _ = inbounds.append({
+       "tag": "relay",
+       "listen": xray_listen,
+       "port": xray_relay_port,
+       "protocol": "dokodemo-door",
+       "settings": {
+         "address": xray_relay_target_address,
+         "port": xray_relay_target_port,
+         "network": "tcp"
+       }
+     }) %}
+{% endif %}
+{% set rules = [] %}
+{% if xray_relay_enabled %}
+{# Обязательно первым: цель реле внутри 10.0.0.0/8, который ниже в blackhole. #}
+{%   set _ = rules.append({"type": "field", "inboundTag": ["relay"], "outboundTag": "direct"}) %}
+{% endif %}
+{% set _ = rules.append({"type": "field", "ip": xray_blocked_cidrs, "outboundTag": "block"}) %}
+{% if xray_block_smtp %}
+{%   set _ = rules.append({"type": "field", "port": "25", "outboundTag": "block"}) %}
+{% endif %}
+{% set config = {
+  "log": {"loglevel": xray_loglevel, "access": xray_access_log},
+  "inbounds": inbounds,
+  "outbounds": [
+    {"tag": "direct", "protocol": "freedom", "settings": {"domainStrategy": xray_freedom_strategy}},
+    {"tag": "block", "protocol": "blackhole"}
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": rules
+  }
+} %}
+{{ config | to_nice_json(indent=2) }}

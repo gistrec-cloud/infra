@@ -1,0 +1,14 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+# Конфиг читается только при старте. Активные соединения рвутся, клиенты
+# переподключаются сами.
+- name: Restart xray
+  ansible.builtin.service:
+    name: xray
+    state: restarted
+  # На первой установке юнита ещё нет, когда обработчики выстраиваются в
+  # очередь, — а стартует сервис задачей ниже, рестарт ему не нужен.
+  when: xray_installed.rc == 0

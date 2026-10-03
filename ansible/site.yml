@@ -153,6 +153,10 @@
     - role: k3s
       when: k3s_managed | default(false)
       tags: [k3s]
+    # После firewall: роль сверяет свой порт с его правилами и падает, если закрыт.
+    - role: xray
+      when: xray_managed | default(false)
+      tags: [xray]
     - role: netdata
       tags: [netdata]
     # App cron jobs come from the apps registry — per app, so a job moves

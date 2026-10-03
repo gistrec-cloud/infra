@@ -1,0 +1,50 @@
+---
+# Смысл переменных и обоснования — README роли.
+xray_managed: false
+
+xray_version: "26.3.27"
+xray_archive_sha256: "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae" # gitleaks:allow — сумма публичного архива, а не токен
+xray_archive_url: >-
+  https://github.com/XTLS/Xray-core/releases/download/v{{ xray_version }}/Xray-linux-64.zip
+
+xray_user: xray
+xray_bin: /usr/local/bin/xray
+xray_config_dir: /usr/local/etc/xray
+
+xray_loglevel: warning
+
+# Пишет каждый адрес назначения и от loglevel не зависит; "" включает.
+xray_access_log: none
+
+xray_listen: "0.0.0.0"
+xray_port: 443
+
+xray_clients: []
+
+xray_reality_enabled: true
+xray_reality_dest: ""
+xray_reality_server_names: []
+xray_reality_private_key: ""
+xray_reality_short_ids: []
+
+# ─── Реле ───
+xray_relay_enabled: false
+xray_relay_port: 443
+xray_relay_target_address: ""
+xray_relay_target_port: 443
+
+xray_blocked_cidrs:
+  - 0.0.0.0/8
+  - 10.0.0.0/8
+  - 100.64.0.0/10
+  - 127.0.0.0/8
+  - 169.254.0.0/16
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+  - ::1/128
+  - fc00::/7
+  - fe80::/10
+
+xray_block_smtp: true
+
+xray_freedom_strategy: UseIPv4

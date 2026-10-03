@@ -1,0 +1,141 @@
+---
+- name: Require at least one inbound
+  ansible.builtin.assert:
+    that: xray_reality_enabled or xray_relay_enabled
+    fail_msg: >-
+      Both xray_reality_enabled and xray_relay_enabled are false — the service
+      would start with nothing listening.
+    quiet: true
+
+- name: Require the Reality parameters
+  ansible.builtin.assert:
+    that:
+      - xray_reality_dest | length > 0
+      - xray_reality_server_names | length > 0
+      - xray_reality_private_key | length > 0
+      - xray_reality_short_ids | length > 0
+      - xray_clients | length > 0
+    fail_msg: >-
+      xray_reality_dest / _server_names / _private_key / _short_ids and
+      xray_clients have no safe defaults — the key pair and the client ids are
+      per-host secrets. Set them in host_vars (values from the vault).
+    quiet: true
+  when: xray_reality_enabled
+
+# Скаляр Jinja перебрала бы посимвольно, а JSON остался бы валидным.
+- name: Require the list-shaped Reality parameters to be lists
+  ansible.builtin.assert:
+    that:
+      - xray_reality_server_names is sequence and xray_reality_server_names is not string
+      - xray_reality_short_ids is sequence and xray_reality_short_ids is not string
+    fail_msg: >-
+      xray_reality_server_names and xray_reality_short_ids must be lists.
+    quiet: true
+  when: xray_reality_enabled
+
+- name: Require the relay target
+  ansible.builtin.assert:
+    that: xray_relay_target_address | length > 0
+    fail_msg: >-
+      xray_relay_enabled is true but xray_relay_target_address is empty — the
+      relay has nowhere to pour the bytes.
+    quiet: true
+  when: xray_relay_enabled
+
+- name: Require every inbound port to be open in the host firewall
+  ansible.builtin.assert:
+    that:
+      - not (firewall_managed | default(false))
+        or item in (firewall_extra_open_tcp_ports | default([]))
+        or item in (firewall_allow_tcp | default([]) | map(attribute='port') | list)
+    fail_msg: >-
+      Port {{ item }} is not in firewall_extra_open_tcp_ports (nor
+      firewall_allow_tcp) while firewall_managed is true — the inbound would
+      listen behind a default-drop chain.
+    quiet: true
+  loop: >-
+    {{ ([xray_port] if xray_reality_enabled else [])
+     + ([xray_relay_port] if xray_relay_enabled else []) }}
+
+- name: Install unzip for the release archive
+  ansible.builtin.apt:
+    name: unzip
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Service account
+  ansible.builtin.user:
+    name: "{{ xray_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    home: /nonexistent
+
+- name: Installed version
+  ansible.builtin.command: "{{ xray_bin }} version"
+  register: xray_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install the pinned release
+  when: xray_version not in (xray_installed.stdout | default(''))
+  block:
+    - name: Fetch the release archive
+      ansible.builtin.get_url:
+        url: "{{ xray_archive_url }}"
+        dest: "/usr/local/share/xray-{{ xray_version }}.zip"
+        checksum: "sha256:{{ xray_archive_sha256 }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    # Только бинарь: geoip.dat/geosite.dat нужны клиентской маршрутизации.
+    - name: Unpack the binary
+      ansible.builtin.unarchive:
+        src: "/usr/local/share/xray-{{ xray_version }}.zip"
+        dest: /usr/local/bin
+        include: [xray]
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart xray
+
+- name: Configuration directory
+  ansible.builtin.file:
+    path: "{{ xray_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ xray_user }}"
+    mode: "0750"
+
+- name: Render the configuration
+  ansible.builtin.template:
+    src: config.json.j2
+    dest: "{{ xray_config_dir }}/config.json"
+    owner: root
+    group: "{{ xray_user }}"
+    mode: "0640"
+    # omit в --check: на новом хосте бинаря, который проверяет, ещё нет.
+    validate: "{{ omit if ansible_check_mode else xray_bin ~ ' run -test -config %s' }}"
+  notify: Restart xray
+
+- name: Install the unit
+  ansible.builtin.template:
+    src: xray.service.j2
+    dest: /etc/systemd/system/xray.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart xray
+
+- name: Enable and start xray
+  ansible.builtin.systemd:
+    name: xray
+    enabled: true
+    state: started
+    daemon_reload: true
