@@ -142,6 +142,30 @@ deploy keys. The app roles are driven entirely by this registry, and DNS points
 at hosts by name too (the `host_ips` map in `terraform/dns`), so a move is a
 one-word edit in two places — the script just does it safely and in order.
 
+## Sharing one-off files
+
+`share.gistrec.cloud` serves files straight out of the public `gistrec-share`
+bucket (`terraform/yandex/buckets.tf`). nginx only proxies, so nothing lands on a
+host disk or in git — a share needs no deploy and no repository:
+
+```sh
+yc storage s3 cp ~/Downloads/report.html s3://gistrec-share/report.html
+# → https://share.gistrec.cloud/report.html
+```
+
+The object name is the URL path; nested prefixes work. Content-Type comes from
+the extension, which matters because the vhost sends
+`X-Content-Type-Options: nosniff` — a wrong type renders as text instead of a
+page. Anonymous listing is off, and objects have no expiry on purpose: a link
+someone was given should not rot. Pruning is manual, `yc storage s3 rm`.
+
+The name is delegated to Gcore for geo-routing (`terraform/gcore`): clients in
+Russia get russia-03, everyone else finland-01. Both hosts carry the *same* vhost
+file and reach the bucket themselves. That is the one difference from the other
+RF fronts, which proxy to finland-01 over the mesh because the app lives only
+there — this bucket sits in `ru-central1`, so the detour would only add latency
+and a point of failure.
+
 ## Quickstart
 
 All commands are run from the repository root.
