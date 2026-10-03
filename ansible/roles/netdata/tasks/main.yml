@@ -181,6 +181,25 @@
   notify: Restart netdata
   when: netdata_httpcheck_jobs | length > 0
 
+- name: Configure go.d portcheck probes (TCP liveness)
+  ansible.builtin.template:
+    src: portcheck.conf.j2
+    dest: /etc/netdata/go.d/portcheck.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_portcheck_jobs | length > 0
+
+# Штатный portcheck_service_reachable уходит `to: silent`, то есть сам по себе
+# не уведомляет никого — см. комментарий в файле. Как и алармы pm2, ставится
+# только на уведомляющем вычислителе: родитель и так считает чарты детей.
+- name: Alert when a monitored TCP port stops accepting connections
+  ansible.builtin.copy:
+    src: portcheck_down.conf
+    dest: /etc/netdata/health.d/portcheck_down.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_stream_destination | length == 0
+
 # Link-quality probes (RTT / jitter / packet loss per pinged host). ICMP needs
 # no setup: the deb grants go.d.plugin cap_net_raw, and the firewall role
 # accepts icmp fleet-wide. go.d re-reads job configs only at startup.
