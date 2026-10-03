@@ -161,10 +161,15 @@ someone was given should not rot. Pruning is manual, `yc storage s3 rm`.
 
 The name is delegated to Gcore for geo-routing (`terraform/gcore`): clients in
 Russia get russia-03, everyone else finland-01. Both hosts carry the *same* vhost
-file and reach the bucket themselves. That is the one difference from the other
-RF fronts, which proxy to finland-01 over the mesh because the app lives only
-there — this bucket sits in `ru-central1`, so the detour would only add latency
-and a point of failure.
+file and reach the bucket themselves — there is no `*-rf` variant proxying to
+finland-01 over the mesh, because the bucket sits in `ru-central1` and russia-03
+reaches it directly. The detour would only add latency and a point of failure.
+
+`glucose` already serves one vhost from both hosts like this, so the fleet has
+three shapes, not two: it keeps a local copy of its data (the MySQL replica plus
+a cron render), a share keeps no state at all, and the fronts that really do
+proxy over the mesh — `pdf-v-excel`, `subtitry`, `flights`,
+`clear-transcript-bot` — do so because the application runs only on finland-01.
 
 ## Quickstart
 
