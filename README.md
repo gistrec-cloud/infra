@@ -167,9 +167,9 @@ geo.json
   └── ansible nginx    → proxy vhost on the far side (certs, headers, wg upstream)
 ```
 
-`front: "none"` means the far side already serves the name itself — `glucose`
-renders its own page from the local MySQL replica, `share` carries the very same
-vhost file and reads the bucket directly. `"geo": false` marks an apex name: a
+`front: "none"` means the far side already serves the name itself — `share`
+carries the very same vhost file and reads the bucket directly, `meow` keeps its
+own copy of one static page (its `deploy.sh` uploads to both hosts). `"geo": false` marks an apex name: a
 zone cannot be delegated one subdomain at a time, so `clear-transcript-bot.ru`
 gets the front but no geo record until its whole zone moves to Gcore (which also
 needs DNS-01 hooks for Gcore, the way `tls` already vendors them for Porkbun).
@@ -203,11 +203,12 @@ file and reach the bucket themselves — there is no `*-rf` variant proxying to
 finland-01 over the mesh, because the bucket sits in `ru-central1` and russia-03
 reaches it directly. The detour would only add latency and a point of failure.
 
-`glucose` already serves one vhost from both hosts like this, so the fleet has
-three shapes, not two: it keeps a local copy of its data (the MySQL replica plus
-a cron render), a share keeps no state at all, and the fronts that really do
-proxy over the mesh — `pdf-v-excel`, `subtitry`, `flights`,
-`clear-transcript-bot` — do so because the application runs only on finland-01.
+`meow` serves one vhost from both hosts like this too, so the fleet has three
+shapes, not two: it keeps a local copy of a static page on each host, a share
+keeps no state at all, and the fronts that really do proxy over the mesh —
+`glucose`, `pdf-v-excel`, `subtitry`, `flights`, `govorit`,
+`clear-transcript-bot` — do so because the application runs only on finland-01
+(`usage` the other way round: it runs only on russia-03).
 
 ## Quickstart
 
