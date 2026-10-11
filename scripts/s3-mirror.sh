@@ -26,11 +26,13 @@ for spec in $BUCKETS; do
       ;;
     copy|sync)
       echo "== $(date -Is) $MODE $b → $dst"
-      # --size-only: ETag у multipart-объектов не md5, а modtime стоил бы HEAD на каждый объект.
+      # --update --use-server-modtime: сравнение по LastModified из листинга (без HEAD на
+      # объект) — ловит перезапись той же длины, которую --size-only пропускает; ETag у
+      # multipart не md5, так что --checksum не вариант.
       # --timeout: без него зависшее чтение из Яндекса стояло молча (11.10, recepter).
       # -v: без него rclone не пишет статистику, пока ничего не передано.
       # --exclude: ключи с «//» под releases/android Яндекс не отдаёт (SerializationError).
-      "$RCLONE" "$MODE" "yc:$b" "$dst:$b" --size-only --fast-list \
+      "$RCLONE" "$MODE" "yc:$b" "$dst:$b" --update --use-server-modtime --fast-list \
         --exclude 'releases/android//**' \
         --transfers 16 --checkers 32 --retries 3 --low-level-retries 5 \
         --timeout 2m --contimeout 30s -v --stats 60s --stats-one-line

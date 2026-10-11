@@ -195,7 +195,8 @@ The object name is the URL path; nested prefixes work. Content-Type comes from
 the extension, which matters because the vhost sends
 `X-Content-Type-Options: nosniff` — a wrong type renders as text instead of a
 page. Anonymous listing is off, and objects have no expiry on purpose: a link
-someone was given should not rot. Pruning is manual, `yc storage s3 rm`.
+someone was given should not rot. Pruning is manual:
+`ssh finland-01 sudo s3-rclone deletefile gc:gistrec-share/<file>`.
 
 The name is delegated to Gcore for geo-routing (`terraform/gcore`): clients in
 Russia get russia-03, everyone else finland-01. Both hosts carry the *same* vhost

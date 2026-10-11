@@ -60,9 +60,14 @@ ssh finland-01 'sudo s3-rclone lsd gc:'          # любая команда rcl
 ## Если Яндекс лёг: переключение
 
 Везде endpoint `https://s-ed1.cloud.gcore.lu`, region `s-ed1`, имя бакета то
-же, ключи storage «gistrec». Откат — вернуть старые значения. После
-переключения бакета убрать его из `BUCKETS` в `scripts/s3-mirror.sh` и
-задеплоить роль, иначе ближайший `sync` вернёт состояние Яндекса.
+же, ключи storage «gistrec». Откат — вернуть старые значения.
+
+Порядок для каждого бакета, строго до смены endpoint'а: `systemctl stop
+s3-mirror.timer s3-mirror.service` → при живом Яндексе остановить приложение и
+сделать финальный `s3-mirror.sh sync` → убрать бакет из `BUCKETS` в
+`scripts/s3-mirror.sh` и задеплоить роль → переключить приложение → вернуть
+таймер. Иначе ближайший `sync` удалит в Gcore всё, что приложение записало
+только туда, и откатит изменённое.
 
 1. **glucose-bot** (finland-01, `~/GlucoseBot/.env`): `S3_ENDPOINT`,
    `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`; `pm2 restart glucose-bot --update-env`.
@@ -91,7 +96,9 @@ ssh finland-01 'sudo s3-rclone lsd gc:'          # любая команда rcl
   share переведены на Gcore в тот же день; превью edalle возвращены на Яндекс
   (CI пишет туда), решение — зеркало по таймеру вместо переключения.
 - `pkill -f s3-mirror` из ssh-сессии убивает саму сессию — её командная строка
-  содержит ту же подстроку. Останавливать `pkill -x rclone`.
+  содержит ту же подстроку, а `pkill -x rclone` заодно убьёт загрузку бэкапов
+  MySQL/CH, если она идёт в этот момент. Останавливать `systemctl stop
+  s3-mirror.service`, ручной запуск — `kill` конкретного PID из `pgrep -a rclone`.
 - Ключи с `//` (`recepter/releases/android//app-release.apk/src/…`, 307 штук,
   исходники, залитые под путь apk) rclone не читает: Яндекс отвечает на них
   не-XML ошибкой. Исключены в скрипте, в копии их нет.
