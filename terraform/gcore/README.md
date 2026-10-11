@@ -69,3 +69,15 @@ be checked without any downtime:
 dig +short @ns1.gcorelabs.net glucose.gistrec.cloud A   # from the EU → 62.238.12.36
 ssh russia-03 dig +short @ns1.gcorelabs.net glucose.gistrec.cloud A  # from RF → 94.228.125.88
 ```
+
+## Object Storage
+
+`storage.tf` — бакеты Яндекса в Люксембурге (`s-ed1`), те же имена. Два
+`gcore_storage_s3`, у каждого своя пара ключей в state: «gistrec» для
+приложений и «gistrec-backups» только под `gistrec-cloud` — ключ приложений
+до бэкапов не дотягивается. Публичность бакета — bucket policy
+(`scripts/s3-public-policy.py`), не флаг и не ACL. Имена бакетов глобальны на
+локацию: удалённое имя занято ещё ~20 с (`409`). Service включается в панели
+отдельно (`403 product is not activated`), а `api.gcore.com` из РФ не отвечает
+по TLS — apply через SOCKS на finland-01. Копирование и cutover —
+`docs/runbooks/s3-mirror.md`.
