@@ -1,0 +1,73 @@
+---
+- name: Refuse to deploy the mirror without keys
+  ansible.builtin.assert:
+    that:
+      - s3mirror_yc_key_id | length > 0
+      - s3mirror_yc_secret | length > 0
+      - s3mirror_gc_key_id | length > 0
+      - s3mirror_gc_secret | length > 0
+      - s3mirror_gcb_key_id | length > 0
+      - s3mirror_gcb_secret | length > 0
+    fail_msg: >-
+      s3mirror_managed is true but a key is empty — see vault_s3_mirror_* /
+      vault_gcore_s3_* / vault_mysql_backup_s3_* in all.vault.yml.example.
+    quiet: true
+
+- name: Install rclone
+  ansible.builtin.apt:
+    name: rclone
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the state dir (freshness marker)
+  ansible.builtin.file:
+    path: "{{ s3mirror_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# no_log: carries S3 keys (0600, sourced by s3-rclone).
+- name: Render the keys file
+  ansible.builtin.template:
+    src: s3-mirror.env.j2
+    dest: "{{ s3mirror_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+# Те же файлы, что в scripts/ — одним источником, чтобы ручной запуск и таймер
+# не расходились.
+- name: Install the rclone wrapper and the mirror script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/{{ item.src }}"
+    dest: "/usr/local/sbin/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - { src: s3-rclone.sh, dest: s3-rclone }
+    - { src: s3-mirror.sh, dest: s3-mirror.sh }
+
+- name: Install the systemd unit and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - s3-mirror.service
+    - s3-mirror.timer
+  notify: Reload systemd
+
+- name: Flush handlers before enabling the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable the mirror timer
+  ansible.builtin.systemd:
+    name: s3-mirror.timer
+    enabled: true
+    state: started

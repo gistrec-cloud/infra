@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Mirror Yandex Object Storage to Gcore ({{ s3mirror_mode }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/s3-mirror.sh {{ s3mirror_mode }}
+Nice=10
+IOSchedulingClass=idle

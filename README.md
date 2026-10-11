@@ -183,11 +183,11 @@ call about who the visitors are, not something a probe decides.
 ## Sharing one-off files
 
 `share.gistrec.cloud` serves files straight out of the public `gistrec-share`
-bucket (`terraform/yandex/buckets.tf`). nginx only proxies, so nothing lands on a
+bucket (`terraform/gcore/storage.tf`, Gcore since 2026-10-11). nginx only proxies, so nothing lands on a
 host disk or in git — a share needs no deploy and no repository:
 
 ```sh
-yc storage s3 cp ~/Downloads/report.html s3://gistrec-share/report.html
+scp ~/Downloads/report.html finland-01:/tmp/ && ssh finland-01 sudo s3-rclone copyto /tmp/report.html gc:gistrec-share/report.html
 # → https://share.gistrec.cloud/report.html
 ```
 
@@ -195,7 +195,8 @@ The object name is the URL path; nested prefixes work. Content-Type comes from
 the extension, which matters because the vhost sends
 `X-Content-Type-Options: nosniff` — a wrong type renders as text instead of a
 page. Anonymous listing is off, and objects have no expiry on purpose: a link
-someone was given should not rot. Pruning is manual, `yc storage s3 rm`.
+someone was given should not rot. Pruning is manual:
+`ssh finland-01 sudo s3-rclone deletefile gc:gistrec-share/<file>`.
 
 The name is delegated to Gcore for geo-routing (`terraform/gcore`): clients in
 Russia get russia-03, everyone else finland-01. Both hosts carry the *same* vhost
