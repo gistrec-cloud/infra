@@ -1,0 +1,5 @@
+{
+  "lifecycleRules": [
+    { "id": "expire-releases-90d", "enabled": true, "filter": { "prefix": "releases/" }, "expiration": { "days": "90" } }
+  ]
+}

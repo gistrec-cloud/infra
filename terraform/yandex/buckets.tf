@@ -4,6 +4,10 @@
 # (needs a static key we deliberately don't mint) and are adopted as-is.
 # gistrec-cloud backup retention (mysql/+clickhouse/) = 365d, set out-of-band from
 # gistrec-cloud-lifecycle.json (uploader key can't prune; bucket lifecycle does).
+# recepter: releases/ (CI builds, a dir per version) expire after 90d —
+# recepter-lifecycle.json; user content (videos/, avatars/, collections/) is kept.
+# Apply: yc storage bucket update --name <b> --lifecycle-rules-from-file <json>;
+# the Gcore mirror carries the same rule (set over S3 API, docs/runbooks/s3-mirror.md).
 # gistrec-share backs share.gistrec.cloud (README). No expiry rule on purpose —
 # a shared link that 404s later is worse than a few idle megabytes; the 5 GiB
 # cap is the ceiling instead.
