@@ -183,11 +183,11 @@ call about who the visitors are, not something a probe decides.
 ## Sharing one-off files
 
 `share.gistrec.cloud` serves files straight out of the public `gistrec-share`
-bucket (`terraform/yandex/buckets.tf`). nginx only proxies, so nothing lands on a
+bucket (`terraform/gcore/storage.tf`, Gcore since 2026-10-11). nginx only proxies, so nothing lands on a
 host disk or in git — a share needs no deploy and no repository:
 
 ```sh
-yc storage s3 cp ~/Downloads/report.html s3://gistrec-share/report.html
+scp ~/Downloads/report.html finland-01:/tmp/ && ssh finland-01 sudo s3-rclone copyto /tmp/report.html gc:gistrec-share/report.html
 # → https://share.gistrec.cloud/report.html
 ```
 

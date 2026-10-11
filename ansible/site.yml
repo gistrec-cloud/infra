@@ -221,6 +221,18 @@
     - role: clickhouse
       when: clickhouse_managed | default(false)
 
+- name: Off-site mirror — Yandex Object Storage → Gcore by timer
+  hosts: all
+  become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+  roles:
+    # Opt-in per host: s3mirror_managed in host_vars (finland-01). Копия
+    # бакетов приложений на случай отказа РФ-S3, docs/runbooks/s3-mirror.md.
+    - role: s3mirror
+      when: s3mirror_managed | default(false)
+      tags: [s3mirror]
+
 - name: Applications — docker dependencies, pm2 apps, static bundles
   hosts: all
   become: true

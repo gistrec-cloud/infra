@@ -1,0 +1,24 @@
+---
+# Зеркало Yandex Object Storage → Gcore по таймеру. Opt-in per host:
+# s3mirror_managed в host_vars (finland-01: путь до обеих сторон чистый, с
+# Timeweb-хостов не гонять — маршрут Timeweb↔Hetzner теряет соединения).
+# Приложения продолжают писать в Яндекс; Gcore — копия на случай отказа РФ-S3,
+# переключение = смена env по docs/runbooks/s3-mirror.md.
+s3mirror_managed: false
+
+# sync повторяет и удаления (lifecycle Яндекса), copy только докладывает.
+s3mirror_mode: sync
+s3mirror_calendar: "*-*-* 00/6:30:00"
+
+s3mirror_env_file: /root/s3-mirror.env
+s3mirror_state_dir: /var/lib/s3-mirror
+
+# Ключи — из vault. Яндекс: SA s3-mirror (storage.viewer на каталог).
+# Gcore: storage «gistrec» (бакеты приложений) и «gistrec-backups» — последний
+# тот же ключ, что у off-site бэкапов mysql.
+s3mirror_yc_key_id: "{{ vault_s3_mirror_yc_key_id | default('') }}"
+s3mirror_yc_secret: "{{ vault_s3_mirror_yc_secret | default('') }}"
+s3mirror_gc_key_id: "{{ vault_gcore_s3_key_id | default('') }}"
+s3mirror_gc_secret: "{{ vault_gcore_s3_secret | default('') }}"
+s3mirror_gcb_key_id: "{{ vault_mysql_backup_s3_key_id | default('') }}"
+s3mirror_gcb_secret: "{{ vault_mysql_backup_s3_secret | default('') }}"

@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Mirror Yandex Object Storage to Gcore on a schedule
+
+[Timer]
+OnCalendar={{ s3mirror_calendar }}
+# Catch up if the host was down at the scheduled time.
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target
