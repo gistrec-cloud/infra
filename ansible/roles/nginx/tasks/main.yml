@@ -5,6 +5,13 @@
     state: present
     update_cache: true
 
+# brotli_static: vhosts can serve precompressed .br files built at deploy time (edalle web bundle).
+- name: Install the brotli_static nginx module
+  ansible.builtin.apt:
+    name: libnginx-mod-http-brotli-static
+    state: present
+  notify: Reload nginx
+
 - name: Install certbot (nginx plugin)
   ansible.builtin.apt:
     name:
