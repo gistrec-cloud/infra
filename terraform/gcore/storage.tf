@@ -20,15 +20,25 @@ locals {
   }
 }
 
+# name/location/storage_id у провайдера ForceNew: replacement = DeleteStorage/
+# DeleteBucket в API вместе с данными. Переезд — только копированием + state mv.
 resource "gcore_storage_s3" "main" {
   name = "gistrec"
   # Люксембург: в РФ локаций нет, Алматы (s-kal2) дальше от finland-01.
   location = "s-ed1"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "gcore_storage_s3" "backups" {
   name     = "gistrec-backups"
   location = "s-ed1"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "gcore_storage_s3_bucket" "this" {
@@ -36,6 +46,10 @@ resource "gcore_storage_s3_bucket" "this" {
 
   name       = each.key
   storage_id = each.value == "backups" ? gcore_storage_s3.backups.storage_id : gcore_storage_s3.main.storage_id
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 output "s3_endpoint" {
