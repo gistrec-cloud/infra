@@ -51,6 +51,7 @@ netdata_pushover_roles: {}
 #   url:             endpoint to probe
 #   timeout:         seconds, default 2
 #   status_accepted: list of healthy HTTP codes, default [200]
+#   response_match:  optional Go regexp the body must match (else bad_content → success=0)
 netdata_httpcheck_jobs: []
 
 # go.d portcheck jobs — живость TCP-порта без разбора протокола. Нужен там, где
