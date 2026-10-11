@@ -3,6 +3,14 @@
 innodb_buffer_pool_size = {{ mysql_innodb_buffer_pool_size }}
 max_connections         = {{ mysql_max_connections }}
 wait_timeout            = {{ mysql_wait_timeout }}
+{% if mysql_perfschema_slim %}
+
+# Поаккаунтные и похостовые агрегаты Performance Schema — см. defaults.
+# Размеры read-only, применяются только при старте сервера.
+performance_schema_accounts_size = 0
+performance_schema_hosts_size    = 0
+performance_schema_users_size    = 0
+{% endif %}
 
 # Match the managed cluster (terraform/yandex/mysql.tf) so behaviour is identical
 # — same strict sql_mode, same utf8mb4 defaults, same time zone (else SYSTEM
