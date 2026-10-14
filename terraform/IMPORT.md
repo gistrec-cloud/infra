@@ -27,8 +27,8 @@ yc config list                    # confirm Yandex auth
 
 ## AWS (`terraform/aws`)
 
-All three live functions (`openai-relay`, `anthropic-relay`, `yandex-rating-counter`) and their
-execution roles are adopted — the recipe below is for the next function that turns up.
+All four live functions (`openai-relay`, `anthropic-relay`, `telegram-relay`, `yandex-rating-counter`)
+and their execution roles are adopted — the recipe below is for the next function that turns up.
 
 ### 1. Discover
 ```bash

@@ -32,6 +32,10 @@ locals {
       name            = "anthropic-relay-role"
       scheduler_trust = false
     }
+    "telegram-relay" = {
+      name            = "telegram-relay-role"
+      scheduler_trust = false
+    }
     "yandex-rating-counter" = {
       name            = "lambda-yandex-rating-counter"
       scheduler_trust = true # invoked by the EventBridge Scheduler timer
@@ -42,6 +46,7 @@ locals {
   role_attachments = {
     "openai-relay|basic-exec"           = { fn = "openai-relay", policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole", policy_key = null }
     "anthropic-relay|basic-exec"        = { fn = "anthropic-relay", policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole", policy_key = null }
+    "telegram-relay|basic-exec"         = { fn = "telegram-relay", policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole", policy_key = null }
     "yandex-rating-counter|cloudwatch"  = { fn = "yandex-rating-counter", policy_arn = null, policy_key = "cloudwatch-yandex-rating-counter" }
     "yandex-rating-counter|self-invoke" = { fn = "yandex-rating-counter", policy_arn = null, policy_key = "lambda-yandex-rating-counter" }
   }

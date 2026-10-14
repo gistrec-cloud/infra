@@ -6,7 +6,7 @@ functions = {
   # deploy and uses the shared exec role (no role_arn).
   "openai-relay" = {
     handler     = "index.handler"
-    runtime     = "nodejs22.x"
+    runtime     = "nodejs24.x"
     s3_bucket   = "my-lambda-artifacts"
     s3_key      = "openai-relay/latest.zip"
     memory_size = 256
@@ -17,7 +17,7 @@ functions = {
   # so s3_* and env are omitted; the pre-existing role is referenced by ARN.
   "anthropic-relay" = {
     handler    = "index.handler"
-    runtime    = "nodejs22.x"
+    runtime    = "nodejs24.x"
     role_arn   = "arn:aws:iam::123456789012:role/anthropic-relay-role"
     public_url = true
   }
