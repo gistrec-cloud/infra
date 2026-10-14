@@ -32,10 +32,8 @@ enforce auth inside the function (or front it with CloudFront/WAF), and never pu
 
 Everything above was imported, not created: the first three functions, their URLs, roles, policies
 and the scheduler have been in state since 2026-07-14 (PR #5); `telegram-relay` was created with the
-AWS CLI and imported the same way on 2026-10-14. One committed change is still unapplied —
-`roles.tf` scopes the `lambda-yandex-rating-counter` policy down from `lambda:*` to
-`lambda:InvokeFunction` (PR #48, 2026-07-20) — so `terraform plan` shows that one policy update in
-place and nothing else.
+AWS CLI and imported the same way on 2026-10-14. The `lambda-yandex-rating-counter` scope-down from `lambda:*` to `lambda:InvokeFunction` (PR #48)
+was applied on 2026-10-15, so `terraform plan` now reports no changes.
 
 Import the *next* function that turns up the same way (id = function name) — recipe in
 [`../IMPORT.md`](../IMPORT.md); `main.tf` resolves its role itself, so never apply a `role` change you
