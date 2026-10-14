@@ -1,10 +1,16 @@
 # terraform/aws — Lambda functions
 
-Manages the Lambda footprint: three functions (`openai-relay`, `anthropic-relay`,
-`yandex-rating-counter`), the two public Function URLs, the per-function IAM roles and customer-managed
+Manages the Lambda footprint: four functions (`openai-relay`, `anthropic-relay`, `telegram-relay`,
+`yandex-rating-counter`), the three public Function URLs, the per-function IAM roles and customer-managed
 policies (`roles.tf`) and the hourly EventBridge Scheduler timer (`schedules.tf`). Configuration only —
 application code ships via a separate S3 artifact pipeline, so no `.zip` lives in this repo or in
 state. Provider `hashicorp/aws ~> 6.0`.
+
+The relays' code is public: [openai-relay](https://github.com/gistrec-cloud/openai-relay),
+[anthropic-relay](https://github.com/gistrec-cloud/anthropic-relay),
+[telegram-relay](https://github.com/gistrec-cloud/telegram-relay). Each ships with
+`npm run package` + `aws lambda update-function-code`; their `RELAY_TOKENS` (one token per client)
+live in the function config, which Terraform ignores.
 
 ## Usage
 
@@ -24,8 +30,9 @@ enforce auth inside the function (or front it with CloudFront/WAF), and never pu
 
 ## Adoption — done
 
-Everything above was imported, not created: the three functions, their URLs, roles, policies and the
-scheduler have been in state since 2026-07-14 (PR #5). One committed change is still unapplied —
+Everything above was imported, not created: the first three functions, their URLs, roles, policies
+and the scheduler have been in state since 2026-07-14 (PR #5); `telegram-relay` was created with the
+AWS CLI and imported the same way on 2026-10-14. One committed change is still unapplied —
 `roles.tf` scopes the `lambda-yandex-rating-counter` policy down from `lambda:*` to
 `lambda:InvokeFunction` (PR #48, 2026-07-20) — so `terraform plan` shows that one policy update in
 place and nothing else.
