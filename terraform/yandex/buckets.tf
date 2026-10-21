@@ -15,6 +15,10 @@
 # four 1024px JPEGs per meal it grows ~1 GiB a year, so 10 GiB is a decade of
 # headroom and still a ceiling on the bill. Its retention is a lifecycle rule set
 # over the S3 API like the others, not a cron in the bot.
+# edalle-recipe-bot (plain recipe-bot is taken globally) keeps source videos, audio for Scribe, transcripts, raw model answers
+# and platform cookies — private, 50 GiB cap; audio/ expires in 30d and videos/
+# in 180d via edalle-recipe-bot-lifecycle.json. Mirrored to Gcore (unlike CTB): the
+# bot must survive a Yandex outage with its recipes' sources intact.
 #
 # folder_id is per-bucket and stays null for the adopted ones. Creating a bucket
 # under a UserAccount IAM token needs it spelled out — the folder cannot be
@@ -32,6 +36,7 @@ locals {
     "gistrec-share"        = { max_size = 5368709120, anonymous_read = true, folder_id = var.folder_id, tags = {} }
     "glucose-bot"          = { max_size = 10737418240, anonymous_read = false, folder_id = var.folder_id, tags = { project = "glucose-bot" } }
     "recepter"             = { max_size = 0, anonymous_read = true, folder_id = null, tags = { project = "recepter" } }
+    "edalle-recipe-bot"    = { max_size = 53687091200, anonymous_read = false, folder_id = var.folder_id, tags = { project = "recipe-bot" } }
   }
 }
 

@@ -1,0 +1,6 @@
+{
+  "lifecycleRules": [
+    { "id": "expire-audio-30d",   "enabled": true, "filter": { "prefix": "audio/" },  "expiration": { "days": "30" } },
+    { "id": "expire-videos-180d", "enabled": true, "filter": { "prefix": "videos/" }, "expiration": { "days": "180" } }
+  ]
+}
