@@ -36,7 +36,7 @@ locals {
     "gistrec-share"        = { max_size = 5368709120, anonymous_read = true, folder_id = var.folder_id, tags = {} }
     "glucose-bot"          = { max_size = 10737418240, anonymous_read = false, folder_id = var.folder_id, tags = { project = "glucose-bot" } }
     "recepter"             = { max_size = 0, anonymous_read = true, folder_id = null, tags = { project = "recepter" } }
-    "edalle-recipe-bot"    = { max_size = 53687091200, anonymous_read = false, folder_id = var.folder_id, tags = { project = "recipe-bot" } }
+    "edalle-recipe-bot"    = { max_size = 53687091200, anonymous_read = false, folder_id = var.folder_id, tags = { project = "edalle-recipe-bot" } }
   }
 }
 
