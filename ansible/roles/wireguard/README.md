@@ -28,11 +28,13 @@ host_vars.
 
 | host       | wireguard_ip | interface  |
 |------------|--------------|------------|
+| russia-02  | 10.10.0.1    | `wg0`      |
 | germany-02 | 10.10.0.2    | `wg-fleet` |
 | russia-03  | 10.10.0.3    | `wg0`      |
 | finland-01 | 10.10.0.4    | `wg0`      |
 
-(10.10.0.1 is free — it was russia-01, destroyed 2026-08-19. 10.10.0.3 was
+(10.10.0.1 was russia-01's until it was destroyed 2026-08-19; the new russia-02
+(edalle-foodops, Timeweb) took it 2026-10-22. 10.10.0.3 was
 germany-01's until it was retired 2026-07-20; russia-03 took the address at its
 onboarding, 2026-08-18. germany-02 joined 2026-09-19 and reused 10.10.0.2 from
 the retired russia-02.)
