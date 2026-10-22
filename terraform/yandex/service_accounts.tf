@@ -16,7 +16,7 @@ locals {
     "mysql-backup"         = { description = "MySQL off-site backup uploader (write-only)", labels = { role = "mysql-backup" } }
     "recepter"             = { description = null, labels = null }
     "realm-status"         = { description = "realm-status fn: Lockbox read + self-invoke", labels = { project = "realm-status" } }
-    "recipe-bot"           = { description = "recipe-bot: Object Storage (videos, transcripts, cookies)", labels = { project = "recipe-bot" } }
+    "edalle-recipe-bot"    = { description = "edalle-recipe-bot: Object Storage (videos, transcripts, cookies)", labels = { project = "edalle-recipe-bot" } }
   }
 }
 

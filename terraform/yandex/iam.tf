@@ -60,10 +60,10 @@ resource "yandex_storage_bucket_iam_binding" "glucose_bot" {
   members = ["serviceAccount:${yandex_iam_service_account.this["glucose-bot"].id}"]
 }
 
-# recipe-bot: the same bucket-scoped pattern as glucose-bot — its key reaches only
+# edalle-recipe-bot: the same bucket-scoped pattern as glucose-bot — its key reaches only
 # its own bucket (videos, transcripts, cookies), never the backups.
 resource "yandex_storage_bucket_iam_binding" "recipe_bot" {
   bucket  = yandex_storage_bucket.this["edalle-recipe-bot"].bucket
   role    = "storage.editor"
-  members = ["serviceAccount:${yandex_iam_service_account.this["recipe-bot"].id}"]
+  members = ["serviceAccount:${yandex_iam_service_account.this["edalle-recipe-bot"].id}"]
 }
