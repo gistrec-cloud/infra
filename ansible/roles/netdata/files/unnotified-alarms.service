@@ -1,0 +1,16 @@
+[Unit]
+Description=Report CRITICAL netdata alarms that were never notified
+After=netdata.service
+
+[Service]
+Type=oneshot
+User=netdata
+Group=netdata
+ExecStart=/usr/local/sbin/unnotified-alarms
+StateDirectory=unnotified-alarms
+Nice=10
+ProtectSystem=strict
+# sqlite в WAL-режиме пишет -shm даже при mode=ro.
+ReadWritePaths=/var/cache/netdata
+PrivateTmp=true
+NoNewPrivileges=true

@@ -1,0 +1,9 @@
+[Unit]
+Description=Check for never-notified CRITICAL netdata alarms every 2 minutes
+
+[Timer]
+OnCalendar=*:0/2
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
