@@ -85,6 +85,10 @@ netdata_ping_jobs: []
 #   url:  /metrics endpoint to scrape
 netdata_prometheus_jobs: []
 
+# go.d-модули, чьи стоковые автоджобы на хосте не нужны (чужие сервисы):
+# /etc/netdata/go.d/<module>.conf с `jobs: []` перекрывает стоковый список.
+netdata_godisabled_modules: []
+
 # Custom health.d alarm files (empty list = nothing copied). Entries: a path
 # relative to the playbook dir (lands in /etc/netdata/health.d/<basename>) or
 # { src, dest } — a dest named after a stock health.d file shadows the stock

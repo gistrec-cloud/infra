@@ -13,7 +13,16 @@
 # files/netdata/health.d is crit-only, so this costs no application coverage.
 SEND_TELEGRAM="YES"
 TELEGRAM_BOT_TOKEN="{{ netdata_telegram_bot_token }}"
+{% if netdata_stream_destination | length > 0 %}
+# Ребёнок: его чарты считает парент, свой дефолт дублировал бы каждый стоковый
+# алерт. Остаются только роли правил, стоящих здесь нарочно (fleet-watch,
+# fleet-uplink — см. README роли); потерю стрима ловит fleet_streaming_lost.
+DEFAULT_RECIPIENT_TELEGRAM="disabled"
+role_recipients_telegram[fleetcrit]="{{ netdata_telegram_chat_id }}|critical"
+role_recipients_telegram[link]="{{ netdata_telegram_chat_id }}|critical"
+{% else %}
 DEFAULT_RECIPIENT_TELEGRAM="{{ netdata_telegram_chat_id }}|critical"
+{% endif %}
 
 # `disk` is the one role exempt from that filter — its WARNING must arrive,
 # because a filling disk is only actionable *before* it is full. The stock

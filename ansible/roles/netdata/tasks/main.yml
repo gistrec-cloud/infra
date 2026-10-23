@@ -234,6 +234,14 @@
   notify: Restart netdata
   when: tls_managed | default(false)
 
+- name: Disable unneeded go.d autodetect jobs
+  ansible.builtin.copy:
+    content: "jobs: []\n"
+    dest: "/etc/netdata/go.d/{{ item }}.conf"
+    mode: "0644"
+  loop: "{{ netdata_godisabled_modules }}"
+  notify: Restart netdata
+
 # go.d re-reads job configs only at startup, hence the full restart.
 - name: Configure go.d filecheck (backup-freshness markers)
   ansible.builtin.template:
