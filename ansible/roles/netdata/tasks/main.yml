@@ -283,6 +283,31 @@
   no_log: true
   when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
 
+# netdata ненадёжно уведомляет об алерте, родившемся в CRITICAL (старт агента,
+# переподключение ребёнка) — скрипт досылает такие в Telegram. Только у
+# уведомляющего вычислителя: он видит алерты всех детей.
+- name: Install the unnotified-alarms reporter
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: unnotified-alarms.py, dest: /usr/local/sbin/unnotified-alarms, mode: "0755" }
+    - { src: unnotified-alarms.service, dest: /etc/systemd/system/unnotified-alarms.service, mode: "0644" }
+    - { src: unnotified-alarms.timer, dest: /etc/systemd/system/unnotified-alarms.timer, mode: "0644" }
+  loop_control:
+    label: "{{ item.dest }}"
+  register: netdata_unnotified_units
+  when: netdata_stream_destination | length == 0 and netdata_telegram_bot_token | length > 0
+
+- name: Enable the unnotified-alarms timer
+  ansible.builtin.systemd:
+    name: unnotified-alarms.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ netdata_unnotified_units is changed }}"
+  when: netdata_stream_destination | length == 0 and netdata_telegram_bot_token | length > 0
+
 - name: Enable and start netdata
   ansible.builtin.service:
     name: netdata
