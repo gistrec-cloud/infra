@@ -171,6 +171,11 @@ function short(sec) {
   return Math.round(sec / 2592000) + 'mo';
 }
 const ago = ts => short(Date.now() / 1000 - ts);
+function long(sec) {
+  const [n, u] = sec < 3600 ? [Math.max(1, Math.round(sec / 60)), 'minute'] : sec < 172800 ? [Math.round(sec / 3600), 'hour']
+    : sec < 1209600 ? [Math.round(sec / 86400), 'day'] : [Math.round(sec / 604800), 'week'];
+  return `${n} ${u}${n === 1 ? '' : 's'}`;
+}
 
 const state = { range: '24h', expanded: new Set(), fullList: new Set(), hover: null, snap: null };
 const byName = name => state.snap.projects.find(p => p.name === name);
@@ -222,7 +227,8 @@ function showTip(hist, i) {
   // цвет как у отрезка: у текущего он учитывает горящие алерты
   const seg = hist.querySelectorAll('i')[i];
   const c = ['crit', 'warn', 'ok'].find(x => seg.classList.contains(x)) || 'nodata';
-  const back = seg.hasAttribute('data-now') ? 'firing now' : current ? 'current interval' : short(now - end) + ' ago';
+  const lifted = seg.hasAttribute('data-now');
+  const back = lifted ? 'firing now' : current ? 'current interval' : long(now - end) + ' ago';
   hist.classList.add('hovering');
   hist.querySelectorAll('i').forEach((x, k) => x.classList.toggle('on', k === i));
   let tip = hist.querySelector('.tip');
@@ -234,7 +240,9 @@ function showTip(hist, i) {
     const pc = bucketCls(v);
     return `<span>${esc(h.labels[k])}<em style="color:var(--${pc})">${pc.toUpperCase()}</em></span>`;
   }).join('');
-  tip.innerHTML = `<b>${interval(end - step, end, current)}</b><span><em style="color:var(--${c === 'nodata' ? 'text-muted' : c})">${c === 'nodata' ? 'N/A' : c.toUpperCase()}</em>${back}</span>` + probes;
+  // статус несут строки проб; свой — только если их нет или отрезок подкрашен горящим алертом
+  const status = probes && !lifted ? '' : `<em style="color:var(--${c === 'nodata' ? 'text-muted' : c})">${c === 'nodata' ? 'N/A' : c.toUpperCase()}</em>`;
+  tip.innerHTML = `<b>${interval(end - step, end, current)}</b><span>${status}${back}</span>` + probes;
   state.hover = { project: p.name, index: i };
 }
 
