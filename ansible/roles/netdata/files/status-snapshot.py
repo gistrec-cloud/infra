@@ -96,8 +96,10 @@ def probes(alarms):
     out, pm2 = {}, {}
 
     def add(a, chart, dim, group, fn=lambda v: v, gap_down=False):
+        # http/port/ping проверяют чужой адрес — хост тут проверяющий, а не место приложения
+        where = 'from' if re.match(r'^(httpcheck|portcheck|ping)_', chart) else '@'
         out[a['host'] + chart] = dict(host=a['host'], chart=chart, dim=dim, group=group, fn=fn, gap_down=gap_down,
-                                      label=f"{chart.split('.')[0]} @ {a['host']}")
+                                      label=f"{chart.split('.')[0]} {where} {a['host']}")
 
     for a in alarms:
         c = a['chart']
@@ -243,8 +245,8 @@ def summary(projects):
 
 
 def public_label(label, project):
-    """«httpcheck_edalle_foodops_testing @ russia-03» → «testing»: без ноды и префикса проекта."""
-    m = re.match(r'^(?:pm2 \S+|([a-z0-9]+?)_(\S+?)) @ ', label)
+    """«httpcheck_edalle_foodops_testing from russia-03» → «testing»: без ноды и префикса проекта."""
+    m = re.match(r'^(?:pm2 \S+|([a-z0-9]+?)_(\S+?)) (?:@|from) ', label)
     if not m or not m[1]:
         return PROBE_KIND['pm2']
     kind, job = m[1], m[2]
