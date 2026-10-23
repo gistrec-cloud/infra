@@ -229,10 +229,12 @@ function showTip(hist, i) {
   if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; hist.appendChild(tip); }
   tip.style.left = ((i + 0.5) / n * 100) + '%';
   tip.style.transform = `translateX(${i < n * 0.1 ? '-10%' : i > n * 0.9 ? '-90%' : '-50%'})`;
-  // какая проба окрасила отрезок (худшая из проб проекта)
-  const probe = h?.w?.[i] != null && c !== 'ok' ? h.labels[h.w[i]] : null;
-  tip.innerHTML = `<b>${interval(end - step, end, current)}</b><span><em style="color:var(--${c === 'nodata' ? 'text-muted' : c})">${c === 'nodata' ? 'N/A' : c.toUpperCase()}</em>${back}</span>` +
-    (probe ? `<span>${esc(probe)}</span>` : '');
+  // все пробы ниже нормы в отрезке, худшая первой — каждая своим цветом
+  const probes = (Array.isArray(h?.w?.[i]) ? h.w[i] : []).map(([k, v]) => {
+    const pc = bucketCls(v);
+    return `<span>${esc(h.labels[k])}<em style="color:var(--${pc})">${pc.toUpperCase()}</em></span>`;
+  }).join('');
+  tip.innerHTML = `<b>${interval(end - step, end, current)}</b><span><em style="color:var(--${c === 'nodata' ? 'text-muted' : c})">${c === 'nodata' ? 'N/A' : c.toUpperCase()}</em>${back}</span>` + probes;
   state.hover = { project: p.name, index: i };
 }
 
