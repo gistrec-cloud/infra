@@ -96,10 +96,9 @@ def probes(alarms):
     out, pm2 = {}, {}
 
     def add(a, chart, dim, group, fn=lambda v: v, gap_down=False):
-        # http/port/ping проверяют чужой адрес — хост тут проверяющий, а не место приложения
-        where = 'from' if re.match(r'^(httpcheck|portcheck|ping)_', chart) else '@'
+        # «from»: хост — откуда данные; у http/port/ping это проверяющий, не место приложения
         out[a['host'] + chart] = dict(host=a['host'], chart=chart, dim=dim, group=group, fn=fn, gap_down=gap_down,
-                                      label=f"{chart.split('.')[0]} {where} {a['host']}")
+                                      label=f"{chart.split('.')[0]} from {a['host']}")
 
     for a in alarms:
         c = a['chart']
@@ -120,7 +119,7 @@ def probes(alarms):
             add(a, m[1] + '.cert_depth0_time_until_expiration', 'expiry', 'min',
                 lambda v: 1 if v > 14 * DAY else 0.96 if v > 7 * DAY else 0)
         if m := re.match(r'^app\.pm2_(.+)_processes$', c):
-            pm2[a['host'] + m[1]] = dict(host=a['host'], app=m[1], label=f"pm2 {m[1]} @ {a['host']}")
+            pm2[a['host'] + m[1]] = dict(host=a['host'], app=m[1], label=f"pm2 {m[1]} from {a['host']}")
     return list(out.values()), list(pm2.values())
 
 
@@ -246,7 +245,7 @@ def summary(projects):
 
 def public_label(label, project):
     """«httpcheck_edalle_foodops_testing from russia-03» → «testing»: без ноды и префикса проекта."""
-    m = re.match(r'^(?:pm2 \S+|([a-z0-9]+?)_(\S+?)) (?:@|from) ', label)
+    m = re.match(r'^(?:pm2 \S+|([a-z0-9]+?)_(\S+?)) from ', label)
     if not m or not m[1]:
         return PROBE_KIND['pm2']
     kind, job = m[1], m[2]
