@@ -24,6 +24,7 @@ STALE_SEC = 3600  # алерты снятых с парка нод застыв�
 RANGES = {'24h': (86400, 48), '7d': (604800, 42)}
 DAY = 86400
 OK_FROM = 0.999  # отрезок не ниже — зелёный, как bucket() на страницах
+WARN_FROM = 0.95  # не ниже — жёлтый, ниже — красный
 
 # Инфраструктура — строки по подсистемам. ping.conf = fleet-link/fleet-uplink
 # под стоковым именем; host_clock_* из trade_lab_clock.conf висит на каждой ноде
@@ -96,8 +97,9 @@ def probes(alarms):
     out, pm2 = {}, {}
 
     def add(a, chart, dim, group, fn=lambda v: v, gap_down=False):
+        # «from»: хост — откуда данные; у http/port/ping это проверяющий, не место приложения
         out[a['host'] + chart] = dict(host=a['host'], chart=chart, dim=dim, group=group, fn=fn, gap_down=gap_down,
-                                      label=f"{chart.split('.')[0]} @ {a['host']}")
+                                      label=f"{chart.split('.')[0]} from {a['host']}")
 
     for a in alarms:
         c = a['chart']
@@ -118,7 +120,7 @@ def probes(alarms):
             add(a, m[1] + '.cert_depth0_time_until_expiration', 'expiry', 'min',
                 lambda v: 1 if v > 14 * DAY else 0.96 if v > 7 * DAY else 0)
         if m := re.match(r'^app\.pm2_(.+)_processes$', c):
-            pm2[a['host'] + m[1]] = dict(host=a['host'], app=m[1], label=f"pm2 {m[1]} @ {a['host']}")
+            pm2[a['host'] + m[1]] = dict(host=a['host'], app=m[1], label=f"pm2 {m[1]} from {a['host']}")
     return list(out.values()), list(pm2.values())
 
 
@@ -164,7 +166,8 @@ def history(parent, alarms, rng):
         merged.append(vals[0][0] if vals else None)  # худшая из проб в отрезке
         # все пробы ниже нормы, худшая первой: [индекс в labels, значение]
         bad.append([[k, round(x, 4)] for x, k in vals if x < OK_FROM] or None)
-    known = [x for x in merged if x is not None]
+    # жёлтый отрезок — деградация, не простой: в uptime идёт как полный
+    known = [1 if x >= WARN_FROM else x for x in merged if x is not None]
     return dict(v=[None if x is None else round(x, 4) for x in merged], t=t, w=bad, labels=labels,
                 uptime=round(sum(known) / len(known) * 100, 2) if known else None)
 
@@ -243,8 +246,8 @@ def summary(projects):
 
 
 def public_label(label, project):
-    """«httpcheck_edalle_foodops_testing @ russia-03» → «testing»: без ноды и префикса проекта."""
-    m = re.match(r'^(?:pm2 \S+|([a-z0-9]+?)_(\S+?)) @ ', label)
+    """«httpcheck_edalle_foodops_testing from russia-03» → «testing»: без ноды и префикса проекта."""
+    m = re.match(r'^(?:pm2 \S+|([a-z0-9]+?)_(\S+?)) from ', label)
     if not m or not m[1]:
         return PROBE_KIND['pm2']
     kind, job = m[1], m[2]
