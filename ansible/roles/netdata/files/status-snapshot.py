@@ -158,14 +158,14 @@ def history(parent, alarms, rng):
                 t = ts
     if not rows:
         return None
-    merged, worst = [], []
+    merged, bad = [], []
     for i in range(points):
-        vals = [(r[i], k) for k, r in enumerate(rows) if r[i] is not None]
-        lo = min(vals) if vals else None  # худшая из проб в отрезке
-        merged.append(lo[0] if lo else None)
-        worst.append(lo[1] if lo and lo[0] < OK_FROM else None)
+        vals = sorted((r[i], k) for k, r in enumerate(rows) if r[i] is not None)
+        merged.append(vals[0][0] if vals else None)  # худшая из проб в отрезке
+        # все пробы ниже нормы, худшая первой: [индекс в labels, значение]
+        bad.append([[k, round(x, 4)] for x, k in vals if x < OK_FROM] or None)
     known = [x for x in merged if x is not None]
-    return dict(v=[None if x is None else round(x, 4) for x in merged], t=t, w=worst, labels=labels,
+    return dict(v=[None if x is None else round(x, 4) for x in merged], t=t, w=bad, labels=labels,
                 uptime=round(sum(known) / len(known) * 100, 2) if known else None)
 
 
@@ -269,7 +269,20 @@ def public(snap):
     """Наружу — только имена, статусы, история и рестарты: без нод, алертов и ссылок.
     Подписи проб в истории — короткие (public_label)."""
     def hist(h, name):
-        return h and dict(h, labels=[public_label(x, name) for x in h['labels']])
+        """Короткие подписи; пробы, слившиеся в одну («network link»), — одной строкой с худшим значением."""
+        if not h:
+            return h
+        short = [public_label(x, name) for x in h['labels']]
+        labels = list(dict.fromkeys(short))
+        w = []
+        for bad in h['w']:
+            seen, out = set(), []
+            for k, v in bad or []:  # худшая первой — первое вхождение метки и есть худшее
+                if short[k] not in seen:
+                    seen.add(short[k])
+                    out.append([labels.index(short[k]), v])
+            w.append(out or None)
+        return dict(h, labels=labels, w=w)
 
     def strip(p):
         hot = any(RANK[a['status']] >= 2 for a in p['alarms'])
