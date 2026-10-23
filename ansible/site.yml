@@ -220,6 +220,7 @@
     # certificate lineage already exists from the prerequisite play above.
     - role: clickhouse
       when: clickhouse_managed | default(false)
+      tags: [clickhouse]
 
 - name: Off-site mirror — Yandex Object Storage → Gcore by timer
   hosts: all

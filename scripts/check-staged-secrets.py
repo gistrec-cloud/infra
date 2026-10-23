@@ -28,8 +28,9 @@ PATTERNS = [
 ]
 
 # Ключевой материал в .pem уже закрыт хуком detect-private-key, а строки
-# сертификатов дают ложные срабатывания на подходящей длине.
-SKIP_SUFFIXES = (".pem",)
+# сертификатов дают ложные срабатывания на подходящей длине. .woff2.b64 —
+# шрифты статус-страницы в base64 (roles/netdata/files/projects-fonts).
+SKIP_SUFFIXES = (".pem", ".woff2.b64")
 
 
 def main():

@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Status page snapshot from the netdata parent API
+After=netdata.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/status-snapshot /etc/status-snapshot.json
+Nice=10
+ProtectSystem=strict
+ReadWritePaths={{ netdata_projects_page_dir }}{% if netdata_status_public_dir | length > 0 %} {{ netdata_status_public_dir }}{% endif %}
+
+PrivateTmp=true
+NoNewPrivileges=true
