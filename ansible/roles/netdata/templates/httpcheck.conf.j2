@@ -6,6 +6,9 @@ jobs:
   - name: {{ job.name }}
     url: {{ job.url }}
     timeout: {{ job.timeout | default(2) }}
+{% if job.update_every is defined %}
+    update_every: {{ job.update_every }}
+{% endif %}
     status_accepted: [{{ (job.status_accepted | default([200])) | join(', ') }}]
 {% if job.response_match is defined %}
     response_match: '{{ job.response_match }}'

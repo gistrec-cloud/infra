@@ -1,0 +1,408 @@
+<!doctype html>
+<!-- {{ ansible_managed }} -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>~/status</title>
+<link rel="icon" id="favicon" href="data:,">
+<style>
+/* Шрифты встроены: Google Fonts из РФ ходит через раз */
+@font-face { font-family: "IBM Plex Sans"; font-weight: 100 700; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  src: url(data:font/woff2;base64,{{ lookup('file', 'projects-fonts/plex-cyr.woff2.b64') | trim }}) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 100 700; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  src: url(data:font/woff2;base64,{{ lookup('file', 'projects-fonts/plex-lat.woff2.b64') | trim }}) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 100 800; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  src: url(data:font/woff2;base64,{{ lookup('file', 'projects-fonts/jb-cyr.woff2.b64') | trim }}) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 100 800; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  src: url(data:font/woff2;base64,{{ lookup('file', 'projects-fonts/jb-lat.woff2.b64') | trim }}) format("woff2"); }
+
+/* Handoff «тёмный терминал» v3: топбар → вердикт + плашки → горящие → таблицы групп */
+:root {
+  --bg: oklch(0.17 0.012 250); --row-hover: oklch(0.2 0.012 250);
+  --divider-row: oklch(0.24 0.01 250); --divider-header: oklch(0.28 0.01 250);
+  --seg-border: oklch(0.3 0.01 250); --seg-active-bg: oklch(0.32 0.012 250);
+  --nodata: oklch(0.33 0.012 250);
+  --text-muted-2: oklch(0.55 0.01 250); --text-muted: oklch(0.62 0.01 250);
+  --text-secondary: oklch(0.75 0.01 250); --text: oklch(0.9 0.01 250); --text-strong: oklch(0.96 0.01 250);
+  --tooltip-bg: oklch(0.26 0.012 250); --tooltip-border: oklch(0.34 0.012 250);
+  --link: oklch(0.75 0.08 250);
+  --ok: oklch(0.72 0.15 155); --warn: oklch(0.8 0.14 75); --crit: oklch(0.68 0.2 25); --crit-text: oklch(0.72 0.2 25);
+  --crit-soft: oklch(0.68 0.2 25 / 0.16); --warn-soft: oklch(0.8 0.14 75 / 0.12);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --cols: 14px minmax(150px, 1.3fr) minmax(90px, 0.75fr) minmax(160px, 3fr) 70px minmax(110px, 1fr) 110px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 14px/1.4 var(--sans); }
+main { max-width: 1440px; margin: 0 auto; padding: 40px clamp(20px, 4vw, 56px) 48px; display: flex; flex-direction: column; gap: 36px; }
+a { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+a:hover { opacity: .7; }
+button:focus-visible, .prow:focus-visible, .more:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; font: 400 13px var(--mono); color: var(--text-muted); }
+.topbar .left { display: flex; align-items: center; gap: 18px; }
+.topbar b { color: var(--text); font-weight: 700; }
+#updated { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#updated.stale { color: var(--crit-text); }
+.nodes { display: flex; gap: 20px; flex-wrap: wrap; }
+.nodes span { display: flex; align-items: center; gap: 7px; }
+.nodes i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.nodes i.down { background: var(--crit); }
+
+.hero { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; border-bottom: 1px solid var(--divider-header); padding-bottom: 28px; }
+.hero > div:first-child { display: flex; flex-direction: column; gap: 10px; }
+#verdict { margin: 0; font: 700 44px/1 var(--mono); letter-spacing: -0.02em; color: var(--ok); }
+#verdict.crit { color: var(--crit-text); } #verdict.warn { color: var(--warn); }
+#counts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font: 500 14px var(--mono); }
+.pill { display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid transparent; }
+.pill b { font-weight: 700; font-size: 16px; }
+.pill.crit { background: var(--crit-soft); } .pill.crit b, .pill.crit span { color: var(--crit); }
+.pill.warn { background: var(--warn-soft); } .pill.warn b, .pill.warn span { color: var(--warn); }
+.pill.ok { border-color: var(--seg-border); } .pill.ok b { color: var(--text); } .pill.ok span { color: var(--ok); }
+.pill.zero { opacity: .4; }
+#counts .total { color: var(--text-muted-2); margin-left: 6px; }
+#err { margin: 0; font: 400 14px var(--mono); color: var(--crit-text); }
+.seg { display: flex; border: 1px solid var(--seg-border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; cursor: pointer; font: 500 13px var(--mono); padding: 7px 14px; background: transparent; color: var(--text-muted); }
+.seg button[aria-pressed="true"] { background: var(--seg-active-bg); color: var(--text-strong); }
+
+#firing { display: flex; flex-direction: column; gap: 2px; font-family: var(--mono); }
+#firing[hidden] { display: none; }
+.frow { display: grid; grid-template-columns: 64px 200px minmax(0, 1fr) 120px; gap: 16px; padding: 10px 14px; font-size: 14px; border-radius: 6px; }
+.frow.crit { background: var(--crit-soft); } .frow.warn { background: var(--warn-soft); }
+.frow .lvl { font-weight: 700; } .frow.crit .lvl { color: var(--crit); } .frow.warn .lvl { color: var(--warn); }
+.frow .proj { color: oklch(0.95 0.01 250); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frow .what { color: oklch(0.78 0.01 250); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frow .since { text-align: right; color: oklch(0.6 0.01 250); }
+
+#groups { display: flex; flex-direction: column; gap: 36px; }
+.group { display: flex; flex-direction: column; }
+.ghead, .prow, .pbody { display: grid; grid-template-columns: var(--cols); gap: 18px; }
+.ghead { padding: 0 14px 10px; font: 500 12px var(--mono); color: var(--text-muted-2); text-transform: uppercase; letter-spacing: 0.06em; }
+.ghead .title { color: oklch(0.85 0.01 250); }
+.ghead .range { white-space: nowrap; }
+.ghead .r { text-align: right; }
+.project { border-top: 1px solid var(--divider-row); }
+.prow { align-items: center; padding: 12px 14px; cursor: pointer; font-size: 14px; }
+.prow:hover { background: var(--row-hover); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.dot.warn { background: var(--warn); } .dot.crit { background: var(--crit); } .dot.nodata { background: var(--nodata); }
+.pname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-weight: 500; color: var(--text-strong); }
+.hosts { display: flex; flex-direction: column; gap: 2px; min-width: 0; font: 400 13px/1.35 var(--mono); color: var(--text-muted); }
+.hosts span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist { position: relative; display: flex; gap: 2px; height: 18px; }
+.hist i { flex: 1; border-radius: 1px; background: var(--nodata); outline-offset: 1px; }
+.hist i.ok { background: var(--ok); } .hist i.warn { background: var(--warn); } .hist i.crit { background: var(--crit); }
+.hist.hovering i { opacity: .45; }
+.hist.hovering i.on { opacity: 1; outline: 1px solid var(--text); }
+.tip { position: absolute; bottom: 28px; pointer-events: none; z-index: 5; white-space: nowrap; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: 6px; background: var(--tooltip-bg); border: 1px solid var(--tooltip-border); box-shadow: 0 6px 20px oklch(0 0 0 / 0.4); font: 400 12px var(--mono); color: var(--text); }
+.tip b { font-weight: 500; }
+.tip span { display: flex; gap: 8px; color: var(--text-muted); }
+.tip em { font-style: normal; font-weight: 700; }
+.uptime { text-align: right; font: 500 13px var(--mono); color: var(--text); font-variant-numeric: tabular-nums; }
+.restart { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font: 400 13px var(--mono); color: var(--text-muted); }
+.links { display: flex; gap: 12px; justify-content: flex-end; font: 400 13px var(--mono); }
+.pbody { padding: 0 14px 16px; }
+.alerts { grid-column: 4 / -1; display: flex; flex-direction: column; gap: 6px; max-width: 560px; font: 400 12.5px var(--mono); color: var(--text-secondary); }
+.alerts div { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.alerts .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alerts .v { color: var(--text-muted-2); white-space: nowrap; }
+.alerts .ok { color: var(--ok); } .alerts .warn { color: var(--warn); } .alerts .crit { color: var(--crit); } .alerts .nodata { color: var(--nodata); }
+.more { align-self: flex-start; color: var(--link); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.more:hover { opacity: .7; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 24px; font: 400 13px var(--mono); color: var(--text-muted); }
+.legend span { display: flex; align-items: center; gap: 8px; }
+.legend i { width: 10px; height: 10px; border-radius: 1px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="topbar">
+    <div class="left"><b>~/status</b><span id="updated">loading…</span></div>
+    <div class="nodes" id="nodes"></div>
+  </header>
+
+  <section class="hero">
+    <div>
+      <h1 id="verdict">loading…</h1>
+      <div id="counts"></div>
+      <p id="err" hidden></p>
+    </div>
+    <div class="seg" id="range">
+      <button type="button" data-range="24h" aria-pressed="true">24h</button>
+      <button type="button" data-range="7d" aria-pressed="false">7d</button>
+    </div>
+  </section>
+
+  <section id="firing" hidden></section>
+
+  <div id="groups"></div>
+
+  <div class="legend">
+    <span><i style="background:var(--ok)"></i>ok</span>
+    <span><i style="background:var(--warn)"></i>warning</span>
+    <span><i style="background:var(--crit)"></i>critical</span>
+    <span><i style="background:var(--nodata)"></i>no data (UNDEFINED / UNINITIALIZED)</span>
+  </div>
+</main>
+<script>
+// Рендер статус-страницы из снимка status.json (status-snapshot.py раз в минуту
+// собирает его из API netdata-парента). Публичная gistrec.cloud/status живёт в
+// репо сайта и читает урезанный снимок.
+const RANK = { CRITICAL: 3, WARNING: 2, UNDEFINED: 1, UNINITIALIZED: 1, CLEAR: 0 };
+const CLS = { CRITICAL: 'crit', WARNING: 'warn', UNDEFINED: 'nodata', UNINITIALIZED: 'nodata', CLEAR: 'ok' };
+const RANGES = { '24h': { after: 86400, points: 48, label: '24 h' }, '7d': { after: 604800, points: 42, label: '7 d' } };
+const GROUPS = [['prod', 'production'], ['pet', 'pet projects'], ['infra', 'infrastructure']];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const STALE_SEC = 180; // снимок раз в минуту: три пропуска подряд — уже не «живые» данные
+
+const raised = a => RANK[a.status] >= 2;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = id => document.getElementById(id);
+
+function short(sec) {
+  if (sec < 3600) return Math.max(1, Math.round(sec / 60)) + 'm';
+  if (sec < 172800) return Math.round(sec / 3600) + 'h';
+  if (sec < 1209600) return Math.round(sec / 86400) + 'd';
+  if (sec < 5184000) return Math.round(sec / 604800) + 'w';
+  return Math.round(sec / 2592000) + 'mo';
+}
+const ago = ts => short(Date.now() / 1000 - ts);
+
+const state = { range: '24h', expanded: new Set(), fullList: new Set(), hover: null, snap: null };
+const byName = name => state.snap.projects.find(p => p.name === name);
+const base = h => (h === state.snap.parent ? '' : '/host/' + encodeURIComponent(h));
+
+// точка строки: худший горящий алерт; серая, только если все алерты без данных
+function dotOf(p) {
+  if (p.alarms.some(raised)) return CLS[p.worst];
+  return p.alarms.every(a => RANK[a.status] === 1) ? 'nodata' : 'ok';
+}
+
+const bucketCls = v => v == null ? 'nodata' : v >= 0.999 ? 'ok' : v >= 0.95 ? 'warn' : 'crit';
+
+// текущий отрезок не светлее текущих алертов строки: иначе точка жёлтая, а полоса зелёная
+const NOW_CLS = { warn: 1, crit: 2 };
+function histCell(p, dot) {
+  const h = p.history[state.range];
+  const n = RANGES[state.range].points;
+  if (!h) return { bars: '<i></i>'.repeat(n), uptime: '—' };
+  const cls = h.v.map(bucketCls);
+  const lifted = (NOW_CLS[dot] || 0) > (NOW_CLS[cls[n - 1]] || 0);
+  if (lifted) cls[n - 1] = dot;
+  return {
+    bars: cls.map((c, i) => `<i class="${c}"${lifted && i === n - 1 ? ' data-now' : ''}></i>`).join(''),
+    uptime: h.uptime != null ? h.uptime.toFixed(2) + '%' : '—',
+  };
+}
+
+// «23 Oct, 14:00 to 14:30», через полночь — с датой у обоих концов
+function interval(start, end, current) {
+  const d = new Date(start * 1000), e = new Date(end * 1000);
+  const day = x => `${x.getDate()} ${MONTHS[x.getMonth()]}`;
+  const hm = x => x.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  if (current) return `${day(d)}, ${hm(d)} to now`;
+  return d.toDateString() === e.toDateString() ? `${day(d)}, ${hm(d)} to ${hm(e)}` : `${day(d)}, ${hm(d)} to ${day(e)}, ${hm(e)}`;
+}
+
+function showTip(hist, i) {
+  const p = byName(hist.dataset.p);
+  if (!p) return;
+  const h = p.history[state.range];
+  const r = RANGES[state.range];
+  const step = r.after / r.points;
+  const n = r.points;
+  const now = Date.now() / 1000;
+  // метка netdata — конец уже закрытого отрезка; «сейчас» только если он ещё идёт
+  const end = h?.t?.[i] ?? state.snap.generated_at - (n - 1 - i) * step;
+  const current = now < end;
+  // цвет как у отрезка: у текущего он учитывает горящие алерты
+  const seg = hist.querySelectorAll('i')[i];
+  const c = ['crit', 'warn', 'ok'].find(x => seg.classList.contains(x)) || 'nodata';
+  const back = seg.hasAttribute('data-now') ? 'firing now' : current ? 'current interval' : short(now - end) + ' ago';
+  hist.classList.add('hovering');
+  hist.querySelectorAll('i').forEach((x, k) => x.classList.toggle('on', k === i));
+  let tip = hist.querySelector('.tip');
+  if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; hist.appendChild(tip); }
+  tip.style.left = ((i + 0.5) / n * 100) + '%';
+  tip.style.transform = `translateX(${i < n * 0.1 ? '-10%' : i > n * 0.9 ? '-90%' : '-50%'})`;
+  tip.innerHTML = `<b>${interval(end - step, end, current)}</b><span><em style="color:var(--${c === 'nodata' ? 'text-muted' : c})">${c === 'nodata' ? 'N/A' : c.toUpperCase()}</em>${back}</span>`;
+  state.hover = { project: p.name, index: i };
+}
+
+function hideTip(hist) {
+  hist.classList.remove('hovering');
+  hist.querySelectorAll('i.on').forEach(x => x.classList.remove('on'));
+  hist.querySelector('.tip')?.remove();
+  state.hover = null;
+}
+
+function frow(a) {
+  const c = CLS[a.status];
+  return `<div class="frow ${c}" title="${esc((a.info || '') + ' · ' + a.host)}">
+    <span class="lvl">${c === 'crit' ? 'CRIT' : 'WARN'}</span>
+    <span class="proj">${esc(a.project)}</span>
+    <span class="what">${esc(a.name)} ${esc(a.value)}</span>
+    <span class="since">${a.since ? ago(a.since) : ''}</span>
+  </div>`;
+}
+
+function projectRow(p) {
+  const dot = dotOf(p);
+  const hc = histCell(p, dot);
+  const restart = `<span class="restart" title="time since the last pm2 restart">${p.restart != null ? '↻ ' + short(p.restart) : '—'}</span>`;
+  const hist = `<div class="hist" data-p="${esc(p.name)}">${hc.bars}</div>`;
+  const hot = p.alarms.filter(raised);
+  const open = state.expanded.has(p.name);
+  let body = '';
+  if (open) {
+    // горящие — по одному и с нодой; остальные схлопнуты по имени (disk_space_early ×7)
+    const many = p.hosts.length > 1 || p.kind === 'infra';
+    const okGroups = new Map();
+    for (const a of p.alarms.filter(a => !raised(a))) {
+      const g = okGroups.get(a.name) || okGroups.set(a.name, { name: a.name, status: a.status, n: 0, info: a.info }).get(a.name);
+      g.n++;
+      if (RANK[a.status] < RANK[g.status]) g.status = a.status;
+    }
+    const ok = [...okGroups.values()].sort((x, y) => RANK[x.status] - RANK[y.status] || x.name.localeCompare(y.name));
+    const full = state.fullList.has(p.name);
+    const rows = hot.map(a => ({ status: a.status, info: a.info, label: (many ? a.host + ' · ' : '') + a.name, value: a.value }))
+      .concat((full ? ok : ok.slice(0, 4)).map(g => ({ status: g.status, info: g.info, label: g.n > 1 ? `${g.name} ×${g.n}` : g.name })));
+    const rest = ok.length - Math.min(ok.length, 4);
+    body = `<div class="pbody"><div class="alerts">${rows.map(a => `<div title="${esc(a.info)}">
+      <span class="${CLS[a.status]}">●</span><span class="n">${esc(a.label)}</span>
+      ${a.value != null ? `<span class="v">${esc(a.value)}</span>` : ''}</div>`).join('')}
+      ${rest > 0 ? `<span class="more" data-p="${esc(p.name)}" tabindex="0" role="button">${full ? 'show less' : `+ ${rest} more ok`}</span>` : ''}</div></div>`;
+  }
+  return `<div class="project">
+    <div class="prow" data-p="${esc(p.name)}" tabindex="0" role="button" aria-expanded="${open}">
+      <span class="dot ${dot}"></span>
+      <span class="pname">${esc(p.name)}</span>
+      <div class="hosts">${p.hosts.map(h => `<span>${esc(h)}</span>`).join('')}</div>
+      ${hist}<span class="uptime">${hc.uptime}</span>${restart}
+      <span class="links"><a href="${base(p.link_host)}/" target="_blank" rel="noopener">netdata</a>${p.sentry ? `<a href="https://gistrec.sentry.io/projects/${encodeURIComponent(p.sentry)}/" target="_blank" rel="noopener">sentry</a>` : ''}</span>
+    </div>${body}
+  </div>`;
+}
+
+// иконка вкладки = цвет вердикта: состояние видно и на фоновой вкладке
+const ICON = { ok: '#43c07a', warn: '#f2af48', crit: '#fc5855' };
+function setIcon(level) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#0b1015"/><circle cx="16" cy="16" r="8" fill="${ICON[level]}"/></svg>`;
+  $('favicon').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
+function render() {
+  const { projects, summary: s } = state.snap;
+  const level = s.verdict_crit ? 'crit' : s.verdict_warn ? 'warn' : 'ok';
+  const v = $('verdict');
+  v.className = level === 'ok' ? '' : level;
+  v.textContent = level === 'ok' ? '✓ all clear'
+    : '✕ ' + [s.verdict_crit && `${s.verdict_crit} critical`, s.verdict_warn && `${s.verdict_warn} warning`].filter(Boolean).join(', ');
+  setIcon(level);
+
+  const pill = (cls, n, tag) => `<span class="pill ${cls}${n ? '' : ' zero'}"><b>${n}</b><span>${tag}</span></span>`;
+  $('counts').innerHTML = pill('crit', s.crit, 'CRIT') + pill('warn', s.warn, 'WARN') + pill('ok', s.total - s.crit - s.warn, 'OK')
+    + `<span class="total">of ${s.total} alerts</span>`;
+
+  // горящие алерты проектов; инфраструктура и системные живут в своих строках
+  const order = { prod: 0, pet: 1 };
+  const firing = projects.filter(p => p.kind !== 'infra')
+    .flatMap(p => p.alarms.filter(raised).map(a => ({ ...a, project: p.name, kind: p.kind })))
+    .sort((x, y) => RANK[y.status] - RANK[x.status] || order[x.kind] - order[y.kind] || x.name.localeCompare(y.name));
+  $('firing').hidden = !firing.length;
+  $('firing').innerHTML = firing.map(frow).join('');
+  $('nodes').innerHTML = state.snap.nodes.map(h => `<span><i class="${state.snap.failed.includes(h) ? 'down' : ''}"></i>${esc(h)}</span>`).join('');
+
+  $('groups').innerHTML = GROUPS.map(([k, title]) => {
+    const own = projects.filter(p => p.kind === k);
+    if (!own.length) return '';
+    const head = `<span></span><span class="title">${title} · ${own.length}</span><span>node</span><span class="range">${RANGES[state.range].label}</span><span class="r">uptime</span><span>restart</span><span></span>`;
+    return `<section class="group"><div class="ghead">${head}</div>${own.map(projectRow).join('')}</section>`;
+  }).join('');
+  if (state.hover) {
+    const hist = document.querySelector(`.hist[data-p="${CSS.escape(state.hover.project)}"]`);
+    if (hist) showTip(hist, state.hover.index); else state.hover = null;
+  }
+}
+
+async function load() {
+  const err = $('err');
+  try {
+    const r = await fetch('/status.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    state.snap = await r.json();
+    render();
+    tick();
+    const failed = state.snap.failed || [];
+    err.hidden = !failed.length;
+    err.textContent = failed.length ? 'not responding: ' + failed.join(', ') : '';
+  } catch (e) {
+    err.hidden = false;
+    err.textContent = `status snapshot unavailable (${e.message}), retrying in 30 s`;
+  }
+}
+
+// снимок старше трёх минут — значит, таймер или парент встали: счётчик краснеет
+function tick() {
+  if (!state.snap) return;
+  const s = Math.max(0, Math.round(Date.now() / 1000 - state.snap.generated_at));
+  const el = $('updated');
+  el.textContent = `updated ${s < 120 ? s + 's' : short(s)} ago`;
+  el.title = `snapshot at ${new Date(state.snap.generated_at * 1000).toLocaleTimeString('en-GB')}, taken every minute`;
+  el.classList.toggle('stale', s > STALE_SEC);
+}
+
+function activate(target) {
+  const more = target.closest('.more');
+  if (more) {
+    const p = more.dataset.p;
+    state.fullList.has(p) ? state.fullList.delete(p) : state.fullList.add(p);
+    return render();
+  }
+  const row = target.closest('.prow');
+  if (row) {
+    const p = row.dataset.p;
+    state.expanded.has(p) ? state.expanded.delete(p) : state.expanded.add(p);
+    render();
+  }
+}
+document.addEventListener('click', e => { if (!e.target.closest('a, button')) activate(e.target); });
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.prow, .more')) { e.preventDefault(); activate(e.target); }
+});
+$('groups').addEventListener('mouseover', e => {
+  const seg = e.target.closest('.hist i');
+  if (seg) showTip(seg.parentElement, [...seg.parentElement.querySelectorAll('i')].indexOf(seg));
+});
+$('groups').addEventListener('mouseout', e => {
+  const hist = e.target.closest('.hist');
+  if (hist && !hist.contains(e.relatedTarget)) hideTip(hist);
+});
+$('range').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b || b.dataset.range === state.range) return;
+  state.range = b.dataset.range;
+  $('range').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  try { localStorage.setItem('status.range', state.range); } catch {}
+  if (state.snap) render();
+});
+
+// выбранный период переживает перезагрузку (localStorage может быть недоступен)
+try {
+  const saved = localStorage.getItem('status.range');
+  if (RANGES[saved]) {
+    state.range = saved;
+    $('range').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.range === saved));
+  }
+} catch {}
+
+load();
+setInterval(load, 30000);
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

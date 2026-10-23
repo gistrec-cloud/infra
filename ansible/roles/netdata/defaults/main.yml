@@ -52,6 +52,7 @@ netdata_pushover_roles: {}
 #   timeout:         seconds, default 2
 #   status_accepted: list of healthy HTTP codes, default [200]
 #   response_match:  optional Go regexp the body must match (else bad_content → success=0)
+#   update_every:    seconds between probes, default go.d's 1s (raise it for paid targets)
 netdata_httpcheck_jobs: []
 
 # go.d portcheck jobs — живость TCP-порта без разбора протокола. Нужен там, где
@@ -89,6 +90,15 @@ netdata_prometheus_jobs: []
 # /etc/netdata/go.d/<module>.conf с `jobs: []` перекрывает стоковый список.
 netdata_godisabled_modules: []
 
+# go.d mysql / clickhouse jobs (empty list = file untouched). Liveness and
+# replication state for the self-hosted databases; the monitoring users live in
+# the mysql/clickhouse role registries (PROCESS + REPLICATION CLIENT / readonly
+# profile — no data access).
+#   mysql:      { name, dsn }  e.g. dsn: "netdata:<pw>@tcp(127.0.0.1:3306)/"
+#   clickhouse: { name, url, username, password }
+netdata_mysql_jobs: []
+netdata_clickhouse_jobs: []
+
 # Custom health.d alarm files (empty list = nothing copied). Entries: a path
 # relative to the playbook dir (lands in /etc/netdata/health.d/<basename>) or
 # { src, dest } — a dest named after a stock health.d file shadows the stock
@@ -97,6 +107,21 @@ netdata_godisabled_modules: []
 # files owned by an app repo (single source of truth in the app's checkout;
 # re-run the play after an app deploy that changes them).
 netdata_health_files: []
+
+# Каталог страницы projects.html (сводка алертов по проектам) на паренте за
+# stats-vhost; пусто = страница не ставится.
+netdata_projects_page_dir: ""
+# Каталог урезанного status.json для публичной gistrec.cloud/status (без нод,
+# алертов и ссылок; саму страницу отдаёт репо сайта); пусто = не писать.
+netdata_status_public_dir: ""
+# Проекты с живыми пользователями: только они (и инфраструктура) определяют
+# вердикт страницы; остальные считаются пет-проектами. Имена как на странице.
+netdata_projects_prod: []
+# Проект на странице → slug в Sentry (ссылка «sentry» в строке проекта).
+netdata_projects_sentry: {}
+# Проект → ноды, где он живёт, для проектов без pm2 (иначе колонка «нода»
+# покажет парент, с которого идут внешние httpcheck-пробы).
+netdata_projects_hosts: {}
 
 # Metrics streaming (parent/child). The shared API key (a UUID) comes from the
 # vault via group_vars/all.yml. A host is a child when

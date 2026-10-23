@@ -242,6 +242,30 @@
   loop: "{{ netdata_godisabled_modules }}"
   notify: Restart netdata
 
+# Database liveness / replication. no_log + 0640: the files carry the
+# monitoring users' passwords. go.d re-reads job configs only at startup.
+- name: Configure go.d mysql collector
+  ansible.builtin.template:
+    src: mysql.conf.j2
+    dest: /etc/netdata/go.d/mysql.conf
+    owner: root
+    group: netdata
+    mode: "0640"
+  no_log: true
+  notify: Restart netdata
+  when: netdata_mysql_jobs | length > 0
+
+- name: Configure go.d clickhouse collector
+  ansible.builtin.template:
+    src: clickhouse.conf.j2
+    dest: /etc/netdata/go.d/clickhouse.conf
+    owner: root
+    group: netdata
+    mode: "0640"
+  no_log: true
+  notify: Restart netdata
+  when: netdata_clickhouse_jobs | length > 0
+
 # go.d re-reads job configs only at startup, hence the full restart.
 - name: Configure go.d filecheck (backup-freshness markers)
   ansible.builtin.template:
@@ -282,6 +306,56 @@
     mode: "0640"
   no_log: true
   when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
+
+# Статус-страница: status-snapshot раз в минуту собирает из API парента
+# status.json (полный — для приватной страницы за fleet-auth, урезанный — для
+# публичной), страницы — статика, которую раздаёт nginx.
+- name: Create the status page dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ [netdata_projects_page_dir, netdata_status_public_dir] | select | list }}"
+  when: netdata_projects_page_dir | length > 0
+
+# Публичную gistrec.cloud/status рендерит репо сайта — отсюда только её status.json.
+- name: Install the status page
+  ansible.builtin.template:
+    src: projects.html.j2
+    dest: "{{ netdata_projects_page_dir }}/projects.html"
+    mode: "0644"
+  when: netdata_projects_page_dir | length > 0
+
+- name: Install the status snapshot script
+  ansible.builtin.copy:
+    src: status-snapshot.py
+    dest: /usr/local/sbin/status-snapshot
+    mode: "0755"
+  when: netdata_projects_page_dir | length > 0
+
+- name: Render the status snapshot config
+  ansible.builtin.template:
+    src: status-snapshot.json.j2
+    dest: /etc/status-snapshot.json
+    mode: "0644"
+  when: netdata_projects_page_dir | length > 0
+
+- name: Install the status snapshot unit and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop: [status-snapshot.service, status-snapshot.timer]
+  register: netdata_snapshot_units
+  when: netdata_projects_page_dir | length > 0
+
+- name: Enable the status snapshot timer
+  ansible.builtin.systemd:
+    name: status-snapshot.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ netdata_snapshot_units is changed }}"
+  when: netdata_projects_page_dir | length > 0
 
 - name: Enable and start netdata
   ansible.builtin.service:

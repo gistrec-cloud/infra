@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# go.d clickhouse collector jobs (HTTP interface). Defined in
+# netdata_clickhouse_jobs; carries the monitoring user's password.
+jobs:
+{% for job in netdata_clickhouse_jobs %}
+  - name: {{ job.name }}
+    url: {{ job.url }}
+    username: {{ job.username }}
+    password: '{{ job.password }}'
+    # DB user is created later in the play (db roles run after netdata)
+    autodetection_retry: 60
+{% endfor %}
