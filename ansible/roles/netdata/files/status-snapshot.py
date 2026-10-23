@@ -23,6 +23,7 @@ CLS = {'CRITICAL': 'crit', 'WARNING': 'warn', 'UNDEFINED': 'nodata', 'UNINITIALI
 STALE_SEC = 3600  # алерты снятых с парка нод застывают — отбрасываем
 RANGES = {'24h': (86400, 48), '7d': (604800, 42)}
 DAY = 86400
+OK_FROM = 0.999  # отрезок не ниже — зелёный, как bucket() на страницах
 
 # Инфраструктура — строки по подсистемам. ping.conf = fleet-link/fleet-uplink
 # под стоковым именем; host_clock_* из trade_lab_clock.conf висит на каждой ноде
@@ -37,6 +38,12 @@ INFRA_CHARTS = [(r'^mysql_', 'MySQL'), (r'^clickhouse_', 'ClickHouse'),
 INFRA_ROWS = {'MySQL', 'ClickHouse', 'S3 Backups', 'Telegram Bot API', 'AWS Relays', 'k3s', 'Network', 'VPS', 'TLS'}
 STOCK_ROW = 'VPS'  # горящие стоковые алерты netdata
 ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime'}
+
+# Публичная подпись пробы: в именах этих джоб — ноды, а ноды наружу не отдаём
+PUBLIC_PROBES = [(r'^watch_xray_', 'proxy port'), (r'^(health|watch)_', 'host health'),
+                 (r'^(link|uplink)_', 'network link'), (r'^k3s_', 'k3s API')]
+PROBE_KIND = {'httpcheck': 'health check', 'portcheck': 'port', 'ping': 'network link', 'filecheck': 'freshness',
+              'x509check': 'TLS cert', 'mysql': 'MySQL', 'clickhouse': 'ClickHouse', 'pm2': 'process'}
 
 
 def get(path):
@@ -89,7 +96,8 @@ def probes(alarms):
     out, pm2 = {}, {}
 
     def add(a, chart, dim, group, fn=lambda v: v, gap_down=False):
-        out[a['host'] + chart] = dict(host=a['host'], chart=chart, dim=dim, group=group, fn=fn, gap_down=gap_down)
+        out[a['host'] + chart] = dict(host=a['host'], chart=chart, dim=dim, group=group, fn=fn, gap_down=gap_down,
+                                      label=f"{chart.split('.')[0]} @ {a['host']}")
 
     for a in alarms:
         c = a['chart']
@@ -110,7 +118,7 @@ def probes(alarms):
             add(a, m[1] + '.cert_depth0_time_until_expiration', 'expiry', 'min',
                 lambda v: 1 if v > 14 * DAY else 0.96 if v > 7 * DAY else 0)
         if m := re.match(r'^app\.pm2_(.+)_processes$', c):
-            pm2[a['host'] + m[1]] = dict(host=a['host'], app=m[1])
+            pm2[a['host'] + m[1]] = dict(host=a['host'], app=m[1], label=f"pm2 {m[1]} @ {a['host']}")
     return list(out.values()), list(pm2.values())
 
 
@@ -126,7 +134,7 @@ def series(parent, host, chart, dim, group, rng):
 def history(parent, alarms, rng):
     _, points = RANGES[rng]
     plist, pm2 = probes(alarms)
-    rows, t = [], None
+    rows, labels, t = [], [], None
     for s in plist:
         try:
             v, ts = series(parent, s['host'], s['chart'], s['dim'], s['group'], rng)
@@ -135,6 +143,7 @@ def history(parent, alarms, rng):
         first = next((i for i, x in enumerate(v) if x is not None), None)
         rows.append([s['fn'](x) if x is not None else 0 if s['gap_down'] and first is not None and i > first else None
                      for i, x in enumerate(v)])
+        labels.append(s['label'])
         if len(ts) == points:
             t = ts
     if not plist:
@@ -144,16 +153,19 @@ def history(parent, alarms, rng):
             except Exception:
                 continue
             rows.append([None if x is None else 1 if x > 0 else 0 for x in v])
+            labels.append(s['label'])
             if len(ts) == points:
                 t = ts
     if not rows:
         return None
-    merged = []
+    merged, worst = [], []
     for i in range(points):
-        vals = [r[i] for r in rows if r[i] is not None]
-        merged.append(min(vals) if vals else None)  # худшая из проб в отрезке
+        vals = [(r[i], k) for k, r in enumerate(rows) if r[i] is not None]
+        lo = min(vals) if vals else None  # худшая из проб в отрезке
+        merged.append(lo[0] if lo else None)
+        worst.append(lo[1] if lo and lo[0] < OK_FROM else None)
     known = [x for x in merged if x is not None]
-    return dict(v=[None if x is None else round(x, 4) for x in merged], t=t,
+    return dict(v=[None if x is None else round(x, 4) for x in merged], t=t, w=worst, labels=labels,
                 uptime=round(sum(known) / len(known) * 100, 2) if known else None)
 
 
@@ -230,12 +242,40 @@ def summary(projects):
                 verdict_warn=sum(a['status'] == 'WARNING' for a in serious))
 
 
+def public_label(label, project):
+    """«httpcheck_edalle_foodops_testing @ russia-03» → «testing»: без ноды и префикса проекта."""
+    m = re.match(r'^(?:pm2 \S+|([a-z0-9]+?)_(\S+?)) @ ', label)
+    if not m or not m[1]:
+        return PROBE_KIND['pm2']
+    kind, job = m[1], m[2]
+    for rx, text in PUBLIC_PROBES:
+        if re.match(rx, job):
+            return text
+    if kind == 'x509check':
+        return re.sub(r'_([a-z]+)$', r'.\1', job).replace('_', '-')
+    if job == 'local':
+        return PROBE_KIND.get(kind, kind)
+    for key in {project, 'tg-bot-api', *(k for k, v in ALIASES.items() if v == project)}:
+        key = key.lower().replace('-', '_')
+        if key.replace('_', '').startswith(job.replace('_', '')):  # cleartranscript ↔ clear-transcript-bot
+            return PROBE_KIND.get(kind, kind)
+        if job.startswith(key + '_'):
+            job = job[len(key) + 1:]
+            break
+    return job.replace('_', ' ')
+
+
 def public(snap):
-    """Наружу — только имена, статусы, история и рестарты: без нод, алертов и ссылок."""
+    """Наружу — только имена, статусы, история и рестарты: без нод, алертов и ссылок.
+    Подписи проб в истории — короткие (public_label)."""
+    def hist(h, name):
+        return h and dict(h, labels=[public_label(x, name) for x in h['labels']])
+
     def strip(p):
         hot = any(RANK[a['status']] >= 2 for a in p['alarms'])
         dot = CLS[p['worst']] if hot else 'nodata' if all(RANK[a['status']] == 1 for a in p['alarms']) else 'ok'
-        return dict(name=p['name'], kind=p['kind'], dot=dot, restart=p['restart'], history=p['history'])
+        return dict(name=p['name'], kind=p['kind'], dot=dot, restart=p['restart'],
+                    history={rng: hist(h, p['name']) for rng, h in p['history'].items()})
     return dict(generated_at=snap['generated_at'], public=True, summary=snap['summary'],
                 projects=[strip(p) for p in snap['projects']])
 
