@@ -24,6 +24,7 @@ STALE_SEC = 3600  # алерты снятых с парка нод застыв�
 RANGES = {'24h': (86400, 48), '7d': (604800, 42)}
 DAY = 86400
 OK_FROM = 0.999  # отрезок не ниже — зелёный, как bucket() на страницах
+WARN_FROM = 0.95  # не ниже — жёлтый, ниже — красный
 
 # Инфраструктура — строки по подсистемам. ping.conf = fleet-link/fleet-uplink
 # под стоковым именем; host_clock_* из trade_lab_clock.conf висит на каждой ноде
@@ -165,7 +166,8 @@ def history(parent, alarms, rng):
         merged.append(vals[0][0] if vals else None)  # худшая из проб в отрезке
         # все пробы ниже нормы, худшая первой: [индекс в labels, значение]
         bad.append([[k, round(x, 4)] for x, k in vals if x < OK_FROM] or None)
-    known = [x for x in merged if x is not None]
+    # жёлтый отрезок — деградация, не простой: в uptime идёт как полный
+    known = [1 if x >= WARN_FROM else x for x in merged if x is not None]
     return dict(v=[None if x is None else round(x, 4) for x in merged], t=t, w=bad, labels=labels,
                 uptime=round(sum(known) / len(known) * 100, 2) if known else None)
 
