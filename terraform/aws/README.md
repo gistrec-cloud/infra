@@ -1,16 +1,17 @@
 # terraform/aws — Lambda functions
 
-Manages the Lambda footprint: four functions (`openai-relay`, `anthropic-relay`, `telegram-relay`,
-`yandex-rating-counter`), the three public Function URLs, the per-function IAM roles and customer-managed
+Manages the Lambda footprint: five functions (`openai-relay`, `anthropic-relay`, `telegram-relay`,
+`github-relay`, `yandex-rating-counter`), the four public Function URLs, the per-function IAM roles and customer-managed
 policies (`roles.tf`) and the hourly EventBridge Scheduler timer (`schedules.tf`). Configuration only —
 application code ships via a separate S3 artifact pipeline, so no `.zip` lives in this repo or in
 state. Provider `hashicorp/aws ~> 6.0`.
 
 The relays' code is public: [openai-relay](https://github.com/gistrec-cloud/openai-relay),
 [anthropic-relay](https://github.com/gistrec-cloud/anthropic-relay),
-[telegram-relay](https://github.com/gistrec-cloud/telegram-relay). Each ships with
-`npm run package` + `aws lambda update-function-code`; their `RELAY_TOKENS` (one token per client)
-live in the function config, which Terraform ignores.
+[telegram-relay](https://github.com/gistrec-cloud/telegram-relay); `github-relay` (read-only GitHub
+GraphQL) is not published yet. Each ships with `npm run package` + `aws lambda update-function-code`;
+their `RELAY_TOKENS` (one token per client) and `github-relay`'s `GITHUB_PAT` live in the function
+config, which Terraform ignores.
 
 ## Usage
 
@@ -32,7 +33,7 @@ enforce auth inside the function (or front it with CloudFront/WAF), and never pu
 
 Everything above was imported, not created: the first three functions, their URLs, roles, policies
 and the scheduler have been in state since 2026-07-14 (PR #5); `telegram-relay` was created with the
-AWS CLI and imported the same way on 2026-10-14. The `lambda-yandex-rating-counter` scope-down from `lambda:*` to `lambda:InvokeFunction` (PR #48)
+AWS CLI and imported the same way on 2026-10-14, `github-relay` on 2026-10-25. The `lambda-yandex-rating-counter` scope-down from `lambda:*` to `lambda:InvokeFunction` (PR #48)
 was applied on 2026-10-15, so `terraform plan` now reports no changes.
 
 Import the *next* function that turns up the same way (id = function name) — recipe in
