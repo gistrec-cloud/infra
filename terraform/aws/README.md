@@ -8,8 +8,8 @@ state. Provider `hashicorp/aws ~> 6.0`.
 
 The relays' code is public: [openai-relay](https://github.com/gistrec-cloud/openai-relay),
 [anthropic-relay](https://github.com/gistrec-cloud/anthropic-relay),
-[telegram-relay](https://github.com/gistrec-cloud/telegram-relay); `github-relay` (read-only GitHub
-GraphQL) is not published yet. Each ships with `npm run package` + `aws lambda update-function-code`;
+[telegram-relay](https://github.com/gistrec-cloud/telegram-relay),
+[github-relay](https://github.com/gistrec-cloud/github-relay) (read-only GitHub GraphQL). Each ships with `npm run package` + `aws lambda update-function-code`;
 their `RELAY_TOKENS` (one token per client) and `github-relay`'s `GITHUB_PAT` live in the function
 config, which Terraform ignores.
 
