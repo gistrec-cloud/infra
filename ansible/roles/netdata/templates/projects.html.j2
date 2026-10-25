@@ -155,7 +155,7 @@ button:focus-visible, .prow:focus-visible, .more:focus-visible { outline: 2px so
 const RANK = { CRITICAL: 3, WARNING: 2, UNDEFINED: 1, UNINITIALIZED: 1, CLEAR: 0 };
 const CLS = { CRITICAL: 'crit', WARNING: 'warn', UNDEFINED: 'nodata', UNINITIALIZED: 'nodata', CLEAR: 'ok' };
 const RANGES = { '24h': { after: 86400, points: 48, label: '24 h' }, '7d': { after: 604800, points: 42, label: '7 d' } };
-const GROUPS = [['prod', 'production'], ['pet', 'pet projects'], ['infra', 'infrastructure']];
+const GROUPS = [['prod', 'production'], ['pet', 'pet projects'], ['infra', 'infrastructure'], ['external', 'external APIs']];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const STALE_SEC = 180; // снимок раз в минуту: три пропуска подряд — уже не «живые» данные
 
@@ -310,19 +310,21 @@ function setIcon(level) {
 
 function render() {
   const { projects, summary: s } = state.snap;
-  const level = s.verdict_crit ? 'crit' : s.verdict_warn ? 'warn' : 'ok';
+  // чужой API, сколько бы ни лежал, поднимает заголовок максимум до warn
+  const level = s.verdict_crit ? 'crit' : s.verdict_warn || s.external ? 'warn' : 'ok';
   const v = $('verdict');
   v.className = level === 'ok' ? '' : level;
   v.textContent = level === 'ok' ? '✓ all clear'
-    : '✕ ' + [s.verdict_crit && `${s.verdict_crit} critical`, s.verdict_warn && `${s.verdict_warn} warning`].filter(Boolean).join(', ');
+    : '✕ ' + [s.verdict_crit && `${s.verdict_crit} critical`, s.verdict_warn && `${s.verdict_warn} warning`,
+              s.external && `${s.external} external`].filter(Boolean).join(', ');
   setIcon(level);
 
   const pill = (cls, n, tag) => `<span class="pill ${cls}${n ? '' : ' zero'}"><b>${n}</b><span>${tag}</span></span>`;
   $('counts').innerHTML = pill('crit', s.crit, 'CRIT') + pill('warn', s.warn, 'WARN') + pill('ok', s.total - s.crit - s.warn, 'OK')
-    + `<span class="total">of ${s.total} alerts</span>`;
+    + `<span class="total">of ${s.total} alerts</span>` + (s.external ? pill('warn', s.external, 'EXTERNAL') : '');
 
   // горящие алерты проектов; инфраструктура и системные живут в своих строках
-  const order = { prod: 0, pet: 1 };
+  const order = { prod: 0, pet: 1, external: 2 };
   const firing = projects.filter(p => p.kind !== 'infra')
     .flatMap(p => p.alarms.filter(raised).map(a => ({ ...a, project: p.name, kind: p.kind })))
     .sort((x, y) => RANK[y.status] - RANK[x.status] || order[x.kind] - order[y.kind] || x.name.localeCompare(y.name));
