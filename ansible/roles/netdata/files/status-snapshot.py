@@ -37,11 +37,20 @@ INFRA_FILES = [
 INFRA_CHARTS = [(r'^mysql_', 'MySQL'), (r'^clickhouse_', 'ClickHouse'),
                 (r'^x509check_', 'TLS'), (r'^portcheck_k3s_', 'k3s')]
 INFRA_ROWS = {'MySQL', 'ClickHouse', 'S3 Backups', 'Telegram Bot API', 'AWS Relays', 'k3s', 'Network', 'VPS', 'TLS'}
+# Чужие API, от которых зависят проекты (пробы askads без токена) — своя группа:
+# их сбой не наш, поэтому заголовок страницы от них максимум жёлтый
+EXTERNAL_CHARTS = [(r'^httpcheck_askads_direct_', 'Yandex Direct API'),
+                   (r'^httpcheck_askads_metrica_', 'Yandex Metrica API'),
+                   (r'^httpcheck_askads_wordstat_', 'Yandex Wordstat API'),
+                   (r'^httpcheck_askads_vk_ads_', 'VK Ads API'),
+                   (r'^httpcheck_askads_webmaster_', 'Yandex Webmaster API')]
+EXTERNAL_ROWS = {row for _, row in EXTERNAL_CHARTS}
 STOCK_ROW = 'VPS'  # горящие стоковые алерты netdata
 ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime'}
 
 # Публичная подпись пробы: в именах этих джоб — ноды, а ноды наружу не отдаём
-PUBLIC_PROBES = [(r'^watch_xray_', 'proxy port'), (r'^(health|watch)_', 'host health'),
+PUBLIC_PROBES = [(r'^askads_(direct|metrica|wordstat|vk_ads|webmaster)_ru$', 'API probe'),
+                 (r'^watch_xray_', 'proxy port'), (r'^(health|watch)_', 'host health'),
                  (r'^(link|uplink)_', 'network link'), (r'^k3s_', 'k3s API')]
 PROBE_KIND = {'httpcheck': 'health check', 'portcheck': 'port', 'ping': 'network link', 'filecheck': 'freshness',
               'x509check': 'TLS cert', 'mysql': 'MySQL', 'clickhouse': 'ClickHouse', 'pm2': 'process'}
@@ -57,7 +66,7 @@ def base(host, parent):
 
 
 def project_of(a):
-    for rx, row in INFRA_CHARTS:
+    for rx, row in EXTERNAL_CHARTS + INFRA_CHARTS:
         if re.search(rx, a['chart']):
             return row
     m = re.search(r'file=/etc/netdata/health\.d/([^,]+)\.conf', a.get('source') or '')
@@ -213,11 +222,13 @@ def build(cfg):
     def one(item):
         name, alarms = item
         alarms.sort(key=lambda a: (-RANK[a['status']], a['name']))
-        kind = 'infra' if name in INFRA_ROWS else 'prod' if name in prod else 'pet'
+        kind = ('external' if name in EXTERNAL_ROWS else 'infra' if name in INFRA_ROWS
+                else 'prod' if name in prod else 'pet')
         pm2_hosts = sorted({a['host'] for a in alarms if a['chart'].startswith('app.pm2_')})
         return dict(
             name=name, kind=kind, worst=alarms[0]['status'],
-            hosts=hosts_map.get(name) or pm2_hosts or sorted({a['host'] for a in alarms}),
+            # у чужого API нод нет: хост алерта — лишь откуда идёт проба
+            hosts=[] if kind == 'external' else hosts_map.get(name) or pm2_hosts or sorted({a['host'] for a in alarms}),
             link_host=alarms[0]['host'], sentry=cfg['sentry'].get(name),
             restart=restart(parent, alarms),
             history={rng: history(parent, alarms, rng) for rng in RANGES},
@@ -235,14 +246,18 @@ def build(cfg):
 
 
 def summary(projects):
-    """Плашки считают все горящие алерты; заголовок — без warning пет-проектов и стоковых."""
-    hot = [(p, a) for p in projects for a in p['alarms'] if RANK[a['status']] >= 2]
+    """Плашки считают все наши горящие алерты; заголовок — без warning пет-проектов и стоковых.
+    Чужие API — отдельно: external = сколько их строк не в норме; страница поднимает
+    заголовок из-за них максимум до warn."""
+    ours = [p for p in projects if p['kind'] != 'external']
+    hot = [(p, a) for p in ours for a in p['alarms'] if RANK[a['status']] >= 2]
     serious = [a for p, a in hot if not (a['status'] == 'WARNING' and (a['stock'] or p['kind'] == 'pet'))]
-    return dict(total=sum(len(p['alarms']) for p in projects),
+    return dict(total=sum(len(p['alarms']) for p in ours),
                 crit=sum(a['status'] == 'CRITICAL' for _, a in hot),
                 warn=sum(a['status'] == 'WARNING' for _, a in hot),
                 verdict_crit=sum(a['status'] == 'CRITICAL' for a in serious),
-                verdict_warn=sum(a['status'] == 'WARNING' for a in serious))
+                verdict_warn=sum(a['status'] == 'WARNING' for a in serious),
+                external=sum(RANK[p['worst']] >= 2 for p in projects if p['kind'] == 'external'))
 
 
 def public_label(label, project):
