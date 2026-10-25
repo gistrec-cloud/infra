@@ -69,7 +69,7 @@ def unnotified(db, now):
 
 def send(conf, text):
     token = re.search(r'^TELEGRAM_BOT_TOKEN="([^"]+)"', conf, re.M).group(1)
-    chat = re.search(r'^DEFAULT_RECIPIENT_TELEGRAM="([^"|]+)', conf, re.M).group(1)
+    chat = re.search(r'^DEFAULT_RECIPIENT_CUSTOM="([^"|]+)', conf, re.M).group(1)
     data = urllib.parse.urlencode({"chat_id": chat, "text": text}).encode()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     for attempt in range(3):

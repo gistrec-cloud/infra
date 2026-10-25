@@ -11,17 +11,33 @@
 # and its follow-up de-escalation + CLEAR ride the same tracking file, so a real
 # outage still arrives as a "down"/"recovered" pair. Every app health alarm in
 # files/netdata/health.d is crit-only, so this costs no application coverage.
-SEND_TELEGRAM="YES"
+#
+# Telegram ходит не стоковым send_telegram, а через custom_sender →
+# /usr/local/sbin/alarm-telegram: одно сообщение на эпизод, CLEAR редактирует
+# его временем решения и длительностью (стоковый слал бы новое на каждый
+# переход). Поэтому получатели ниже — role_recipients_custom; фильтр |critical
+# у alarm-notify общий для всех методов и работает так же.
+SEND_TELEGRAM="NO"
 TELEGRAM_BOT_TOKEN="{{ netdata_telegram_bot_token }}"
+SEND_CUSTOM="YES"
+custom_sender() {
+  TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}" TELEGRAM_API_URL="${TELEGRAM_API_URL}" \
+    NETDATA_CACHE_DIR="${NETDATA_CACHE_DIR}" host="${host}" status="${status}" \
+    alarm_id="${alarm_id}" when="${when}" name="${name}" summary="${summary}" \
+    chart="${chart}" info="${info}" value_string="${value_string}" \
+    old_value_string="${old_value_string}" non_clear_duration="${non_clear_duration}" \
+    goto_url="${goto_url}" /usr/local/sbin/alarm-telegram ${1} &&
+    info "sent telegram notification to '${1}' for ${notification_description}"
+}
 {% if netdata_stream_destination | length > 0 %}
 # Ребёнок: его чарты считает парент, свой дефолт дублировал бы каждый стоковый
 # алерт. Остаются только роли правил, стоящих здесь нарочно (fleet-watch,
 # fleet-uplink — см. README роли); потерю стрима ловит fleet_streaming_lost.
-DEFAULT_RECIPIENT_TELEGRAM="disabled"
-role_recipients_telegram[fleetcrit]="{{ netdata_telegram_chat_id }}|critical"
-role_recipients_telegram[link]="{{ netdata_telegram_chat_id }}|critical"
+DEFAULT_RECIPIENT_CUSTOM="disabled"
+role_recipients_custom[fleetcrit]="{{ netdata_telegram_chat_id }}|critical"
+role_recipients_custom[link]="{{ netdata_telegram_chat_id }}|critical"
 {% else %}
-DEFAULT_RECIPIENT_TELEGRAM="{{ netdata_telegram_chat_id }}|critical"
+DEFAULT_RECIPIENT_CUSTOM="{{ netdata_telegram_chat_id }}|critical"
 {% endif %}
 
 # `disk` is the one role exempt from that filter — its WARNING must arrive,
@@ -32,7 +48,7 @@ DEFAULT_RECIPIENT_TELEGRAM="{{ netdata_telegram_chat_id }}|critical"
 # On 2026-08-13 that meant the first message arrived at 100%, with MySQL already
 # refusing writes. Only files/disk_space_early.conf addresses this role, so the
 # exemption costs exactly one warning per filling disk, not a reopened floodgate.
-role_recipients_telegram[disk]="{{ netdata_telegram_chat_id }}"
+role_recipients_custom[disk]="{{ netdata_telegram_chat_id }}"
 {% if netdata_pushover_token | length > 0 %}
 
 # Pushover — the "wake me" escalation layer. Deliberately NOT a default
