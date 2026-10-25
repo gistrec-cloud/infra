@@ -100,6 +100,12 @@ def fresh_ok(warn_h, crit_h):
     return lambda v: 1 if v < warn_h * 3600 else 0.96 if v < crit_h * 3600 else 0
 
 
+def answered_success(d):
+    """Доля успехов среди проб, на которые askads ответил; askads не ответил вовсе — нет данных."""
+    answered = 1 - (d.get('no_connection') or 0)
+    return None if d.get('success') is None or answered < 0.01 else min(1, d['success'] / answered)
+
+
 def probes(alarms):
     """Пробы истории: значение отрезка 1 = норма, 0.95–0.999 = warn, ниже = crit.
     Если проб нет — живость pm2-процесса."""
@@ -112,7 +118,11 @@ def probes(alarms):
 
     for a in alarms:
         c = a['chart']
-        if re.match(r'^httpcheck_.+\.request_status$', c) or re.match(r'^portcheck_.+_status$', c):
+        if any(re.match(rx, c) for rx, _ in EXTERNAL_CHARTS):
+            # проба чужого API идёт через askads: не ответил сам askads (no_connection) —
+            # это не сбой API, а «нет данных»; рестарт askads виден в строке askads
+            add(a, c, 'success,no_connection', 'average', answered_success)
+        elif re.match(r'^httpcheck_.+\.request_status$', c) or re.match(r'^portcheck_.+_status$', c):
             add(a, c, 'success', 'average')
         elif re.match(r'^ping_.+\.host_packet_loss_', c):
             add(a, c, 'loss', 'average', lambda v: 1 - v / 100)
@@ -137,8 +147,13 @@ def series(parent, host, chart, dim, group, rng):
     after, points = RANGES[rng]
     q = urllib.parse.urlencode(dict(chart=chart, after=-after, points=points, group=group,
                                     format='json', dimensions=dim))
-    rows = list(reversed(get(f'{base(host, parent)}/api/v1/data?{q}')['data']))
-    v = ([None] * max(0, points - len(rows)) + [r[1] for r in rows])[-points:]
+    d = get(f'{base(host, parent)}/api/v1/data?{q}')
+    rows = list(reversed(d['data']))
+    if ',' in dim:  # несколько измерений — отрезок как {измерение: значение}
+        vals = [None if all(x is None for x in r[1:]) else dict(zip(d['labels'][1:], r[1:])) for r in rows]
+    else:
+        vals = [r[1] for r in rows]
+    v = ([None] * max(0, points - len(rows)) + vals)[-points:]
     return v, [r[0] for r in rows]
 
 
