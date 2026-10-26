@@ -78,15 +78,12 @@
       After=docker.service
       [Service]
       TimeoutStartSec=300
-      ExecStartPre=+/bin/sh -c 'for i in $$(seq 90); do docker exec {{ mysql_container_name | default("mysql") }} mysqladmin ping --silent >/dev/null 2>&1 && exit 0; sleep 2; done; exit 0'
+      ExecStartPre=+/bin/sh -c 'for i in $$(seq 90); do \
+        docker exec {{ mysql_container_name | default("mysql") }} mysqladmin ping --silent >/dev/null 2>&1 && exit 0; \
+        sleep 2; done; exit 0'
     mode: "0644"
-  register: nodeapp_pm2_wait_mysql
+  notify: Reload systemd
   when: mysql_managed | default(false) and mysql_role | default('') == 'primary'
-
-- name: Reload systemd after the pm2 drop-in change
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: nodeapp_pm2_wait_mysql is changed
 
 # pm2 never rotates ~/.pm2/logs — the pm2-logrotate module caps them.
 - name: Install the pm2-logrotate module
