@@ -122,6 +122,10 @@ netdata_projects_sentry: {}
 # Проект → ноды, где он живёт, для проектов без pm2 (иначе колонка «нода»
 # покажет парент, с которого идут внешние httpcheck-пробы).
 netdata_projects_hosts: {}
+# Проект → имена обязательных алертов: любой в CRITICAL — проект лежит целиком
+# (outage, «DOWN»). Без записи обязательны *_health_down, *_healthcheck,
+# pm2_app_down, mysql_down, clickhouse_down (REQUIRED в status-snapshot.py).
+netdata_projects_required: {}
 
 # Metrics streaming (parent/child). The shared API key (a UUID) comes from the
 # vault via group_vars/all.yml. A host is a child when

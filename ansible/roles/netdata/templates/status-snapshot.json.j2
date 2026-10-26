@@ -3,6 +3,7 @@
   'prod': netdata_projects_prod,
   'sentry': netdata_projects_sentry,
   'hosts': netdata_projects_hosts,
+  'required': netdata_projects_required,
   'private_out': netdata_projects_page_dir ~ '/status.json',
   'public_out': (netdata_status_public_dir ~ '/status.json') if netdata_status_public_dir | length > 0 else '',
 } | to_nice_json }}

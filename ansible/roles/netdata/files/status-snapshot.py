@@ -47,6 +47,10 @@ EXTERNAL_CHARTS = [(r'^httpcheck_askads_direct_', 'Yandex Direct API'),
 EXTERNAL_ROWS = {row for _, row in EXTERNAL_CHARTS}
 STOCK_ROW = 'VPS'  # горящие стоковые алерты netdata
 ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime'}
+# Обязательные алерты: любой из них в CRITICAL — проект лежит целиком (outage),
+# а не частично (crit). Проекты из конфига required — своим списком имён
+REQUIRED = r'^(pm2_app_down|mysql_down|clickhouse_down)$|_health_down$|_healthcheck$'
+MAJOR_FROM = 2  # столько prod-проектов в outage — заголовок «Major outage»
 
 # Публичная подпись пробы: в именах этих джоб — ноды, а ноды наружу не отдаём
 PUBLIC_PROBES = [(r'^askads_(direct|metrica|wordstat|vk_ads|webmaster)_ru$', 'API probe'),
@@ -212,7 +216,7 @@ def restart(parent, alarms):
 
 def build(cfg):
     parent = cfg['parent']
-    prod, hosts_map = set(cfg['prod']), cfg['hosts']
+    prod, hosts_map, required = set(cfg['prod']), cfg['hosts'], cfg.get('required', {})
     hosts = get('/api/v1/info').get('mirrored_hosts') or [parent]
     now = time.time()
     groups, failed = {}, []
@@ -233,6 +237,14 @@ def build(cfg):
             if p:
                 groups.setdefault(p, []).append(a)
     merge_prefixes(groups)
+    for name, names in required.items():
+        # опечатка или переименованный алерт молча отключили бы outage проекта
+        missing = set(names) - {a['name'] for a in groups.get(name, [])}
+        if missing:
+            print(f'status-snapshot: {name}: no required alarms {sorted(missing)}', file=sys.stderr)
+
+    def is_required(name, a):
+        return a['name'] in required[name] if name in required else bool(re.search(REQUIRED, a['name']))
 
     def one(item):
         name, alarms = item
@@ -242,6 +254,8 @@ def build(cfg):
         pm2_hosts = sorted({a['host'] for a in alarms if a['chart'].startswith('app.pm2_')})
         return dict(
             name=name, kind=kind, worst=alarms[0]['status'],
+            # у чужого API outage нет: его сбой и так не наш
+            outage=kind != 'external' and any(a['status'] == 'CRITICAL' and is_required(name, a) for a in alarms),
             # у чужого API нод нет: хост алерта — лишь откуда идёт проба
             hosts=[] if kind == 'external' else hosts_map.get(name) or pm2_hosts or sorted({a['host'] for a in alarms}),
             link_host=alarms[0]['host'], sentry=cfg['sentry'].get(name),
@@ -263,7 +277,9 @@ def build(cfg):
 def summary(projects):
     """Плашки считают все наши горящие алерты; заголовок — без warning пет-проектов и стоковых.
     Чужие API — отдельно: external = сколько их строк не в норме; страница поднимает
-    заголовок из-за них максимум до warn."""
+    заголовок из-за них максимум до warn. outage — наши проекты, лежащие целиком
+    (это проекты, а не алерты: в total - crit - warn не входит); major — их среди
+    prod не меньше MAJOR_FROM."""
     ours = [p for p in projects if p['kind'] != 'external']
     hot = [(p, a) for p in ours for a in p['alarms'] if RANK[a['status']] >= 2]
     serious = [a for p, a in hot if not (a['status'] == 'WARNING' and (a['stock'] or p['kind'] == 'pet'))]
@@ -272,7 +288,9 @@ def summary(projects):
                 warn=sum(a['status'] == 'WARNING' for _, a in hot),
                 verdict_crit=sum(a['status'] == 'CRITICAL' for a in serious),
                 verdict_warn=sum(a['status'] == 'WARNING' for a in serious),
-                external=sum(RANK[p['worst']] >= 2 for p in projects if p['kind'] == 'external'))
+                external=sum(RANK[p['worst']] >= 2 for p in projects if p['kind'] == 'external'),
+                outage=sum(p['outage'] for p in ours),
+                major=sum(p['outage'] for p in ours if p['kind'] == 'prod') >= MAJOR_FROM)
 
 
 def public_label(label, project):
@@ -319,7 +337,7 @@ def public(snap):
 
     def strip(p):
         hot = any(RANK[a['status']] >= 2 for a in p['alarms'])
-        dot = CLS[p['worst']] if hot else 'nodata' if all(RANK[a['status']] == 1 for a in p['alarms']) else 'ok'
+        dot = 'outage' if p['outage'] else CLS[p['worst']] if hot else 'nodata' if all(RANK[a['status']] == 1 for a in p['alarms']) else 'ok'
         return dict(name=p['name'], kind=p['kind'], dot=dot, restart=p['restart'],
                     history={rng: hist(h, p['name']) for rng, h in p['history'].items()})
     return dict(generated_at=snap['generated_at'], public=True, summary=snap['summary'],
