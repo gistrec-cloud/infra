@@ -28,6 +28,7 @@
   --tooltip-bg: oklch(0.26 0.012 250); --tooltip-border: oklch(0.34 0.012 250);
   --link: oklch(0.75 0.08 250);
   --ok: oklch(0.72 0.15 155); --warn: oklch(0.8 0.14 75); --crit: oklch(0.68 0.2 25); --crit-text: oklch(0.72 0.2 25);
+  --outage: oklch(0.52 0.21 27); --outage-text: oklch(0.6 0.22 27);
   --crit-soft: oklch(0.68 0.2 25 / 0.16); --warn-soft: oklch(0.8 0.14 75 / 0.12);
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -54,13 +55,14 @@ button:focus-visible, .prow:focus-visible, .more:focus-visible { outline: 2px so
 .hero { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; border-bottom: 1px solid var(--divider-header); padding-bottom: 28px; }
 .hero > div:first-child { display: flex; flex-direction: column; gap: 10px; }
 #verdict { margin: 0; font: 700 44px/1 var(--mono); letter-spacing: -0.02em; color: var(--ok); }
-#verdict.crit { color: var(--crit-text); } #verdict.warn { color: var(--warn); }
+#verdict.crit { color: var(--crit-text); } #verdict.major { color: var(--outage-text); } #verdict.warn { color: var(--warn); }
 #counts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font: 500 14px var(--mono); }
 .pill { display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid transparent; }
 .pill b { font-weight: 700; font-size: 16px; }
 .pill.crit { background: var(--crit-soft); } .pill.crit b, .pill.crit span { color: var(--crit); }
 .pill.warn { background: var(--warn-soft); } .pill.warn b, .pill.warn span { color: var(--warn); }
 .pill.ok { border-color: var(--seg-border); } .pill.ok b { color: var(--text); } .pill.ok span { color: var(--ok); }
+.pill.outage { background: var(--crit-soft); } .pill.outage b, .pill.outage span { color: var(--outage-text); }
 .pill.zero { opacity: .4; }
 #counts .total { color: var(--text-muted-2); margin-left: 6px; }
 #err { margin: 0; font: 400 14px var(--mono); color: var(--crit-text); }
@@ -89,12 +91,16 @@ button:focus-visible, .prow:focus-visible, .more:focus-visible { outline: 2px so
 .prow:hover { background: var(--row-hover); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .dot.warn { background: var(--warn); } .dot.crit { background: var(--crit); } .dot.nodata { background: var(--nodata); }
+/* проект лежит целиком, а не частично: темнее и пульсирует */
+.dot.outage { background: var(--outage); animation: outage 1.6s ease-out infinite; }
+@keyframes outage { from { box-shadow: 0 0 0 0 oklch(0.52 0.21 27 / 0.7); } to { box-shadow: 0 0 0 6px oklch(0.52 0.21 27 / 0); } }
+@media (prefers-reduced-motion: reduce) { .dot.outage { animation: none; } }
 .pname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-weight: 500; color: var(--text-strong); }
 .hosts { display: flex; flex-direction: column; gap: 2px; min-width: 0; font: 400 13px/1.35 var(--mono); color: var(--text-muted); }
 .hosts span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hist { position: relative; display: flex; gap: 2px; height: 18px; }
 .hist i { flex: 1; border-radius: 1px; background: var(--nodata); outline-offset: 1px; }
-.hist i.ok { background: var(--ok); } .hist i.warn { background: var(--warn); } .hist i.crit { background: var(--crit); }
+.hist i.ok { background: var(--ok); } .hist i.warn { background: var(--warn); } .hist i.crit { background: var(--crit); } .hist i.outage { background: var(--outage); }
 .hist.hovering i { opacity: .45; }
 .hist.hovering i.on { opacity: 1; outline: 1px solid var(--text); }
 .tip { position: absolute; bottom: 28px; pointer-events: none; z-index: 5; white-space: nowrap; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: 6px; background: var(--tooltip-bg); border: 1px solid var(--tooltip-border); box-shadow: 0 6px 20px oklch(0 0 0 / 0.4); font: 400 12px var(--mono); color: var(--text); }
@@ -145,6 +151,7 @@ button:focus-visible, .prow:focus-visible, .more:focus-visible { outline: 2px so
     <span><i style="background:var(--ok)"></i>ok</span>
     <span><i style="background:var(--warn)"></i>warning</span>
     <span><i style="background:var(--crit)"></i>critical</span>
+    <span><i style="background:var(--outage)"></i>down (whole project)</span>
     <span><i style="background:var(--nodata)"></i>no data (UNDEFINED / UNINITIALIZED)</span>
   </div>
 </main>
@@ -181,8 +188,10 @@ const state = { range: '24h', expanded: new Set(), fullList: new Set(), hover: n
 const byName = name => state.snap.projects.find(p => p.name === name);
 const base = h => (h === state.snap.parent ? '' : '/host/' + encodeURIComponent(h));
 
-// точка строки: худший горящий алерт; серая, только если все алерты без данных
+// точка строки: outage, если лежит целиком; иначе худший горящий алерт; серая,
+// только если все алерты без данных
 function dotOf(p) {
+  if (p.outage) return 'outage';
   if (p.alarms.some(raised)) return CLS[p.worst];
   return p.alarms.every(a => RANK[a.status] === 1) ? 'nodata' : 'ok';
 }
@@ -190,7 +199,7 @@ function dotOf(p) {
 const bucketCls = v => v == null ? 'nodata' : v >= 0.999 ? 'ok' : v >= 0.95 ? 'warn' : 'crit';
 
 // текущий отрезок не светлее текущих алертов строки: иначе точка жёлтая, а полоса зелёная
-const NOW_CLS = { warn: 1, crit: 2 };
+const NOW_CLS = { warn: 1, crit: 2, outage: 3 };
 function histCell(p, dot) {
   const h = p.history[state.range];
   const n = RANGES[state.range].points;
@@ -226,7 +235,7 @@ function showTip(hist, i) {
   const current = now < end;
   // цвет как у отрезка: у текущего он учитывает горящие алерты
   const seg = hist.querySelectorAll('i')[i];
-  const c = ['crit', 'warn', 'ok'].find(x => seg.classList.contains(x)) || 'nodata';
+  const c = ['outage', 'crit', 'warn', 'ok'].find(x => seg.classList.contains(x)) || 'nodata';
   const lifted = seg.hasAttribute('data-now');
   const back = lifted ? 'firing now' : current ? 'current interval' : long(now - end) + ' ago';
   hist.classList.add('hovering');
@@ -241,7 +250,7 @@ function showTip(hist, i) {
     return `<span>${esc(h.labels[k])}<em style="color:var(--${pc})">${pc.toUpperCase()}</em></span>`;
   }).join('');
   // статус несут строки проб; свой — только если их нет или отрезок подкрашен горящим алертом
-  const status = probes && !lifted ? '' : `<em style="color:var(--${c === 'nodata' ? 'text-muted' : c})">${c === 'nodata' ? 'N/A' : c.toUpperCase()}</em>`;
+  const status = probes && !lifted ? '' : `<em style="color:var(--${c === 'nodata' ? 'text-muted' : c})">${c === 'nodata' ? 'N/A' : c === 'outage' ? 'DOWN' : c.toUpperCase()}</em>`;
   tip.innerHTML = `<b>${interval(end - step, end, current)}</b><span>${status}${back}</span>` + probes;
   state.hover = { project: p.name, index: i };
 }
@@ -302,7 +311,7 @@ function projectRow(p) {
 }
 
 // иконка вкладки = цвет вердикта: состояние видно и на фоновой вкладке
-const ICON = { ok: '#43c07a', warn: '#f2af48', crit: '#fc5855' };
+const ICON = { ok: '#43c07a', warn: '#f2af48', crit: '#fc5855', major: '#c4161c' };
 function setIcon(level) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#0b1015"/><circle cx="16" cy="16" r="8" fill="${ICON[level]}"/></svg>`;
   $('favicon').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
@@ -310,17 +319,19 @@ function setIcon(level) {
 
 function render() {
   const { projects, summary: s } = state.snap;
-  // чужой API, сколько бы ни лежал, поднимает заголовок максимум до warn
-  const level = s.verdict_crit ? 'crit' : s.verdict_warn || s.external ? 'warn' : 'ok';
+  // чужой API, сколько бы ни лежал, поднимает заголовок максимум до warn;
+  // major — prod-проектов, лежащих целиком, не меньше двух (summary.major)
+  const level = s.major ? 'major' : s.verdict_crit || s.outage ? 'crit' : s.verdict_warn || s.external ? 'warn' : 'ok';
   const v = $('verdict');
   v.className = level === 'ok' ? '' : level;
   v.textContent = level === 'ok' ? '✓ all clear'
-    : '✕ ' + [s.verdict_crit && `${s.verdict_crit} critical`, s.verdict_warn && `${s.verdict_warn} warning`,
-              s.external && `${s.external} external`].filter(Boolean).join(', ');
+    : (level === 'major' ? '✕ major outage · ' : '✕ ') + [s.outage && `${s.outage} down`, s.verdict_crit && `${s.verdict_crit} critical`,
+              s.verdict_warn && `${s.verdict_warn} warning`, s.external && `${s.external} external`].filter(Boolean).join(', ');
   setIcon(level);
 
   const pill = (cls, n, tag) => `<span class="pill ${cls}${n ? '' : ' zero'}"><b>${n}</b><span>${tag}</span></span>`;
-  $('counts').innerHTML = pill('crit', s.crit, 'CRIT') + pill('warn', s.warn, 'WARN') + pill('ok', s.total - s.crit - s.warn, 'OK')
+  // DOWN считает проекты, не алерты: вне «of N alerts», и только когда есть
+  $('counts').innerHTML = (s.outage ? pill('outage', s.outage, 'DOWN') : '') + pill('crit', s.crit, 'CRIT') + pill('warn', s.warn, 'WARN') + pill('ok', s.total - s.crit - s.warn, 'OK')
     + `<span class="total">of ${s.total} alerts</span>` + (s.external ? pill('warn', s.external, 'EXTERNAL') : '');
 
   // горящие алерты проектов; инфраструктура и системные живут в своих строках

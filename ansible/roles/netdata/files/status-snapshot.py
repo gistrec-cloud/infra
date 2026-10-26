@@ -237,6 +237,11 @@ def build(cfg):
             if p:
                 groups.setdefault(p, []).append(a)
     merge_prefixes(groups)
+    # prod без единого алерта иначе молча пропал бы со страницы: нода не стримит
+    # дольше STALE_SEC, парент не отдал её алерты или алерты переименованы
+    for name in prod - groups.keys():
+        groups[name] = [dict(name='project_missing', chart='', status='CRITICAL', host=parent, missing=True,
+                             summary='no alarms for this project on the parent: node not streaming or alarms renamed')]
     for name, names in required.items():
         # опечатка или переименованный алерт молча отключили бы outage проекта
         missing = set(names) - {a['name'] for a in groups.get(name, [])}
@@ -255,9 +260,10 @@ def build(cfg):
         return dict(
             name=name, kind=kind, worst=alarms[0]['status'],
             # у чужого API outage нет: его сбой и так не наш
-            outage=kind != 'external' and any(a['status'] == 'CRITICAL' and is_required(name, a) for a in alarms),
+            outage=kind != 'external' and any(a['status'] == 'CRITICAL' and (a.get('missing') or is_required(name, a))
+                                              for a in alarms),
             # у чужого API нод нет: хост алерта — лишь откуда идёт проба
-            hosts=[] if kind == 'external' else hosts_map.get(name) or pm2_hosts or sorted({a['host'] for a in alarms}),
+            hosts=[] if kind == 'external' else hosts_map.get(name) or pm2_hosts or sorted({a['host'] for a in alarms if not a.get('missing')}),
             link_host=alarms[0]['host'], sentry=cfg['sentry'].get(name),
             restart=restart(parent, alarms),
             history={rng: history(parent, alarms, rng) for rng in RANGES},
