@@ -5,7 +5,7 @@
 Infrastructure as code for the **gistrec-cloud** fleet.
 
 - **Ansible** configures what lives *inside* the servers — base hardening, firewall, nginx, registry-driven apps (pm2 / static / docker / cron), self-hosted databases, monitoring.
-- **Terraform** manages cloud resources — DNS (Cloudflare + Porkbun), AWS Lambda, the Hetzner and Timeweb servers, and Yandex Cloud (Object Storage, Cloud Functions, IAM/Lockbox).
+- **Terraform** manages cloud resources — DNS (Cloudflare + Porkbun, geo-routed names on Gcore), Gcore Object Storage, AWS Lambda relays, the Hetzner and Timeweb servers, and Yandex Cloud (Object Storage, Cloud Functions, IAM/Lockbox).
 
 The repository is deliberately split into **code** (public, here) and **live data** (private, never committed): real inventory, IPs, tokens and state stay out of git. Everything you see here uses placeholders — copy the `*.example` files, fill them locally, and they are already covered by `.gitignore`.
 
@@ -83,18 +83,20 @@ infra/
 │       ├── clickhouse/           # self-hosted ClickHouse (Docker), TLS ports + S3 backups
 │       ├── mysql/                # self-hosted MySQL (Docker), primary/replica
 │       ├── k3s/                  # single-node Kubernetes on a shared host, under its existing ufw
+│       ├── s3mirror/             # opt-in timer: Yandex Object Storage → Gcore mirror, s3-rclone
 │       └── xray/                 # opt-in VLESS+Reality inbound (personal VPN), optional relay mode
 ├── terraform/                    # cloud resources as code (independent root modules, one state each)
 │   ├── dns/                      # Cloudflare + Porkbun DNS records (host_ips: fleet IPs live once)
-│   ├── aws/                      # Lambda functions + Function URLs + IAM/EventBridge schedule
+│   ├── aws/                      # Lambda relays (openai, anthropic, telegram, github) + yandex-rating-counter
+│   ├── gcore/                    # geo-routed DNS zones (from geo.json) + Object Storage buckets
 │   ├── hetzner/                  # Hetzner Cloud server (finland-01)
 │   ├── timeweb/                  # Timeweb Cloud server (russia-03) + floating IPv4
 │   ├── yandex/                   # Object Storage, Cloud Function, IAM/Lockbox
 │   ├── yandex-budget-explorer/   # own YC folder: Cloud Functions + Lockbox + timer trigger
 │   └── yandex-vk-ads-tool/       # own YC folder: Object Storage (landing bucket)
-├── docs/runbooks/                # operational procedures (move-apps, break-glass)
+├── docs/runbooks/                # operational procedures (move-apps, break-glass, s3-mirror)
 ├── geo.json                      # (gitignored) two-sided names — read by terraform AND ansible
-└── scripts/                      # backups (envs, repo-private files), move-apps, pre-commit checks
+└── scripts/                      # backups (envs, repo-private files), move-apps, S3 mirror tools, pre-commit checks
 ```
 
 ## Roles
@@ -113,13 +115,14 @@ infra/
 | `registry_manifest` | Internal helper shared by registry roles to load and persist ownership boundaries |
 | `docker_runtime` | Internal Docker Engine and Compose bootstrap shared by container roles |
 | `container_tls` | Internal container-readable TLS lifecycle primitives |
-| `netdata`  | Install netdata, bind to localhost, child→parent streaming, Telegram/Pushover alarms |
+| `netdata`  | Install netdata, bind to localhost, child→parent streaming, Telegram/Pushover alarms. A Telegram alert is one message per episode, edited on CLEAR (`alarm-telegram.py`); the `unnotified-alarms` timer resends CRITICALs netdata never notified; `status-snapshot` writes the data for `gistrec.cloud/status` and the private `stats.gistrec.cloud/status` every minute. Conventions: [role README](ansible/roles/netdata/README.md) |
 | `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
 | `chrony`   | Opt-in time sync: chrony replaces systemd-timesyncd (clock-stepping hypervisors) |
 | `breakglass`| Emergency `rescue` user (YubiKey keys in root-owned `/etc/ssh/rescue_keys`) — survives home wipes |
 | `clickhouse` | Self-hosted ClickHouse in Docker; public TLS ports (9440/8443), nightly dumps + off-site S3 |
 | `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
 | `k3s`      | Single-node Kubernetes on a host shared with a third party: adds narrow ufw rules instead of replacing the firewall, API reachable over the mesh only |
+| `s3mirror` | Opt-in (`s3mirror_managed`, finland-01): rclone timer mirroring Yandex Object Storage buckets to Gcore; installs the `s3-rclone` wrapper used below. Runbook: [`docs/runbooks/s3-mirror.md`](docs/runbooks/s3-mirror.md) |
 | `xray`     | Opt-in VLESS+Reality inbound (personal VPN): pinned binary, config validated before restart, inbound port cross-checked against the host firewall. A relay mode forwards TCP to a far host over the mesh, so the client dials a near host while the Reality handshake terminates on the far one |
 
 ## App registry & moves
@@ -201,8 +204,8 @@ someone was given should not rot. Pruning is manual:
 The name is delegated to Gcore for geo-routing (`terraform/gcore`): clients in
 Russia get russia-03, everyone else finland-01. Both hosts carry the *same* vhost
 file and reach the bucket themselves — there is no `*-rf` variant proxying to
-finland-01 over the mesh, because the bucket sits in `ru-central1` and russia-03
-reaches it directly. The detour would only add latency and a point of failure.
+finland-01 over the mesh, because the bucket (Gcore `s-ed1`, Luxembourg) is
+reachable from russia-03 directly. The detour would only add latency and a point of failure.
 
 `meow` serves one vhost from both hosts like this too, so the fleet has three
 shapes, not two: it keeps a local copy of a static page on each host, a share
@@ -217,7 +220,7 @@ All commands are run from the repository root.
 
 ```bash
 # 0. one-time setup
-pipx install pre-commit && pre-commit install        # gitleaks + fmt/lint on every commit
+brew install pre-commit && make hooks                # gitleaks + fmt/lint + IP/secret checks on every commit
 ansible-galaxy collection install -r ansible/requirements.yml
 
 # 1. inventory & vars — every copy below is gitignored
