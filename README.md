@@ -115,7 +115,7 @@ infra/
 | `registry_manifest` | Internal helper shared by registry roles to load and persist ownership boundaries |
 | `docker_runtime` | Internal Docker Engine and Compose bootstrap shared by container roles |
 | `container_tls` | Internal container-readable TLS lifecycle primitives |
-| `netdata`  | Install netdata, bind to localhost, child→parent streaming, Telegram/Pushover alarms. A Telegram alert is one message per episode, edited on CLEAR (`alarm-telegram.py`); the `unnotified-alarms` timer resends CRITICALs netdata never notified; `status-snapshot` writes the data for `gistrec.cloud/status` and the private `stats.gistrec.cloud/status` every minute. Conventions: [role README](ansible/roles/netdata/README.md) |
+| `netdata`  | Install netdata, bind to localhost, child→parent streaming, Telegram/Pushover alarms. A Telegram alert is one message per episode, edited on CLEAR (`alarm-telegram.py`); the `unnotified-alarms` timer sends CRITICALs netdata never notified about; `status-snapshot` writes the data for `gistrec.cloud/status` and the private `stats.gistrec.cloud/status` every minute. Conventions: [role README](ansible/roles/netdata/README.md) |
 | `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
 | `chrony`   | Opt-in time sync: chrony replaces systemd-timesyncd (clock-stepping hypervisors) |
 | `breakglass`| Emergency `rescue` user (YubiKey keys in root-owned `/etc/ssh/rescue_keys`) — survives home wipes |
