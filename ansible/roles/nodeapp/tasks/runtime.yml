@@ -60,6 +60,34 @@
       pm2 startup systemd -u {{ admin_user }} --hp /home/{{ admin_user }}
     creates: "/etc/systemd/system/pm2-{{ admin_user }}.service"
 
+# On boot pm2 resurrects apps before the dockerized MySQL answers; dnd-crime-api
+# exits on a failed startup ping and burns pm2's fast-restart budget → errored.
+# mysqladmin ping exits 0 even on access denied, so no credentials needed.
+- name: Create the pm2 unit drop-in directory
+  ansible.builtin.file:
+    path: "/etc/systemd/system/pm2-{{ admin_user }}.service.d"
+    state: directory
+    mode: "0755"
+  when: mysql_managed | default(false) and mysql_role | default('') == 'primary'
+
+- name: Hold pm2 resurrection until the local MySQL primary answers
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/pm2-{{ admin_user }}.service.d/wait-mysql.conf"
+    content: |
+      [Unit]
+      After=docker.service
+      [Service]
+      TimeoutStartSec=300
+      ExecStartPre=+/bin/sh -c 'for i in $$(seq 90); do docker exec {{ mysql_container_name | default("mysql") }} mysqladmin ping --silent >/dev/null 2>&1 && exit 0; sleep 2; done; exit 0'
+    mode: "0644"
+  register: nodeapp_pm2_wait_mysql
+  when: mysql_managed | default(false) and mysql_role | default('') == 'primary'
+
+- name: Reload systemd after the pm2 drop-in change
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: nodeapp_pm2_wait_mysql is changed
+
 # pm2 never rotates ~/.pm2/logs — the pm2-logrotate module caps them.
 - name: Install the pm2-logrotate module
   ansible.builtin.command:
