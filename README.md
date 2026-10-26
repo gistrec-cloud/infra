@@ -2,14 +2,14 @@
 
 [![CI](https://github.com/gistrec-cloud/infra/actions/workflows/ci.yml/badge.svg)](https://github.com/gistrec-cloud/infra/actions/workflows/ci.yml)
 
-Infrastructure as code for the **gistrec-cloud** fleet.
+Infrastructure as code for the gistrec-cloud fleet.
 
-- **Ansible** configures what lives *inside* the servers — base hardening, firewall, nginx, registry-driven apps (pm2 / static / docker / cron), self-hosted databases, monitoring.
-- **Terraform** manages cloud resources — DNS (Cloudflare + Porkbun, geo-routed names on Gcore), Gcore Object Storage, AWS Lambda relays, the Hetzner and Timeweb servers, and Yandex Cloud (Object Storage, Cloud Functions, IAM/Lockbox).
+- Ansible configures what lives *inside* the servers: base hardening, firewall, nginx, registry-driven apps (pm2 / static / docker / cron), self-hosted databases, monitoring.
+- Terraform manages cloud resources: DNS (Cloudflare + Porkbun, geo-routed names on Gcore), Gcore Object Storage, AWS Lambda relays, the Hetzner and Timeweb servers, and Yandex Cloud (Object Storage, Cloud Functions, IAM/Lockbox).
 
-The repository is deliberately split into **code** (public, here) and **live data** (private, never committed): real inventory, IPs, tokens and state stay out of git. Everything you see here uses placeholders — copy the `*.example` files, fill them locally, and they are already covered by `.gitignore`.
+This public repository holds only code. Live data (real inventory, IPs, tokens and state) is private and never committed. Everything here uses placeholders. Copy the `*.example` files and fill them locally; the copies are already covered by `.gitignore`.
 
-Run **`brew install pre-commit && make hooks`** after cloning — nothing in `.pre-commit-config.yaml` runs without that binary, and its absence is silent. Alongside gitleaks and the linters it installs a check that refuses any public IPv4 in a tracked file: `.gitignore` protects whole files, this catches the address pasted into a comment or a README.
+Run `brew install pre-commit && make hooks` after cloning. Nothing in `.pre-commit-config.yaml` runs without that binary, and nothing tells you it is missing. Alongside gitleaks and the linters it installs a check that refuses any public IPv4 in a tracked file: `.gitignore` protects whole files, this catches the address pasted into a comment or a README.
 
 ## Architecture
 
@@ -127,7 +127,7 @@ infra/
 
 ## App registry & moves
 
-Moving an app to another VPS is **one command**, with no user-visible downtime:
+Moving an app to another VPS is one command, with no user-visible downtime:
 
 ```sh
 scripts/move-apps.py --app <name> <DST>   # one app  (--dry-run to preview)
@@ -139,23 +139,23 @@ it, applies DNS only if the plan is update-only, waits for that to propagate, an
 only then reconciles the source. Every step is idempotent and checkpointed, so a
 re-run resumes where it failed. Details: [`docs/runbooks/move-apps.md`](docs/runbooks/move-apps.md).
 
-That works because "what runs where" lives in one gitignored file —
+"What runs where" lives in one gitignored file,
 `ansible/apps.yml` (copy from `apps.yml.example`): per app it names the host,
 dirs, env files (deployed from 1Password), vhosts, processes, cron jobs and CI
 deploy keys. The app roles are driven entirely by this registry, and DNS points
 at hosts by name too (the `host_ips` map in `terraform/dns`), so a move is a
-one-word edit in two places — the script just does it safely and in order.
+one-word edit in two places. The script makes both edits in order, with the checks above.
 
-## Geo registry — two-sided names
+## Geo registry: two-sided names
 
 Russian ISPs shape *outbound* traffic to foreign origins: ТСПУ cuts the
 connection after the first ~14 KB, so a 32 KB landing page reaches an RF visitor
 truncated. The fix is to put a near address in front of the visitor and let the
-border crossing happen inside the wg mesh instead. That needs three things to
-agree — a Gcore zone with a geo record, an NS pair in the parent Cloudflare zone,
+border crossing happen inside the wg mesh. Three things have to
+agree: a Gcore zone with a geo record, an NS pair in the parent Cloudflare zone,
 and a proxy vhost on the host that does *not* run the app.
 
-All three come from **one gitignored file, `geo.json`** (copy from
+All three come from one gitignored file, `geo.json` (copy from
 `geo.json.example`), read by `terraform/gcore`, `terraform/dns` and the `nginx`
 role. Adding a site is one entry:
 
@@ -170,24 +170,24 @@ geo.json
   └── ansible nginx    → proxy vhost on the far side (certs, headers, wg upstream)
 ```
 
-`front: "none"` means the far side already serves the name itself — `share`
+`front: "none"` means the far side already serves the name itself: `share`
 carries the very same vhost file and reads the bucket directly, `meow` keeps its
 own copy of one static page (its `deploy.sh` uploads to both hosts). `"geo": false` marks an apex name: a
 zone cannot be delegated one subdomain at a time, so `clear-transcript-bot.ru`
 gets the front but no geo record until its whole zone moves to Gcore (which also
 needs DNS-01 hooks for Gcore, the way `tls` already vendors them for Porkbun).
 
-Measured 2026-10-03, worth knowing before enrolling a name: **both datacentre
-paths are clean in both directions** — from Hetzner and from russia-03 every
+Before enrolling a name, note the 2026-10-03 measurement: both datacentre
+paths are clean in both directions. From Hetzner and from russia-03 every
 fleet name returns in full (a 2.6 MB page in 0.7 s). The truncation lives on
-consumer ISP paths, which no fleet host can observe, so enrolment is a judgement
-call about who the visitors are, not something a probe decides.
+consumer ISP paths, which no fleet host can observe, so whether to enrol a name
+depends on who its visitors are. A probe from the fleet can't decide it.
 
 ## Sharing one-off files
 
 `share.gistrec.cloud` serves files straight out of the public `gistrec-share`
 bucket (`terraform/gcore/storage.tf`, Gcore since 2026-10-11). nginx only proxies, so nothing lands on a
-host disk or in git — a share needs no deploy and no repository:
+host disk or in git, and a share needs no deploy and no repository:
 
 ```sh
 scp ~/Downloads/report.html finland-01:/tmp/ && ssh finland-01 sudo s3-rclone copyto /tmp/report.html gc:gistrec-share/report.html
@@ -196,22 +196,22 @@ scp ~/Downloads/report.html finland-01:/tmp/ && ssh finland-01 sudo s3-rclone co
 
 The object name is the URL path; nested prefixes work. Content-Type comes from
 the extension, which matters because the vhost sends
-`X-Content-Type-Options: nosniff` — a wrong type renders as text instead of a
+`X-Content-Type-Options: nosniff`: a wrong type renders as text instead of a
 page. Anonymous listing is off, and objects have no expiry on purpose: a link
 someone was given should not rot. Pruning is manual:
 `ssh finland-01 sudo s3-rclone deletefile gc:gistrec-share/<file>`.
 
 The name is delegated to Gcore for geo-routing (`terraform/gcore`): clients in
 Russia get russia-03, everyone else finland-01. Both hosts carry the *same* vhost
-file and reach the bucket themselves — there is no `*-rf` variant proxying to
+file and reach the bucket themselves. There is no `*-rf` variant proxying to
 finland-01 over the mesh, because the bucket (Gcore `s-ed1`, Luxembourg) is
-reachable from russia-03 directly. The detour would only add latency and a point of failure.
+reachable from russia-03 directly. A detour would only add latency and one more point of failure.
 
-`meow` serves one vhost from both hosts like this too, so the fleet has three
-shapes, not two: it keeps a local copy of a static page on each host, a share
-keeps no state at all, and the fronts that really do proxy over the mesh —
-`glucose`, `pdf-v-excel`, `subtitry`, `flights`, `govorit`,
-`clear-transcript-bot` — do so because the application runs only on finland-01
+`meow` also serves one vhost from both hosts, so the fleet has three
+shapes: `meow` keeps a local copy of a static page on each host, a share
+keeps no state at all, and the fronts that do proxy over the mesh
+(`glucose`, `pdf-v-excel`, `subtitry`, `flights`, `govorit`,
+`clear-transcript-bot`) do so because the application runs only on finland-01
 (`usage` the other way round: it runs only on russia-03).
 
 ## Quickstart
@@ -246,12 +246,12 @@ See the `Makefile` for the full list of targets (`make help`).
 
 ## Security model
 
-- **No secrets in git.** Tokens, keys and real inventory are `.gitignore`d; only `*.example` templates are tracked.
-- **Secrets at rest** are encrypted with `ansible-vault`. Even encrypted, the real vault stays private in this setup.
-- **`gitleaks`** runs as a pre-commit hook so nothing sensitive slips into history. Two more local hooks cover what it misses, because it matches secrets by the shape of known services' tokens: `scripts/check-staged-ips.py` refuses public IPv4 literals (a host address gives away just as much while looking nothing like a token — allowed ranges in `scripts/allowed-public-ips.txt`), and `scripts/check-staged-secrets.py` refuses uuids and base64 key material (an xray client uuid *is* the inbound's password, and a private x25519 key opens it outright). Both read only the added lines of the index, via the shared `scripts/staged_diff.py`. Real values belong in the gitignored inventory and host_vars, or in the vault.
-- **SSH is key-only** and root login is disabled by the `common` role. A pre-flight `assert` refuses to disable password auth unless at least one key is present in `vault_admin_ssh_keys`, so the playbook fails fast instead of locking you out.
-- **Firewall is default-drop** (nftables); only SSH / 80 / 443 and explicitly listed ports are open, and fail2ban bans via nftables to match.
+- No secrets in git. Tokens, keys and real inventory are `.gitignore`d; only `*.example` templates are tracked.
+- Secrets at rest are encrypted with `ansible-vault`. Even encrypted, the real vault stays private in this setup.
+- `gitleaks` runs as a pre-commit hook so nothing sensitive slips into history. Two more local hooks cover what it misses, because it matches secrets by the shape of known services' tokens: `scripts/check-staged-ips.py` refuses public IPv4 literals (a host address gives away just as much while looking nothing like a token; allowed ranges are in `scripts/allowed-public-ips.txt`), and `scripts/check-staged-secrets.py` refuses uuids and base64 key material (an xray client uuid *is* the inbound's password, and a private x25519 key opens it outright). Both read only the added lines of the index, via the shared `scripts/staged_diff.py`. Real values belong in the gitignored inventory and host_vars, or in the vault.
+- SSH is key-only and root login is disabled by the `common` role. A pre-flight `assert` refuses to disable password auth unless at least one key is present in `vault_admin_ssh_keys`, so the playbook fails fast instead of locking you out.
+- The firewall is default-drop (nftables); only SSH / 80 / 443 and explicitly listed ports are open, and fail2ban bans via nftables to match.
 
 ## Notes
 
-Example IPs use the `203.0.113.0/24` documentation range (RFC 5737) and `example.com` — replace them with your own in the gitignored copies.
+Example IPs use the `203.0.113.0/24` documentation range (RFC 5737) and `example.com`; replace them with your own in the gitignored copies.
