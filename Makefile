@@ -11,7 +11,7 @@ help: ## Show this help
 hooks: ## Install the pre-commit hooks (gitleaks, linters, public-IP check)
 	@command -v pre-commit >/dev/null || { \
 		echo "pre-commit is not installed — the hooks in .pre-commit-config.yaml"; \
-		echo "(gitleaks, terraform_fmt, ansible-lint, detect-private-key, the"; \
+		echo "(gitleaks, terraform_fmt/validate, detect-private-key, the"; \
 		echo "public-IP check) do NOT run without it. Install with:"; \
 		echo "    brew install pre-commit"; \
 		exit 1; }
