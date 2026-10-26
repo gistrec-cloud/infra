@@ -159,6 +159,15 @@
   notify: Restart netdata
   when: netdata_stream_destination | length == 0
 
+# Replaces the stock swap.conf: page on swap-in rate, not swap occupancy.
+- name: Alert on swap thrashing instead of swap usage
+  ansible.builtin.copy:
+    src: swap.conf
+    dest: /etc/netdata/health.d/swap.conf
+    mode: "0644"
+  notify: Restart netdata
+  when: netdata_stream_destination | length == 0
+
 # Early (85%) disk warning addressed to the `disk` role, the one recipient
 # exempt from the fleet's |critical Telegram filter — the stock alarm's WARNING
 # is filtered and its CRITICAL only fires under 5 GB free, so a filling disk
