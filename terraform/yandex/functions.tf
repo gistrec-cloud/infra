@@ -44,7 +44,7 @@ resource "yandex_function" "realm_status" {
   environment = {
     # Self-hosted primary public endpoint (off-VPC → public IP; TLS opportunistic,
     # db.py verifies only when MYSQL_CHECK_SSL=1, unset here).
-    MYSQL_HOST           = "public.mysql.gistrec.cloud"
+    MYSQL_HOST           = "ru.mysql.gistrec.cloud"
     MYSQL_PORT           = "3306"
     MYSQL_USER           = "realmctl"
     MYSQL_DB             = "realmctl"

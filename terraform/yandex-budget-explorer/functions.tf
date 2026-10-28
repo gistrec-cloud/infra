@@ -15,7 +15,7 @@ locals {
     # as with managed).
     LOGIN      = "gistrec"
     MYSQL_DB   = "budget-explorer"
-    MYSQL_HOST = "public.mysql.gistrec.cloud"
+    MYSQL_HOST = "ru.mysql.gistrec.cloud"
     MYSQL_PORT = "3306"
     MYSQL_USER = "budget-explorer"
   }
