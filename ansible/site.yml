@@ -148,7 +148,7 @@
     - role: chrony
       when: chrony_managed | default(false)
       tags: [chrony]
-    # HTTPS egress from Russia for the mesh (ru-proxy.gistrec.cloud): RU APIs
+    # HTTPS egress from Russia for the mesh (ru.proxy.gistrec.cloud): RU APIs
     # that drop connections from finland-01 (T-Bank since 2026-10-27).
     # After firewall, which opens the port to the clients.
     - role: egressproxy
