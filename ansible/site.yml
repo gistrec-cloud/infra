@@ -154,6 +154,12 @@
     - role: egressproxy
       when: egressproxy_managed | default(false)
       tags: [egressproxy]
+    # The reverse: public TCP entry in Russia forwarded into the mesh
+    # (ru.mysql.gistrec.cloud → finland-01 MySQL) for Yandex Cloud consumers
+    # whose packets stopped reaching finland-01 in 2026-10.
+    - role: ingressproxy
+      when: ingressproxy_routes | default([]) | length > 0
+      tags: [ingressproxy]
     # Break-glass: rescue user whose keys live OUTSIDE any home dir
     # (root-owned /etc/ssh/rescue_keys) — survives home wipes and login-user
     # compromise. Opt-in per host; germany-02 runs it too (2026-07-18

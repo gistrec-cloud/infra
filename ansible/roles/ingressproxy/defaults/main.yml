@@ -1,0 +1,9 @@
+---
+# Public TCP entry points on this host forwarded into the mesh. Entries:
+# {name: mysql, bind: 203.0.113.7, port: 3306, backend: 10.10.0.4:3306}.
+# Bind the public IP explicitly: the same port may already be taken on
+# 127.0.0.1 (the local MySQL replica on russia-03).
+ingressproxy_routes: []
+
+# Idle timeout for both sides; long enough for slow analytics queries.
+ingressproxy_timeout: 1h
