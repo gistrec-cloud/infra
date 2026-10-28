@@ -1,0 +1,25 @@
+# Managed by ansible (roles/ingressproxy). Local edits will be overwritten.
+global
+    log /dev/log local0 warning
+    maxconn 512
+    user haproxy
+    group haproxy
+    daemon
+
+defaults
+    mode tcp
+    log global
+    option tcplog
+    timeout connect 5s
+    timeout client {{ ingressproxy_timeout }}
+    timeout server {{ ingressproxy_timeout }}
+
+# No `check` on servers: a bare TCP probe counts as a connect error on MySQL,
+# and max_connect_errors would then block this host's wg IP — the same address
+# the local replica replicates from.
+{% for route in ingressproxy_routes %}
+listen {{ route.name }}
+    bind {{ route.bind }}:{{ route.port }}
+    server backend {{ route.backend }}
+
+{% endfor %}
