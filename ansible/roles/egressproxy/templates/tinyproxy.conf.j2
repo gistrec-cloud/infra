@@ -1,0 +1,17 @@
+# Managed by ansible (roles/egressproxy). Local edits will be overwritten.
+# No Listen: binding the wg IP would fail when tinyproxy starts before wg0 at
+# boot. The nftables default-drop keeps the port closed outside the mesh.
+User tinyproxy
+Group tinyproxy
+Port {{ egressproxy_port }}
+Timeout 30
+MaxClients 100
+Syslog On
+LogLevel Warning
+DisableViaHeader Yes
+{% for client in egressproxy_clients %}
+Allow {{ client }}
+{% endfor %}
+{% for port in egressproxy_connect_ports %}
+ConnectPort {{ port }}
+{% endfor %}

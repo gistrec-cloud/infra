@@ -148,6 +148,12 @@
     - role: chrony
       when: chrony_managed | default(false)
       tags: [chrony]
+    # HTTPS egress from Russia for the mesh (ru.proxy.gistrec.cloud): RU APIs
+    # that drop connections from finland-01 (T-Bank since 2026-10-27).
+    # After firewall, which opens the port to the clients.
+    - role: egressproxy
+      when: egressproxy_managed | default(false)
+      tags: [egressproxy]
     # Break-glass: rescue user whose keys live OUTSIDE any home dir
     # (root-owned /etc/ssh/rescue_keys) — survives home wipes and login-user
     # compromise. Opt-in per host; germany-02 runs it too (2026-07-18

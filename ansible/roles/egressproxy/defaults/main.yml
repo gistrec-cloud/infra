@@ -1,0 +1,9 @@
+---
+egressproxy_port: 8888
+
+# Source IPs allowed to use the proxy (the same set must be opened in
+# firewall_allow_tcp). Empty = nobody.
+egressproxy_clients: []
+
+# CONNECT is limited to these ports: the proxy exists for HTTPS APIs.
+egressproxy_connect_ports: [443]

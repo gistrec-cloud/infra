@@ -1,0 +1,22 @@
+---
+- name: Install tinyproxy
+  ansible.builtin.apt:
+    name: tinyproxy
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Deploy /etc/tinyproxy/tinyproxy.conf
+  ansible.builtin.template:
+    src: tinyproxy.conf.j2
+    dest: /etc/tinyproxy/tinyproxy.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart tinyproxy
+
+- name: Enable and start tinyproxy
+  ansible.builtin.service:
+    name: tinyproxy
+    state: started
+    enabled: true
