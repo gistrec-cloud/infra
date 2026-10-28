@@ -75,8 +75,9 @@ resource "aws_iam_role_policy_attachment" "per_function" {
 
 data "aws_iam_policy_document" "cloudwatch_yandex_rating_counter" {
   statement {
-    actions   = ["logs:CreateLogGroup"]
-    resources = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"]
+    actions = ["logs:CreateLogGroup"]
+    # log-group ARN без :* — с 2027-04-26 CloudWatch Logs не засчитывает stream-ARN для group-действий
+    resources = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/yandex-rating-counter"]
   }
   statement {
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
