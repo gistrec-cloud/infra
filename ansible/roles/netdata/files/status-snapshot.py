@@ -32,7 +32,7 @@ INFRA_FILES = [
     (r'^mysql$', 'MySQL'), (r'^clickhouse-down$', 'ClickHouse'),
     (r'^(backup-staleness|s3-mirror)$', 'S3 Backups'),
     (r'^tg-bot-api$', 'Telegram Bot API'), (r'^lambda-relay$', 'AWS Relays'),
-    (r'^(ping|portcheck-down)$', 'Network'), (r'^(fleet-|disk-space-early|oom-notify)', 'VPS'),
+    (r'^(ping|portcheck-down)$', 'Network'), (r'^(fleet-|disk-space-early|oom-notify|swap$)', 'VPS'),
 ]
 INFRA_CHARTS = [(r'^mysql_', 'MySQL'), (r'^clickhouse_', 'ClickHouse'),
                 (r'^x509check_', 'TLS'), (r'^portcheck_k3s_', 'k3s')]
