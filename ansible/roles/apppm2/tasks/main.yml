@@ -157,6 +157,13 @@
     apppm2_apps | map(attribute='value.process.runtime', default='')
     | select('equalto', 'python') | list | length > 0
 
+# Системные пакеты, которые приложение просит в process.apt (jobs: poppler-utils для pdftotext).
+- name: System packages requested by apps
+  ansible.builtin.apt:
+    name: "{{ apppm2_apps | map(attribute='value.process.apt', default=[]) | flatten | unique }}"
+    state: present
+  when: apppm2_apps | map(attribute='value.process.apt', default=[]) | flatten | length > 0
+
 - name: Snapshot current pm2 process names
   ansible.builtin.command: pm2 jlist
   become: true
