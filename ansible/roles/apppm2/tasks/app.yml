@@ -92,6 +92,28 @@
   become_user: "{{ admin_user }}"
   when: apppm2_pip is not skipped
 
+# process.playwright: [chromium-headless-shell] — браузеры Playwright из venv приложения
+# (jobs рендерит PDF резюме). Системные библиотеки ставит root (install-deps), сами браузеры —
+# пользователь приложения в ~/.cache/ms-playwright. Повторный запуск — no-op, если версия та же.
+- name: Playwright system deps — {{ apppm2_app.key }}
+  ansible.builtin.command:
+    cmd: >-
+      {{ apppm2_dir }}/{{ apppm2_app.value.process.venv | default('.venv') }}/bin/playwright
+      install-deps {{ apppm2_app.value.process.playwright | join(' ') }}
+  register: apppm2_pw_deps
+  changed_when: "'Installing dependencies' in apppm2_pw_deps.stdout or 'Setting up' in apppm2_pw_deps.stdout"
+  when: apppm2_app.value.process.playwright | default([]) | length > 0
+
+- name: Playwright browsers — {{ apppm2_app.key }}
+  ansible.builtin.command:
+    cmd: "{{ apppm2_app.value.process.venv | default('.venv') }}/bin/playwright install {{ apppm2_app.value.process.playwright | join(' ') }}"
+    chdir: "{{ apppm2_dir }}"
+  become: true
+  become_user: "{{ admin_user }}"
+  register: apppm2_pw
+  changed_when: "'downloaded to' in apppm2_pw.stdout"
+  when: apppm2_app.value.process.playwright | default([]) | length > 0
+
 # `npm: true` covers non-node runtimes that spawn node helpers from
 # node_modules (askads: python backend spawns MCP servers per request).
 # npm ci needs a lockfile; without one fall back to npm install.
