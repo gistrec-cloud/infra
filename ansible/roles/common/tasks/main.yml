@@ -8,6 +8,9 @@
       - ca-certificates
       - gnupg
       - unattended-upgrades
+      # Образ FirstVDS ставит systemd-cron: его `crontab -l` на пустом crontab
+      # выходит с 2, и модуль cron (appcron) падает. apt снимет его как конфликт.
+      - cron
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -95,12 +98,13 @@
   # /etc/ssh/sshd_config.d/ if the sshd -t check below ever fails.
 
 # sshd takes the FIRST value it sees and includes sshd_config.d in lexical
-# order, so a provider's 50-cloud-init.conf (PasswordAuthentication yes on
-# Timeweb images) silently wins over 99-hardening.conf. Caught on russia-03.
-- name: Remove the cloud-init sshd drop-in
+# order, so a provider drop-in (PasswordAuthentication yes) silently wins over
+# 99-hardening.conf. Caught on russia-03 (Timeweb) and russia-05 (FirstVDS).
+- name: Remove provider sshd drop-ins
   ansible.builtin.file:
-    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    path: "/etc/ssh/sshd_config.d/{{ item }}"
     state: absent
+  loop: "{{ common_sshd_provider_dropins }}"
   notify: Restart sshd
 
 - name: Verify full sshd configuration is valid
