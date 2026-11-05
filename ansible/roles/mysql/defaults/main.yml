@@ -62,6 +62,16 @@ mysql_wait_timeout: 28800
 # by_digest (какие запросы тяжёлые), все глобальные счётчики и статус репликации.
 mysql_perfschema_slim: false
 
+# Сколько арен держит glibc malloc (MALLOC_ARENA_MAX). 0 — дефолт glibc (8 × ядер).
+#
+# Каждый поток mysqld получает свою арену, освобождённое в ней система назад не
+# получает. Замер на primary 2026-11-03: сам MySQL насчитывал 1,40 ГиБ
+# (sys.memory_global_total; buffer pool 1 ГБ, temptable 15 МБ), а у процесса было
+# ~2,45 ГБ (RSS 1,6 + своп 0,84). Неучтённый ~1 ГБ — дробление арен; он же и уехал
+# в своп (si/so ≈ 0: страниц никто не трогает). 2 арены обычно снимают это почти
+# без потерь на таких нагрузках. Применяется пересозданием контейнера.
+mysql_malloc_arena_max: 0
+
 # ─── Runaway-query guard ───
 # SELECT timeout (ms) applied via init_connect, NOT as a global — see
 # server.cnf.j2 for why. 0 disables the guard entirely.
