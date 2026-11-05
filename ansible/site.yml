@@ -182,10 +182,7 @@
       tags: [netdata]
     # App cron jobs come from the apps registry — per app, so a job moves
     # hosts together with its app (edit apps.yml, re-run).
-    # Явный common_managed: false = хост без admin_user (russia-05), а кроны
-    # живут в его crontab. Неуказанный флаг (старые хосты) роль не отключает.
     - role: appcron
-      when: common_managed | default(true)
       tags: [appcron]
 
 # Provision shared host prerequisites before anything consumes them. In the old

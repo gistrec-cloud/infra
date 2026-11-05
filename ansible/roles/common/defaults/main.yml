@@ -7,5 +7,10 @@
 # Existing adopted hosts leave common_managed unset and are unaffected.
 common_admin_passwordless_sudo: true
 
+# Provider drop-ins that turn password auth back on (see tasks).
+common_sshd_provider_dropins:
+  - 50-cloud-init.conf  # Timeweb
+  - 40-hosting.conf     # FirstVDS
+
 # FQDN for the host itself. Empty = leave whatever the provider image set.
 common_hostname: ""
