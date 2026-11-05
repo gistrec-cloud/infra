@@ -65,3 +65,6 @@ vault_admin_ssh_keys:
 # vault_s3_mirror_yc_secret: "REPLACE_ME"
 # vault_gcore_s3_key_id:     "REPLACE_ME"
 # vault_gcore_s3_secret:     "REPLACE_ME"
+
+# API-ключ общего Qdrant на russia-03 (apps.yml: qdrant). Генерировать: openssl rand -hex 32
+# vault_qdrant_api_key: "REPLACE_ME"
