@@ -1,0 +1,28 @@
+---
+- name: Refuse a non-loopback bind
+  ansible.builtin.assert:
+    that: redis_bind.split() | reject('in', ['127.0.0.1', '::1']) | list | length == 0
+    fail_msg: "redis_bind должен быть loopback, получено: {{ redis_bind }}"
+
+- name: Install redis-server
+  ansible.builtin.apt:
+    name: redis-server
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Deploy /etc/redis/redis.conf
+  ansible.builtin.template:
+    src: redis.conf.j2
+    dest: /etc/redis/redis.conf
+    owner: redis
+    group: redis
+    mode: "0640"
+  no_log: "{{ redis_password | length > 0 }}"
+  notify: Restart redis
+
+- name: Enable and start redis-server
+  ansible.builtin.service:
+    name: redis-server
+    state: started
+    enabled: true

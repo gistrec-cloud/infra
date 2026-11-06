@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+bind {{ redis_bind }}
+protected-mode yes
+port {{ redis_port }}
+{% if redis_password %}
+requirepass {{ redis_password }}
+{% endif %}
+
+supervised systemd
+daemonize no
+pidfile /run/redis/redis-server.pid
+logfile /var/log/redis/redis-server.log
+loglevel notice
+dir /var/lib/redis
+
+# Только кэш: ни RDB, ни AOF, реплики нет. Данные, которые нужно сохранить, — в MySQL.
+save ""
+appendonly no
+
+maxmemory {{ redis_maxmemory }}
+maxmemory-policy {{ redis_maxmemory_policy }}
+
+rename-command FLUSHALL ""
+rename-command CONFIG ""
+rename-command DEBUG ""

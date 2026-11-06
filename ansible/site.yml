@@ -246,6 +246,18 @@
       when: s3mirror_managed | default(false)
       tags: [s3mirror]
 
+- name: Local cache — Redis on loopback
+  hosts: all
+  become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
+  roles:
+    # Только кэш, без персистентности и реплики; данные — в MySQL.
+    # Opt-in per host: redis_managed в host_vars. Пока не включён нигде.
+    - role: redis
+      when: redis_managed | default(false)
+      tags: [redis]
+
 - name: Applications — docker dependencies, pm2 apps, static bundles
   hosts: all
   become: true
