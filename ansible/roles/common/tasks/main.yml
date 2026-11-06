@@ -117,6 +117,14 @@
   loop: "{{ common_sshd_provider_dropins }}"
   notify: Restart sshd
 
+# Провайдерский ключ поддержки = root без нашего ведома; консоль у провайдера и так есть.
+- name: Remove provider root SSH keys
+  ansible.builtin.lineinfile:
+    path: /root/.ssh/authorized_keys
+    regexp: '\s{{ item | regex_escape }}$'
+    state: absent
+  loop: "{{ common_root_provider_keys }}"
+
 - name: Verify full sshd configuration is valid
   ansible.builtin.command: sshd -t
   changed_when: false
