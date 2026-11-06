@@ -14,6 +14,7 @@ Timeweb-хостов не гонять — маршрут Timeweb↔Hetzner те
 |---|---|---|---|
 | приложения | `gistrec` (14688) | `terraform output -raw s3_access_key` / `s3_secret_key` | все, кроме gistrec-cloud |
 | бэкапы | `gistrec-backups` (14689) | `s3_backups_access_key` / `s3_backups_secret_key` | gistrec-cloud |
+| restic edalle-foodops | `edalle-foodops-backups` | `s3_edalle_foodops_backups_access_key` / `…_secret_key` | edalle-foodops-backup |
 
 - Endpoint один: `https://s-ed1.cloud.gcore.lu`, region `s-ed1`. Объекты
   публичных бакетов читаются и path-style (`…/recepter/key`), и virtual-host
@@ -29,7 +30,8 @@ Timeweb-хостов не гонять — маршрут Timeweb↔Hetzner те
 
 | бакет | пишет | читает | зеркало |
 |---|---|---|---|
-| aleksandravoo, askads, dnd-crime, glucose-bot, recepter | Яндекс (приложения, CI) | Яндекс | `sync` в Gcore по таймеру |
+| aleksandravoo, askads, dnd-crime, edalle-foodops, glucose-bot, recepter | Яндекс (приложения, CI) | Яндекс | `sync` в Gcore по таймеру |
+| edalle-foodops-backup | **оба**: russia-05 (`backup.sh`) делает независимый снимок restic в Яндекс и в Gcore | — | нет: зеркало повторило бы порчу/удаление |
 | gistrec-cloud | **Gcore** (`mysql-backup.service` на finland-01) | — | нет, это уже оригинал |
 | gistrec-share | **Gcore** (`s3-rclone copyto … gc:gistrec-share/…`, README) | share.gistrec.cloud → Gcore | нет |
 | clear-transcript-bot | Яндекс | Яндекс | **нет** — в Gcore пустой бакет, при переключении бот стартует с нуля (решение 11.10) |

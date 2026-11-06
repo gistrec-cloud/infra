@@ -19,6 +19,11 @@
 # and platform cookies — private, 50 GiB cap; audio/ expires in 30d and videos/
 # in 180d via edalle-recipe-bot-lifecycle.json. Mirrored to Gcore (unlike CTB): the
 # bot must survive a Yandex outage with its recipes' sources intact.
+# edalle-foodops (2026-11, off Timeweb) holds generated menu/order .docx — private,
+# 10 GiB cap, mirrored to Gcore. edalle-foodops-backup is its restic repository:
+# restic prunes itself (forget --prune), so no lifecycle rule; the second, independent
+# copy goes straight from russia-05 to Gcore (storage edalle-foodops-backups), not
+# through the mirror — a mirror would replay corruption or deletion.
 #
 # folder_id is per-bucket and stays null for the adopted ones. Creating a bucket
 # under a UserAccount IAM token needs it spelled out — the folder cannot be
@@ -29,14 +34,16 @@
 
 locals {
   buckets = {
-    "aleksandravoo"        = { max_size = 53687091200, anonymous_read = true, folder_id = null, tags = { project = "aleksandravoo" } }
-    "clear-transcript-bot" = { max_size = 0, anonymous_read = false, folder_id = null, tags = { project = "clear-transcript-bot" } }
-    "dnd-crime"            = { max_size = 53687091200, anonymous_read = true, folder_id = null, tags = {} }
-    "gistrec-cloud"        = { max_size = 53687091200, anonymous_read = false, folder_id = null, tags = {} }
-    "gistrec-share"        = { max_size = 5368709120, anonymous_read = true, folder_id = var.folder_id, tags = {} }
-    "glucose-bot"          = { max_size = 10737418240, anonymous_read = false, folder_id = var.folder_id, tags = { project = "glucose-bot" } }
-    "recepter"             = { max_size = 0, anonymous_read = true, folder_id = null, tags = { project = "recepter" } }
-    "edalle-recipe-bot"    = { max_size = 53687091200, anonymous_read = false, folder_id = var.folder_id, tags = { project = "edalle-recipe-bot" } }
+    "aleksandravoo"         = { max_size = 53687091200, anonymous_read = true, folder_id = null, tags = { project = "aleksandravoo" } }
+    "clear-transcript-bot"  = { max_size = 0, anonymous_read = false, folder_id = null, tags = { project = "clear-transcript-bot" } }
+    "dnd-crime"             = { max_size = 53687091200, anonymous_read = true, folder_id = null, tags = {} }
+    "gistrec-cloud"         = { max_size = 53687091200, anonymous_read = false, folder_id = null, tags = {} }
+    "gistrec-share"         = { max_size = 5368709120, anonymous_read = true, folder_id = var.folder_id, tags = {} }
+    "glucose-bot"           = { max_size = 10737418240, anonymous_read = false, folder_id = var.folder_id, tags = { project = "glucose-bot" } }
+    "recepter"              = { max_size = 0, anonymous_read = true, folder_id = null, tags = { project = "recepter" } }
+    "edalle-recipe-bot"     = { max_size = 53687091200, anonymous_read = false, folder_id = var.folder_id, tags = { project = "edalle-recipe-bot" } }
+    "edalle-foodops"        = { max_size = 10737418240, anonymous_read = false, folder_id = var.folder_id, tags = { project = "edalle-foodops" } }
+    "edalle-foodops-backup" = { max_size = 53687091200, anonymous_read = false, folder_id = var.folder_id, tags = { project = "edalle-foodops" } }
   }
 }
 

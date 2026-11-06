@@ -13,10 +13,14 @@ locals {
     "askads"               = "apps" # не из terraform/yandex (создан руками 2026-09-19), но публичный и живой
     "clear-transcript-bot" = "apps" # только бакет под быстрое переключение, данные не копируем
     "dnd-crime"            = "apps"
+    "edalle-foodops"       = "apps" # меню/заказы .docx, зеркало из Яндекса
     "gistrec-share"        = "apps"
     "glucose-bot"          = "apps"
     "recepter"             = "apps"
     "gistrec-cloud"        = "backups"
+    # restic edalle-foodops: пишет сам russia-05 (backup.sh), независимый снимок,
+    # не зеркало. Свой storage — ключ на VPS не дотягивается до бэкапов MySQL.
+    "edalle-foodops-backup" = "edalle-foodops-backups"
   }
 }
 
@@ -41,11 +45,24 @@ resource "gcore_storage_s3" "backups" {
   }
 }
 
+resource "gcore_storage_s3" "edalle_foodops_backups" {
+  name     = "edalle-foodops-backups"
+  location = "s-ed1"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "gcore_storage_s3_bucket" "this" {
   for_each = local.s3_buckets
 
-  name       = each.key
-  storage_id = each.value == "backups" ? gcore_storage_s3.backups.storage_id : gcore_storage_s3.main.storage_id
+  name = each.key
+  storage_id = {
+    apps                     = gcore_storage_s3.main.storage_id
+    backups                  = gcore_storage_s3.backups.storage_id
+    "edalle-foodops-backups" = gcore_storage_s3.edalle_foodops_backups.storage_id
+  }[each.value]
 
   lifecycle {
     prevent_destroy = true
@@ -73,5 +90,15 @@ output "s3_backups_access_key" {
 
 output "s3_backups_secret_key" {
   value     = gcore_storage_s3.backups.generated_secret_key
+  sensitive = true
+}
+
+output "s3_edalle_foodops_backups_access_key" {
+  value     = gcore_storage_s3.edalle_foodops_backups.generated_access_key
+  sensitive = true
+}
+
+output "s3_edalle_foodops_backups_secret_key" {
+  value     = gcore_storage_s3.edalle_foodops_backups.generated_secret_key
   sensitive = true
 }

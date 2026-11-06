@@ -14,7 +14,7 @@ RCLONE="${RCLONE:-/usr/local/sbin/s3-rclone}"
 # бакет под быстрое переключение (user, 11.10). Публичность — bucket policy
 # (scripts/s3-public-policy.py), ACL на объектах не нужен.
 # Переключённые бакеты убраны (gistrec-share, gistrec-cloud — 11.10): их пишут уже в Gcore.
-BUCKETS="aleksandravoo:gc askads:gc dnd-crime:gc glucose-bot:gc recepter:gc"
+BUCKETS="aleksandravoo:gc askads:gc dnd-crime:gc edalle-foodops:gc glucose-bot:gc recepter:gc"
 
 for spec in $BUCKETS; do
   b="${spec%%:*}" dst="${spec##*:}"
