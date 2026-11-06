@@ -12,5 +12,9 @@ common_sshd_provider_dropins:
   - 50-cloud-init.conf  # Timeweb
   - 40-hosting.conf     # FirstVDS
 
+# Comments of provider-injected keys in /root/.ssh/authorized_keys (see tasks).
+common_root_provider_keys:
+  - supportAccessKey    # FirstVDS
+
 # FQDN for the host itself. Empty = leave whatever the provider image set.
 common_hostname: ""
