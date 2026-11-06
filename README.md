@@ -83,6 +83,7 @@ infra/
 │       ├── clickhouse/           # self-hosted ClickHouse (Docker), TLS ports + S3 backups
 │       ├── mysql/                # self-hosted MySQL (Docker), primary/replica
 │       ├── k3s/                  # single-node Kubernetes on a shared host, under its existing ufw
+│       ├── redis/                # opt-in local Redis cache on loopback (unused for now)
 │       ├── s3mirror/             # opt-in timer: Yandex Object Storage → Gcore mirror, s3-rclone
 │       └── xray/                 # opt-in VLESS+Reality inbound (personal VPN), optional relay mode
 ├── terraform/                    # cloud resources as code (independent root modules, one state each)
@@ -122,6 +123,7 @@ infra/
 | `clickhouse` | Self-hosted ClickHouse in Docker; public TLS ports (9440/8443), nightly dumps + off-site S3 |
 | `mysql`    | Self-hosted MySQL 8.0 in Docker; GTID primary/replica over the mesh      |
 | `k3s`      | Single-node Kubernetes on a host shared with a third party: adds narrow ufw rules instead of replacing the firewall, API reachable over the mesh only |
+| `redis`    | Opt-in (`redis_managed`): local Redis cache from apt, loopback only, cache only (no persistence, no replica — data lives in MySQL). Not enabled on any host yet. [Role README](ansible/roles/redis/README.md) |
 | `s3mirror` | Opt-in (`s3mirror_managed`, finland-01): rclone timer mirroring Yandex Object Storage buckets to Gcore; installs the `s3-rclone` wrapper used below. Runbook: [`docs/runbooks/s3-mirror.md`](docs/runbooks/s3-mirror.md) |
 | `xray`     | Opt-in VLESS+Reality inbound (personal VPN): pinned binary, config validated before restart, inbound port cross-checked against the host firewall. A relay mode forwards TCP to a far host over the mesh, so the client dials a near host while the Reality handshake terminates on the far one |
 

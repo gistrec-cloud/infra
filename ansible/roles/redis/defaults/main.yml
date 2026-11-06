@@ -1,0 +1,8 @@
+---
+# Только кэш: данные теряются при рестарте и гибели хоста. Всё ценное — в MySQL.
+redis_bind: "127.0.0.1"
+redis_port: 6379
+redis_maxmemory: 256mb
+redis_maxmemory_policy: allkeys-lru
+# Пусто = без пароля; на loopback хватает. Иначе — vault_redis_password.
+redis_password: ""
