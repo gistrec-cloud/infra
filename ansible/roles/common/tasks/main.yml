@@ -41,6 +41,16 @@
     name: "{{ common_hostname }}"
   when: common_hostname | length > 0
 
+# MPTCP парку не нужен; выключен ради CVE-2026-98432 (UAF в установке соединения)
+# и чтобы Go 1.24+ не открывал MPTCP-листенеры по умолчанию.
+- name: Disable MPTCP
+  ansible.posix.sysctl:
+    name: net.mptcp.enabled
+    value: "0"
+    sysctl_file: /etc/sysctl.d/90-mptcp-off.conf
+    sysctl_set: true
+    state: present
+
 - name: Ensure admin user exists
   ansible.builtin.user:
     name: "{{ admin_user }}"
