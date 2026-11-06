@@ -12,6 +12,9 @@ common_sshd_provider_dropins:
   - 50-cloud-init.conf  # Timeweb
   - 40-hosting.conf     # FirstVDS
 
+# Host-only admin keys on top of the fleet-wide vault list (e.g. a project deploy key).
+common_admin_extra_ssh_keys: []
+
 # Comments of provider-injected keys in /root/.ssh/authorized_keys (see tasks).
 common_root_provider_keys:
   - supportAccessKey    # FirstVDS

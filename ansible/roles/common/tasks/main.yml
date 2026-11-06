@@ -81,7 +81,7 @@
     key: "{{ item }}"
     state: present
     exclusive: false
-  loop: "{{ vault_admin_ssh_keys | default([]) }}"
+  loop: "{{ vault_admin_ssh_keys | default([]) + common_admin_extra_ssh_keys }}"
   no_log: true
 
 - name: Refuse to lock ourselves out
