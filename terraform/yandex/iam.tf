@@ -67,3 +67,18 @@ resource "yandex_storage_bucket_iam_binding" "recipe_bot" {
   role    = "storage.editor"
   members = ["serviceAccount:${yandex_iam_service_account.this["edalle-recipe-bot"].id}"]
 }
+
+# edalle-foodops: two accounts, each bound to its own bucket — the app key (menus,
+# orders) cannot reach the restic repository. editor, not uploader, for both: the app
+# overwrites nothing but restic must delete (prune, stale locks).
+resource "yandex_storage_bucket_iam_binding" "edalle_foodops" {
+  bucket  = yandex_storage_bucket.this["edalle-foodops"].bucket
+  role    = "storage.editor"
+  members = ["serviceAccount:${yandex_iam_service_account.this["edalle-foodops"].id}"]
+}
+
+resource "yandex_storage_bucket_iam_binding" "edalle_foodops_backup" {
+  bucket  = yandex_storage_bucket.this["edalle-foodops-backup"].bucket
+  role    = "storage.editor"
+  members = ["serviceAccount:${yandex_iam_service_account.this["edalle-foodops-backup"].id}"]
+}

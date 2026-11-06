@@ -5,18 +5,20 @@
 
 locals {
   service_accounts = {
-    "recepter-monitoring"  = { description = null, labels = null }
-    "gistrec"              = { description = null, labels = null }
-    "recepter-s3"          = { description = null, labels = null }
-    "aleksandravoo"        = { description = null, labels = { project = "aleksandravoo" } }
-    "clear-transcript-bot" = { description = "Storage + SpeechKit", labels = null }
-    "dnd-crime"            = { description = null, labels = null }
-    "glucose-bot"          = { description = "Storage", labels = { project = "glucose-bot" } }
-    "wordstat"             = { description = null, labels = null }
-    "mysql-backup"         = { description = "MySQL off-site backup uploader (write-only)", labels = { role = "mysql-backup" } }
-    "recepter"             = { description = null, labels = null }
-    "realm-status"         = { description = "realm-status fn: Lockbox read + self-invoke", labels = { project = "realm-status" } }
-    "edalle-recipe-bot"    = { description = "edalle-recipe-bot: Object Storage (videos, transcripts, cookies)", labels = { project = "edalle-recipe-bot" } }
+    "recepter-monitoring"   = { description = null, labels = null }
+    "gistrec"               = { description = null, labels = null }
+    "recepter-s3"           = { description = null, labels = null }
+    "aleksandravoo"         = { description = null, labels = { project = "aleksandravoo" } }
+    "clear-transcript-bot"  = { description = "Storage + SpeechKit", labels = null }
+    "dnd-crime"             = { description = null, labels = null }
+    "glucose-bot"           = { description = "Storage", labels = { project = "glucose-bot" } }
+    "wordstat"              = { description = null, labels = null }
+    "mysql-backup"          = { description = "MySQL off-site backup uploader (write-only)", labels = { role = "mysql-backup" } }
+    "recepter"              = { description = null, labels = null }
+    "realm-status"          = { description = "realm-status fn: Lockbox read + self-invoke", labels = { project = "realm-status" } }
+    "edalle-recipe-bot"     = { description = "edalle-recipe-bot: Object Storage (videos, transcripts, cookies)", labels = { project = "edalle-recipe-bot" } }
+    "edalle-foodops"        = { description = "edalle-foodops: Object Storage (menu/order documents)", labels = { project = "edalle-foodops" } }
+    "edalle-foodops-backup" = { description = "edalle-foodops: restic repository (backup.sh on russia-05)", labels = { project = "edalle-foodops" } }
   }
 }
 
