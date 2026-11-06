@@ -249,6 +249,8 @@
 - name: Local cache — Redis on loopback
   hosts: all
   become: true
+  vars_files:
+    - ["group_vars/all.vault.yml", "group_vars/all.vault.yml.example"]
   roles:
     # Только кэш, без персистентности и реплики; данные — в MySQL.
     # Opt-in per host: redis_managed в host_vars. Пока не включён нигде.
