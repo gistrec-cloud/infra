@@ -30,7 +30,7 @@ Timeweb-хостов не гонять — маршрут Timeweb↔Hetzner те
 
 | бакет | пишет | читает | зеркало |
 |---|---|---|---|
-| aleksandravoo, askads, dnd-crime, edalle-foodops, glucose-bot, recepter | Яндекс (приложения, CI) | Яндекс | `sync` в Gcore по таймеру |
+| aleksandravoo, askads, dnd-crime, edalle-foodops, edalle-recipe-bot, glucose-bot, recepter | Яндекс (приложения, CI) | Яндекс | `sync` в Gcore по таймеру |
 | edalle-foodops-backup | **оба**: russia-05 (`backup.sh`) делает независимый снимок restic в Яндекс и в Gcore | — | нет: зеркало повторило бы порчу/удаление |
 | gistrec-cloud | **Gcore** (`mysql-backup.service` на finland-01) | — | нет, это уже оригинал |
 | gistrec-share | **Gcore** (`s3-rclone copyto … gc:gistrec-share/…`, README) | share.gistrec.cloud → Gcore | нет |
@@ -92,6 +92,11 @@ s3-mirror.timer s3-mirror.service` → при живом Яндексе оста
    secrets `YC_S3_ACCESS_KEY_ID` / `YC_S3_SECRET_ACCESS_KEY`.
 6. **clear-transcript-bot** — `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`;
    бакет пустой, старые записи теряют аудио.
+7. **edalle-recipe-bot** (finland-01, `~/EdalleRecipeBot/.env`): `S3_ENDPOINT`,
+   `S3_ACCESS_KEY`, `S3_SECRET_KEY` (`S3_BUCKET` тот же); `pm2 restart edalle-recipe-bot`.
+   Бот при старте тянет cookies из `cookies/<platform>.txt`, так что переключать только
+   после финального `sync`. В БД лежат ключи объектов, а не URL — переписывать нечего.
+   Lifecycle (audio/ 30d, videos/ 180d) в Gcore не нужен: `sync` повторяет удаления Яндекса.
 
 Перед 2–4 проверить, не хранит ли БД приложения полные URL с
 `storage.yandexcloud.net`: их надо переписать на новый host одним UPDATE.
