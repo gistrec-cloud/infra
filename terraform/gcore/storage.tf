@@ -14,6 +14,7 @@ locals {
     "clear-transcript-bot" = "apps" # только бакет под быстрое переключение, данные не копируем
     "dnd-crime"            = "apps"
     "edalle-foodops"       = "apps" # меню/заказы .docx, зеркало из Яндекса
+    "edalle-recipe-bot"    = "apps" # видео/аудио/транскрипты/cookies бота рецептов, зеркало из Яндекса
     "gistrec-share"        = "apps"
     "glucose-bot"          = "apps"
     "recepter"             = "apps"
