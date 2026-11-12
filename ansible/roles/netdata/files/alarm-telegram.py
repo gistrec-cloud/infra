@@ -11,7 +11,14 @@ WARNING для роли без |critical) открывает эпизод нов
 
 Вызывается из custom_sender (health_alarm_notify.conf) с переменными
 alarm-notify.sh в окружении; аргументы — chat id после фильтра |critical.
-Эпизод — файл в $NETDATA_CACHE_DIR/alarm-telegram на пару (chat, host, alarm_id)."""
+Эпизод — файл в $NETDATA_CACHE_DIR/alarm-telegram на пару (chat, host, alarm_id).
+
+Чаты проектов. Если аларм относится к проекту из файла маршрутов
+(alarmroutes.ROUTES, роль выводит его из alert_chats реестра) и это аларм
+простоя (alarmroutes.is_simple), то же событие уходит и в чаты проекта: только
+CRITICAL и его закрытие, своим текстом — без ноды, чарта и ссылки на netdata
+(она за авторизацией). Эпизод у каждого чата свой. Сбой чата проекта не влияет
+на код возврата: он — про чаты владельца из argv."""
 import fcntl
 import html
 import json
@@ -23,6 +30,15 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+# Общий модуль маршрутов роль ставит в /usr/local/lib/netdata-alarms; без него
+# (ребёнок, старый деплой) скрипт работает как раньше, только для чатов владельца.
+sys.path[:0] = [os.environ.get("ALARM_LIB_DIR", "/usr/local/lib/netdata-alarms"),
+                os.path.dirname(os.path.abspath(__file__))]
+try:
+    import alarmroutes
+except ImportError:  # pragma: no cover — нет модуля, нет и маршрутов
+    alarmroutes = None
 
 STATE_DIR = os.path.join(os.environ.get("NETDATA_CACHE_DIR", "/var/cache/netdata"), "alarm-telegram")
 TZ = ZoneInfo("Europe/Moscow")
@@ -93,7 +109,34 @@ def render(ep, status, now):
     return "\n".join(lines)
 
 
-def notify(chat, status, now):
+def render_owner(ep, status, now):
+    text = render(ep, "CLEAR" if status == "REMOVED" else status, now)
+    if status == "REMOVED":
+        text = text.replace("✅ Решено", "⚪️ Алерт удалён", 1)
+    return text
+
+
+def project_view(route):
+    """Текст для чата проекта: что лежит и почему, без ноды, чарта и ссылки."""
+    def view(ep, status, now):
+        e = html.escape
+        why = alarmroutes.cause(route, env("name", ""), env("chart", ""), env("summary", ""), env("info", ""))
+        name = e(route["name"])
+        if status == "CRITICAL":
+            return "\n".join([f"🔴 <b>{name}</b> недоступен — {e(why)}", "",
+                              f"🕒 Началось: {stamp(ep['start'])} МСК"])
+        head = f"✅ <b>{name}</b> снова работает" if status == "CLEAR" else f"⚪️ <b>{name}</b>: проверка снята"
+        end = "✅ Восстановлено" if status == "CLEAR" else "⚪️ Проверка снята"
+        return "\n".join([head, f"Было: {e(why)}", "",
+                          f"🕒 Началось: {stamp(ep['start'])} МСК",
+                          f"{end}: {stamp(now)} МСК",
+                          f"⏱ Длилось: {human(now - ep['start'])}"])
+    return view
+
+
+def notify(chat, status, now, view=render_owner, quiet_clear=True):
+    """quiet_clear: CLEAR без открытого эпизода всё равно сообщить (тихо).
+    Чату проекта такое не шлём — «восстановлено» без начала его только путает."""
     key = f"{chat}_{env('host', '')}_{env('alarm_id', '')}".replace("/", "_")
     path = os.path.join(STATE_DIR, key)
     with open(os.path.join(STATE_DIR, ".lock"), "w") as lock:
@@ -118,7 +161,7 @@ def notify(chat, status, now):
             ep["value"] = env("value_string", "")
             if status == "CRITICAL":
                 ep["peak"] = "CRITICAL"
-            text = render(ep, status, now)
+            text = view(ep, status, now)
             if not raise_new:
                 try:
                     api("editMessageText", message_id=ep["message_id"], text=text, **base)
@@ -137,10 +180,10 @@ def notify(chat, status, now):
         # CLEAR / REMOVED закрывают эпизод. Без записи (уведомление о начале
         # не ушло или state потерян) — отдельное тихое сообщение, как раньше.
         if ep is None:
+            if not quiet_clear:
+                return
             ep = {"start": now - int(env("non_clear_duration") or 0), "value": env("old_value_string", "")}
-        text = render(ep, "CLEAR", now)
-        if status == "REMOVED":
-            text = text.replace("✅ Решено", "⚪️ Алерт удалён", 1)
+        text = view(ep, status, now)
         try:
             if "message_id" not in ep:
                 raise LookupError
@@ -153,18 +196,45 @@ def notify(chat, status, now):
             pass
 
 
+def project_chats(owner):
+    """(маршрут, чаты) проекта, если аларм — простой этого проекта, иначе (None, [])."""
+    if alarmroutes is None:
+        return None, []
+    route = alarmroutes.route_for(alarmroutes.load(os.environ.get("ALARM_ROUTES", alarmroutes.ROUTES))["routes"],
+                                  env("name", ""), env("chart", ""), env("src", ""))
+    if not route or not alarmroutes.is_simple(route, env("name", "")):
+        return None, []
+    # Чат и так в argv (владелец вписал свой чат проекту) — второй раз не шлём.
+    return route, [c for c in route.get("chats", []) if c not in owner]
+
+
 def main():
     status = env("status", "")
     now = int(env("when") or time.time())
     os.makedirs(STATE_DIR, exist_ok=True)
+    owner = sys.argv[1:]
     failed = 0
-    for chat in sys.argv[1:]:
+    for chat in owner:
         try:
             notify(chat, status, now)
         except Exception as e:  # noqa: BLE001 — один чат не должен ронять остальные
             print(f"alarm-telegram: {chat}: {e}", file=sys.stderr)
             failed += 1
-    sys.exit(1 if failed == len(sys.argv[1:]) else 0)
+    # Чаты проекта: только CRITICAL и его закрытие. WARNING после CRITICAL
+    # эпизод не трогает — сообщение ждёт CLEAR.
+    if status in ("CRITICAL", "CLEAR", "REMOVED"):
+        try:
+            route, chats = project_chats(owner)
+        except Exception as e:  # noqa: BLE001 — битые маршруты не мешают владельцу
+            print(f"alarm-telegram: routes: {e}", file=sys.stderr)
+            route, chats = None, []
+        for chat in chats:
+            try:
+                notify(chat, status, now, view=project_view(route), quiet_clear=False)
+            except Exception as e:  # noqa: BLE001
+                print(f"alarm-telegram: {route['name']} {chat}: {e}", file=sys.stderr)
+    # Код возврата — про чаты владельца: их провал должен быть виден.
+    sys.exit(1 if failed == len(owner) else 0)
 
 
 if __name__ == "__main__":

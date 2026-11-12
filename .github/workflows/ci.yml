@@ -35,6 +35,18 @@ jobs:
         working-directory: ansible
         run: ansible-lint
 
+  python-tests:
+    name: python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: netdata role scripts (alarm-telegram, status-snapshot)
+        # Стандартная библиотека, без сети: api() и urlopen подменены.
+        run: python3 -m unittest discover -s ansible/roles/netdata/tests -v
+
   terraform:
     name: terraform validate
     runs-on: ubuntu-latest

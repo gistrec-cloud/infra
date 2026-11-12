@@ -8,7 +8,7 @@ Type=oneshot
 ExecStart=/usr/local/sbin/status-snapshot /etc/status-snapshot.json
 Nice=10
 ProtectSystem=strict
-ReadWritePaths={{ netdata_projects_page_dir }}{% if netdata_status_public_dir | length > 0 %} {{ netdata_status_public_dir }}{% endif %}
+ReadWritePaths={{ netdata_projects_page_dir }}{% if netdata_status_public_dir | length > 0 %} {{ netdata_status_public_dir }}{% endif %}{% if netdata_alert_feed_dir | length > 0 %} {{ netdata_alert_feed_dir }}{% endif %}
 
 PrivateTmp=true
 NoNewPrivileges=true

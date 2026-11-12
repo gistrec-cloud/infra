@@ -304,6 +304,37 @@
     label: "{{ item.src | default(item, true) }}"
   notify: Restart netdata
 
+# Общий модуль маршрутов в чаты проектов (alarm-telegram, status-snapshot). Ставится
+# раньше отправителя: без модуля тот работает, но про чаты проектов не знает.
+- name: Create the alarm library dir
+  ansible.builtin.file:
+    path: /usr/local/lib/netdata-alarms
+    state: directory
+    mode: "0755"
+  when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
+
+- name: Install the alarm routing module
+  ansible.builtin.copy:
+    src: alarmroutes.py
+    dest: /usr/local/lib/netdata-alarms/alarmroutes.py
+    mode: "0644"
+  when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
+
+# Маршруты в чаты проектов — из alert_chats реестра. Только у парента: он один
+# уведомляет и видит алармы всех нод, а реестр общий, поэтому в файл идут все
+# приложения, где бы они ни жили. 0640 root:netdata, как конфиг уведомлений:
+# alarm-notify работает от netdata.
+- name: Render the project alert routes
+  ansible.builtin.template:
+    src: alarm-telegram-routes.json.j2
+    dest: /etc/netdata/alarm-telegram-routes.json
+    owner: root
+    group: netdata
+    mode: "0640"
+  when: >-
+    netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
+    and netdata_stream_destination | length == 0
+
 # Отправитель Telegram для custom_sender — ставится раньше конфига, который на
 # него переключает, иначе первое же уведомление уйдёт в несуществующий файл.
 - name: Install the editing Telegram sender
@@ -371,7 +402,7 @@
     path: "{{ item }}"
     state: directory
     mode: "0755"
-  loop: "{{ [netdata_projects_page_dir, netdata_status_public_dir] | select | list }}"
+  loop: "{{ [netdata_projects_page_dir, netdata_status_public_dir, netdata_alert_feed_dir] | select | list }}"
   when: netdata_projects_page_dir | length > 0
 
 # Публичную gistrec.cloud/status рендерит репо сайта — отсюда только её status.json.
