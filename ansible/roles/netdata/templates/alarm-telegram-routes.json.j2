@@ -1,0 +1,30 @@
+{#- Маршруты алертов в чаты проектов — из реестра apps.yml (alert_chats).
+    Реестр общий для всех хостов, а уведомляет только парент: он видит алармы
+    всех нод, поэтому сюда попадают все приложения с alert_chats, на каком бы
+    хосте они ни жили. Читают alarm-telegram (кому слать) и status-snapshot
+    (alert-feed.json для команд бота). Пустой список = поведение прежнее. -#}
+{%- set ns = namespace(routes=[]) -%}
+{%- for key, app in (apps | default({}, true)) | dictsort -%}
+{%-   if (app.alert_chats | default([], true)) | length > 0 -%}
+{%-     set prefix = key | lower | replace('-', '_') -%}
+{%-     set pns = namespace(probes={}) -%}
+{%-     for job in netdata_httpcheck_jobs -%}
+{%-       if job.name == prefix or job.name.startswith(prefix ~ '_') -%}
+{%-         set pns.probes = pns.probes | combine({job.name: job.url}) -%}
+{%-       endif -%}
+{%-     endfor -%}
+{%-     set ns.routes = ns.routes + [{
+          'name': key,
+          'chats': app.alert_chats | map('string') | list,
+          'pm2': (app.process | default({}, true)).pm2 | default([], true),
+          'prefix': prefix,
+          'required': netdata_projects_required[key] | default([], true),
+          'probes': pns.probes,
+        }] -%}
+{%-   endif -%}
+{%- endfor -%}
+{{ {
+  'owner_chats': (netdata_telegram_chat_id | string).split(),
+  'status_json': (netdata_projects_page_dir ~ '/status.json') if netdata_projects_page_dir | length > 0 else '',
+  'routes': ns.routes,
+} | to_nice_json }}

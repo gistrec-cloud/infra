@@ -53,6 +53,14 @@
 #   deploy_keys:               # CI keys, installed with command=...,restrict
 #     - {key: "ssh-ed25519 AAA... comment", command: "/usr/bin/rrsync -wo <dir>"}
 #   control_scripts: [names]   # forced-command scripts: files/bin/<name> (gitignored) -> ~/bin
+#   alert_chats: ["-1001234567890", "-1001234567890:42"]
+#                              # Telegram-чаты проекта для алертов о простое (необязательно).
+#                              # Элемент — chat id или "chat:thread" (топик форума), в кавычках;
+#                              # id даёт команда /id бота алертов в этом чате. Сюда идут только
+#                              # CRITICAL и восстановление алармов простоя: pm2_app_down процессов
+#                              # из process.pm2, *_health_down / *_healthcheck проекта и
+#                              # netdata_projects_required[<name>]. Метрические — только владельцу.
+#                              # Подхватывает роль netdata на паренте (README роли).
 
 apps:
   my-api:
@@ -69,3 +77,4 @@ apps:
     dir: bots/my-bot
     env: [.env.prod, .env.staging]    # items: dotenv my-bot-prod / -staging
     notes: also needs redis on the same host
+    alert_chats: ["-1001234567890"]   # чат разработки: «my-bot недоступен» / «снова работает»

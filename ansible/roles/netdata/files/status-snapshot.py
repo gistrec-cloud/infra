@@ -50,7 +50,8 @@ STOCK_ROW = 'VPS'  # горящие стоковые алерты netdata
 ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime', 'znakhub': 'val-id',
            'znakhub-api': 'val-id', 'znakhub-worker': 'val-id'}
 # Обязательные алерты: любой из них в CRITICAL — проект лежит целиком (outage),
-# а не частично (crit). Проекты из конфига required — своим списком имён
+# а не частично (crit). Проекты из конфига required — своим списком имён.
+# Та же регулярка — класс «простой» для чатов проектов (alarmroutes.REQUIRED)
 REQUIRED = r'^(pm2_app_down|mysql_down|clickhouse_down)$|_health_down$|_healthcheck$'
 MAJOR_FROM = 2  # столько prod-проектов в outage — заголовок «Major outage»
 

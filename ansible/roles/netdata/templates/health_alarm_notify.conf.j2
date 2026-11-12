@@ -17,6 +17,11 @@
 # его временем решения и длительностью (стоковый слал бы новое на каждый
 # переход). Поэтому получатели ниже — role_recipients_custom; фильтр |critical
 # у alarm-notify общий для всех методов и работает так же.
+#
+# Сверх чатов из ${1} alarm-telegram сам шлёт алармы простоя в чаты проектов
+# (/etc/netdata/alarm-telegram-routes.json, из alert_chats реестра). Проект он
+# узнаёт по name/chart/src: src — «строка и файл» правила (позиционный
+# аргумент 13 alarm-notify.sh), по файлу health.d — как страница статуса.
 SEND_TELEGRAM="NO"
 TELEGRAM_BOT_TOKEN="{{ netdata_telegram_bot_token }}"
 SEND_CUSTOM="YES"
@@ -24,7 +29,7 @@ custom_sender() {
   TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}" TELEGRAM_API_URL="${TELEGRAM_API_URL}" \
     NETDATA_CACHE_DIR="${NETDATA_CACHE_DIR}" host="${host}" status="${status}" \
     alarm_id="${alarm_id}" when="${when}" name="${name}" summary="${summary}" \
-    chart="${chart}" info="${info}" value_string="${value_string}" \
+    chart="${chart}" src="${src}" info="${info}" value_string="${value_string}" \
     old_value_string="${old_value_string}" non_clear_duration="${non_clear_duration}" \
     goto_url="${goto_url}" /usr/local/sbin/alarm-telegram ${1} &&
     info "sent telegram notification to '${1}' for ${notification_description}"
