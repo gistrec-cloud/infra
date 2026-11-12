@@ -46,7 +46,9 @@ EXTERNAL_CHARTS = [(r'^httpcheck_askads_direct_', 'Yandex Direct API'),
                    (r'^httpcheck_askads_webmaster_', 'Yandex Webmaster API')]
 EXTERNAL_ROWS = {row for _, row in EXTERNAL_CHARTS}
 STOCK_ROW = 'VPS'  # горящие стоковые алерты netdata
-ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime'}
+# znakhub — кодовое имя Valid (val-id.ru): файл алертов и pm2-процессы названы по нему
+ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime', 'znakhub': 'val-id',
+           'znakhub-api': 'val-id', 'znakhub-worker': 'val-id'}
 # Обязательные алерты: любой из них в CRITICAL — проект лежит целиком (outage),
 # а не частично (crit). Проекты из конфига required — своим списком имён
 REQUIRED = r'^(pm2_app_down|mysql_down|clickhouse_down)$|_health_down$|_healthcheck$'
