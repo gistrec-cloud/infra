@@ -17,3 +17,10 @@ nginx_geo_front_timeout: 300s
 # Nothing else recreates them, and nginx -t passes without the file (opened
 # per request) — a rebuilt host would serve 500s to every authed request.
 nginx_htpasswd_files: {}
+
+# alert-feed.json парента (netdata_alert_feed_dir, пишет status-snapshot) —
+# данные для команд /alerts и /status бота алертов на другом хосте. Адреса, с
+# которых его можно читать, — wg-IP хоста бота: location в health.conf
+# отвечает только им (allow/deny по адресу источника), остальным 403. Пусто или
+# без netdata_alert_feed_dir — location нет.
+nginx_alert_feed_allow: []

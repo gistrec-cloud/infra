@@ -116,7 +116,7 @@ infra/
 | `registry_manifest` | Internal helper shared by registry roles to load and persist ownership boundaries |
 | `docker_runtime` | Internal Docker Engine and Compose bootstrap shared by container roles |
 | `container_tls` | Internal container-readable TLS lifecycle primitives |
-| `netdata`  | Install netdata, bind to localhost, child→parent streaming, Telegram/Pushover alarms. A Telegram alert is one message per episode, edited on CLEAR (`alarm-telegram.py`); the `unnotified-alarms` timer sends CRITICALs netdata never notified about; `status-snapshot` writes the data for `gistrec.cloud/status` and the private `stats.gistrec.cloud/status` every minute. Conventions: [role README](ansible/roles/netdata/README.md) |
+| `netdata`  | Install netdata, bind to localhost, child→parent streaming, Telegram/Pushover alarms. A Telegram alert is one message per episode, edited on CLEAR (`alarm-telegram.py`); the `unnotified-alarms` timer sends CRITICALs netdata never notified about; `status-snapshot` writes the data for `gistrec.cloud/status` and the private `stats.gistrec.cloud/status` every minute; downtime alerts also go to a project's own chat (`alert_chats`). Conventions: [role README](ansible/roles/netdata/README.md) |
 | `wireguard`| Private WireGuard mesh (`wg0`) between fleet hosts for encrypted traffic |
 | `chrony`   | Opt-in time sync: chrony replaces systemd-timesyncd (clock-stepping hypervisors) |
 | `breakglass`| Emergency `rescue` user (YubiKey keys in root-owned `/etc/ssh/rescue_keys`) — survives home wipes |
@@ -147,6 +147,20 @@ dirs, env files (deployed from 1Password), vhosts, processes, cron jobs and CI
 deploy keys. The app roles are driven entirely by this registry, and DNS points
 at hosts by name too (the `host_ips` map in `terraform/dns`), so a move is a
 one-word edit in two places. The script makes both edits in order, with the checks above.
+
+### Alerts in a project's chat
+
+All alarms go to the owner's Telegram chat. A project can also get its own
+downtime alerts in its development chat: add @GistrecCloudBot to the chat, send
+`/id` there, put the answer into the app's `alert_chats` in `apps.yml`
+(`alert_chats: ["-1001234567890"]`, or `"chat:thread"` for a forum topic), and
+re-run the netdata role on the parent (`--tags netdata`); `/alerts` in the chat
+then lists what it will receive. The chat gets only CRITICAL and recovery of
+the downtime alarms (pm2 process down, the `*_health_down` probe, the
+project's required alarms), worded for the team, with no node names, charts
+or netdata links; metric alarms stay with the owner. The commands live in the
+bot's own app (GistrecCloudBot), which reads `alert-feed.json` from the parent
+over the mesh. Details: [netdata role README](ansible/roles/netdata/README.md#чаты-проектов).
 
 ## Geo registry: two-sided names
 

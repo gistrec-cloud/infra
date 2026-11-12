@@ -17,6 +17,22 @@ server {
         return 200 "ok\n";
     }
 
+{% if (netdata_alert_feed_dir | default('')) | length > 0 and nginx_alert_feed_allow | length > 0 %}
+    # Данные для команд бота алертов (status-snapshot → alert-feed.json). Порт
+    # 80 открыт всем, а server_name ловит и подставленный Host, поэтому доступ
+    # решает адрес источника: только wg-IP хоста бота, остальным 403.
+    location = /alert-feed.json {
+{% for addr in nginx_alert_feed_allow %}
+        allow {{ addr }};
+{% endfor %}
+        deny all;
+        access_log off;
+        default_type application/json;
+        add_header Cache-Control "no-store" always;
+        alias {{ netdata_alert_feed_dir }}/alert-feed.json;
+    }
+
+{% endif %}
     # Anything else addressed here is scanner noise — drop it like the honeypot.
     location / {
         return 444;

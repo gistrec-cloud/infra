@@ -93,7 +93,29 @@ finland-01 или едет по wg, поднимается разом при ф�
    аларм, иначе в чат придёт только падение pm2-процесса.
 4. Прогнать роль на паренте: `ansible-playbook site.yml -l russia-03 --tags netdata`.
 5. Проверить в чате: `/alerts` — какие проверки сюда приходят, `/status` — их
-   состояние.
+   состояние (через минуту, когда status-snapshot перепишет alert-feed.json).
+
+## Данные для команд бота
+
+Команды `/id`, `/alerts`, `/status` живут не здесь, а в приложении бота
+(`gistrec-cloud-bot` на finland-01, репозиторий GistrecCloudBot): у этого токена
+уже есть свой getUpdates, второй слушатель конфликтовал бы с ним. Отсюда бот
+берёт данные: при `netdata_alert_feed_dir` status-snapshot раз в минуту пишет
+туда `alert-feed.json` (отдельный каталог: каталог страницы статуса закрыт
+авторизацией stats-vhost):
+
+- `owner_chats` — чат владельца (`netdata_telegram_chat_id`);
+- `chats` — по проекту с `alert_chats`: его чаты и проверки простоя уже
+  человеческими словами («процесс val-id-api», «ответ https://val-id.ru/healthz»)
+  со статусом и временем начала;
+- `projects` — проекты страницы статуса (вид, худший статус, outage) и их
+  алармы: имя, статус, с какого времени.
+
+Токена, нод, чартов и ссылок в файле нет. Отдаёт его nginx парента в
+`health.conf` (`location = /alert-feed.json`) только адресам из
+`nginx_alert_feed_allow` — wg-IP finland-01; запрос с любого другого адреса,
+в том числе с подставленным Host, получает 403. Бот читает
+`http://<wg-IP парента>/alert-feed.json`, тем же путём, что NETDATA_URL.
 
 Тесты скриптов: `python3 -m unittest discover -s ansible/roles/netdata/tests -v`
 (без сети; в CI — джоба `python tests`).

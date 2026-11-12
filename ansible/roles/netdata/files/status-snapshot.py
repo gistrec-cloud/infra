@@ -4,6 +4,8 @@ netdata-парента проекты, их алерты, историю апт�
 файла — полный для приватной stats.gistrec.cloud/status и урезанный для
 публичной gistrec.cloud/status (без нод, алертов и ссылок).
 
+Третий файл (feed_out, если задан) — данные для команд бота алертов, см. feed().
+
 Конфиг — /etc/status-snapshot.json (роль netdata, netdata_status_*)."""
 import json
 import os
@@ -270,7 +272,8 @@ def build(cfg):
             link_host=alarms[0]['host'], sentry=cfg['sentry'].get(name),
             restart=restart(parent, alarms),
             history={rng: history(parent, alarms, rng) for rng in RANGES},
-            alarms=[dict(name=a['name'], status=a['status'], value=a.get('value_string'),
+            # chart — для feed(): по нему чат проекта видит, какой процесс или проба
+            alarms=[dict(name=a['name'], chart=a.get('chart', ''), status=a['status'], value=a.get('value_string'),
                          info=a.get('summary') or a.get('info'), host=a['host'],
                          since=a.get('last_status_change'), stock=a.get('stock', False))
                     for a in alarms],
@@ -353,6 +356,32 @@ def public(snap):
                 projects=[strip(p) for p in snap['projects']])
 
 
+def feed(snap, routes_path):
+    """Данные для команд бота алертов (/alerts, /status в @GistrecCloudBot на finland-01).
+
+    Без секретов и без нод: чаты владельца и проектов из файла маршрутов
+    (alert_chats реестра), проекты страницы с алармами (имя, статус, с какого
+    времени) и для каждого чата проекта — его проверки простоя уже
+    человеческими словами (alarmroutes.subject), чтобы бот не повторял
+    классификацию у себя."""
+    sys.path[:0] = ['/usr/local/lib/netdata-alarms', os.path.dirname(os.path.abspath(__file__))]
+    import alarmroutes
+    cfg = alarmroutes.load(routes_path)
+    by_name = {p['name']: p for p in snap['projects']}
+    chats = []
+    for r in cfg['routes']:
+        p = by_name.get(r['name'])
+        checks = [dict(title=alarmroutes.subject(r, a['name'], a.get('chart', ''), a.get('info') or ''),
+                       status=a['status'], since=a.get('since'))
+                  for a in (p['alarms'] if p else []) if alarmroutes.is_simple(r, a['name'])]
+        chats.append(dict(project=r['name'], chats=r.get('chats', []), found=p is not None, checks=checks))
+    return dict(generated_at=snap['generated_at'], owner_chats=cfg['owner_chats'], chats=chats,
+                projects=[dict(name=p['name'], kind=p['kind'], worst=p['worst'], outage=p['outage'],
+                               alarms=[dict(name=a['name'], status=a['status'], since=a.get('since'))
+                                       for a in p['alarms']])
+                          for p in snap['projects']])
+
+
 def write(path, data):
     d = os.path.dirname(path)
     fd, tmp = tempfile.mkstemp(dir=d, prefix='.status-')
@@ -369,6 +398,8 @@ def main():
     write(cfg['private_out'], snap)
     if cfg.get('public_out'):
         write(cfg['public_out'], public(snap))
+    if cfg.get('feed_out'):
+        write(cfg['feed_out'], feed(snap, cfg['routes']))
 
 
 if __name__ == '__main__':

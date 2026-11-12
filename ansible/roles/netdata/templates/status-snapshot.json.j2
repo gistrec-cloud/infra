@@ -6,4 +6,6 @@
   'required': netdata_projects_required,
   'private_out': netdata_projects_page_dir ~ '/status.json',
   'public_out': (netdata_status_public_dir ~ '/status.json') if netdata_status_public_dir | length > 0 else '',
+  'feed_out': (netdata_alert_feed_dir ~ '/alert-feed.json') if netdata_alert_feed_dir | length > 0 else '',
+  'routes': '/etc/netdata/alarm-telegram-routes.json',
 } | to_nice_json }}

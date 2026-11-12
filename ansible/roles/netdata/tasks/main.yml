@@ -402,7 +402,7 @@
     path: "{{ item }}"
     state: directory
     mode: "0755"
-  loop: "{{ [netdata_projects_page_dir, netdata_status_public_dir] | select | list }}"
+  loop: "{{ [netdata_projects_page_dir, netdata_status_public_dir, netdata_alert_feed_dir] | select | list }}"
   when: netdata_projects_page_dir | length > 0
 
 # Публичную gistrec.cloud/status рендерит репо сайта — отсюда только её status.json.
