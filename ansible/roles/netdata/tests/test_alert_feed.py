@@ -44,6 +44,16 @@ ROUTES = {"owner_chats": ["111"], "status_json": "", "routes": [
 ]}
 
 
+class Probes(unittest.TestCase):
+    def test_quiet_alert_probe_stays_out_of_uptime_history(self):
+        probes, _ = ss.probes([
+            alarm("clear_transcript_bot_healthcheck", "CLEAR", "httpcheck_cleartranscript.request_status"),
+            alarm("clear_transcript_bot_failure_spike", "CRITICAL",
+                  "httpcheck_clear_transcript_bot_failure_spike.request_status"),
+        ])
+        self.assertEqual([p["chart"] for p in probes], ["httpcheck_cleartranscript.request_status"])
+
+
 class Feed(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
