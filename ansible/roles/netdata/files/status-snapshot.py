@@ -47,6 +47,9 @@ EXTERNAL_CHARTS = [(r'^httpcheck_askads_direct_', 'Yandex Direct API'),
                    (r'^httpcheck_askads_vk_ads_', 'VK Ads API'),
                    (r'^httpcheck_askads_webmaster_', 'Yandex Webmaster API')]
 EXTERNAL_ROWS = {row for _, row in EXTERNAL_CHARTS}
+# Пробы /alerts/<имя> ClearTranscriptBot: 503 там — сбои у части пользователей при
+# живом боте. В алертах проекта они видны, в историю доступности не идут
+QUIET_CHARTS = r'^httpcheck_clear_transcript_bot_'
 STOCK_ROW = 'VPS'  # горящие стоковые алерты netdata
 # znakhub — кодовое имя Valid (val-id.ru): файл алертов и pm2-процессы названы по нему
 ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime', 'znakhub': 'val-id',
@@ -127,6 +130,8 @@ def probes(alarms):
 
     for a in alarms:
         c = a['chart']
+        if re.match(QUIET_CHARTS, c):
+            continue
         if any(re.match(rx, c) for rx, _ in EXTERNAL_CHARTS):
             # проба чужого API идёт через askads: не ответил сам askads (no_connection) —
             # это не сбой API, а «нет данных»; рестарт askads виден в строке askads
