@@ -42,8 +42,9 @@ except ImportError:  # pragma: no cover — нет модуля, нет и ма�
 
 STATE_DIR = os.path.join(os.environ.get("NETDATA_CACHE_DIR", "/var/cache/netdata"), "alarm-telegram")
 TZ = ZoneInfo("Europe/Moscow")
-EMOJI = {"CRITICAL": "🔴", "WARNING": "⚠️", "CLEAR": "✅"}
-STATUS = {"CRITICAL": "is critical", "WARNING": "needs attention", "CLEAR": "recovered"}
+HEAD = {"CRITICAL": "🔴 Критично", "WARNING": "⚠️ Внимание", "CLEAR": "✅ Решено", "REMOVED": "⚪️ Алерт удалён"}
+# 0/1-флаги: «было 1 status» ничего не говорит.
+QUIET_UNITS = {"status", "boolean"}
 
 env = os.environ.get
 
@@ -83,37 +84,48 @@ def human(seconds):
     return f"{d} д {h} ч" if h else f"{d} д"
 
 
-def render(ep, status, now):
-    """Текст сообщения по эпизоду и текущему статусу."""
-    e = html.escape
-    title = env("name", "").replace("_", " ")
-    summary = (env("summary") or title).replace("_", " ")
-    value = ep["value"] if status == "CLEAR" else env("value_string", "")
-    link = summary
-    if value:
-        link += f" (было {value})" if status == "CLEAR" else f" = {value}"
-    lines = [
-        f"{EMOJI.get(status, '⚪️')} {e(env('host', ''))} {STATUS.get(status, status.lower())} - <b>{e(title)}</b>",
-        e(env("chart", "")),
-        f'<a href="{e(env("goto_url", ""), quote=True)}">{e(link)}</a>',
-        f"<i>{e(env('info', ''))}</i>",
-        "",
-        f"🕒 Началось: {stamp(ep['start'])} МСК",
-    ]
-    if status == "CLEAR":
-        lines += [f"✅ Решено: {stamp(now)} МСК", f"⏱ Длилось: {human(now - ep['start'])}"]
-    else:
-        if status == "WARNING" and ep["peak"] == "CRITICAL":
-            lines.append(f"⚠️ Снизилось до warning: {stamp(now)} МСК")
-        lines.append("⏳ Ещё не решено")
-    return "\n".join(lines)
+def hhmm(ts, ref):
+    """Время, с датой — только если день не тот, что у ref."""
+    d, r = datetime.fromtimestamp(ts, TZ), datetime.fromtimestamp(ref, TZ)
+    return d.strftime("%H:%M" if d.date() == r.date() else "%d.%m %H:%M")
+
+
+def shown_value(v):
+    if not v or env("units", "") in QUIET_UNITS or v.rsplit(" ", 1)[-1] in QUIET_UNITS:
+        return ""
+    return v
 
 
 def render_owner(ep, status, now):
-    text = render(ep, "CLEAR" if status == "REMOVED" else status, now)
-    if status == "REMOVED":
-        text = text.replace("✅ Решено", "⚪️ Алерт удалён", 1)
-    return text
+    """Сверху что случилось (summary + info), снизу одна строка «нода · время ·
+    ссылка», технические имена — в свёрнутой цитате."""
+    e = html.escape
+    closed = status in ("CLEAR", "REMOVED")
+    summary = (env("summary") or env("name", "")).replace("_", " ")
+    value = shown_value(ep["value"] if closed else env("value_string", ""))
+    if value:
+        summary += f" (было {value})" if closed else f" = {value}"
+    lines = [f"{HEAD.get(status, '⚪️ ' + status)} · <b>{e(summary)}</b>"]
+    if env("info"):
+        lines.append(e(env("info")))
+
+    start = ep["start"]
+    if closed:
+        span = f"{hhmm(start, now)} → {hhmm(now, start)} МСК · {human(now - start)}"
+    else:
+        span = f"с {hhmm(start, now)} МСК"
+        if status == "WARNING" and ep["peak"] == "CRITICAL":
+            span += f" · снизилось до warning в {hhmm(now, start)}"
+        span += " · ⏳ не решено"
+    foot = [e(env("host", "")), span]
+    if env("goto_url"):
+        foot.append(f'<a href="{e(env("goto_url"), quote=True)}">netdata ↗</a>')
+    lines += ["", " · ".join(p for p in foot if p)]
+
+    details = [e(x) for x in (env("name", ""), env("chart", "")) if x]
+    if details:
+        lines.append(f"<blockquote expandable>{chr(10).join(details)}</blockquote>")
+    return "\n".join(lines)
 
 
 def project_view(route):
