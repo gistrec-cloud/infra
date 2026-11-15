@@ -95,8 +95,10 @@ class ProjectChats(Base):
         # без ноды, чарта и ссылки на netdata, без «·»
         for leak in ("russia-03", "app.pm2_", "href", "·"):
             self.assertNotIn(leak, p["text"])
-        # чат владельца — прежний текст с нодой и чартом
-        self.assertIn("russia-03 is critical", fake.to(OWNER)[0][1]["text"])
+        # чат владельца — свой текст с нодой и чартом
+        owner = fake.to(OWNER)[0][1]["text"]
+        self.assertIn("russia-03 · с", owner)
+        self.assertIn("app.pm2_val-id-api_processes", owner)
 
     def test_health_probe_names_url(self):
         fake = Fake()
@@ -179,6 +181,57 @@ class ProjectChats(Base):
         fake = Fake()
         self.run_alarm(fake, "CRITICAL", 1_700_000_000, **PM2_DOWN)
         self.assertEqual(len(fake.calls), 1)
+
+
+MARKER = dict(name="clear_transcript_bot_marker_missing", alarm_id="3", host="finland-01",
+              chart="filecheck_clear_transcript_bot_remind_pending.file_/home/gistrec/x_existence_status",
+              summary="clear transcript bot marker missing", units="status",
+              info="ClearTranscriptBot: нет файла-метки remind_pending", goto_url="https://stats/x",
+              src="line=133,file=/etc/netdata/health.d/clear-transcript-bot.conf")
+T0 = 1_763_211_180  # 15.11.2025 15:53 МСК
+
+
+class OwnerText(Base):
+    def test_open_episode(self):
+        fake = Fake()
+        self.run_alarm(fake, "CRITICAL", T0, value_string="0 status", **MARKER)
+        self.assertEqual(fake.to(OWNER)[0][1]["text"], "\n".join([
+            "🔴 Критично · <b>clear transcript bot marker missing</b>",
+            "ClearTranscriptBot: нет файла-метки remind_pending",
+            "",
+            'finland-01 · с 15:53 МСК · ⏳ не решено · <a href="https://stats/x">netdata ↗</a>',
+            f"<blockquote expandable>clear_transcript_bot_marker_missing\n{MARKER['chart']}</blockquote>",
+        ]))
+
+    def test_clear_one_line_span_and_quiet_status_value(self):
+        fake = Fake()
+        self.run_alarm(fake, "CRITICAL", T0, value_string="0 status", **MARKER)
+        self.run_alarm(fake, "CLEAR", T0 + 540, **MARKER)
+        text = fake.to(OWNER)[-1][1]["text"]
+        self.assertTrue(text.startswith("✅ Решено · <b>clear transcript bot marker missing</b>\n"))
+        self.assertIn("finland-01 · 15:53 → 16:02 МСК · 9 мин", text)
+        self.assertNotIn("status)", text)
+
+    def test_value_shown_for_real_units(self):
+        fake = Fake()
+        self.run_alarm(fake, "CRITICAL", T0, value_string="95%", **dict(MARKER, units="%"))
+        self.run_alarm(fake, "CLEAR", T0 + 60, **dict(MARKER, units="%"))
+        self.assertIn("missing = 95%</b>", fake.to(OWNER)[0][1]["text"])
+        self.assertIn("missing (было 95%)</b>", fake.to(OWNER)[-1][1]["text"])
+
+    def test_date_only_across_midnight(self):
+        fake = Fake()
+        self.run_alarm(fake, "CRITICAL", T0, **MARKER)
+        self.run_alarm(fake, "REMOVED", T0 + 86_400, **MARKER)
+        text = fake.to(OWNER)[-1][1]["text"]
+        self.assertTrue(text.startswith("⚪️ Алерт удалён · "))
+        self.assertIn("15.11 15:53 → 16.11 15:53 МСК · 1 д", text)
+
+    def test_downgrade_to_warning(self):
+        fake = Fake()
+        self.run_alarm(fake, "CRITICAL", T0, **MARKER)
+        self.run_alarm(fake, "WARNING", T0 + 420, **MARKER)
+        self.assertIn("с 15:53 МСК · снизилось до warning в 16:00 · ⏳ не решено", fake.to(OWNER)[-1][1]["text"])
 
 
 class Routing(unittest.TestCase):
