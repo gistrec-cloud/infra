@@ -21,6 +21,7 @@ data "archive_file" "realm_status" {
     "pyvenv.cfg",
     "mypy.ini",
     "pyrightconfig.json",
+    "YandexInternalRootCA.crt",
   ]
 }
 
