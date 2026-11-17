@@ -97,8 +97,9 @@ class ProjectChats(Base):
             self.assertNotIn(leak, p["text"])
         # чат владельца — свой текст с нодой и чартом
         owner = fake.to(OWNER)[0][1]["text"]
-        self.assertIn("russia-03 · с", owner)
+        self.assertIn("russia-03, с", owner)
         self.assertIn("app.pm2_val-id-api_processes", owner)
+        self.assertNotIn("·", owner)
 
     def test_health_probe_names_url(self):
         fake = Fake()
@@ -196,10 +197,11 @@ class OwnerText(Base):
         fake = Fake()
         self.run_alarm(fake, "CRITICAL", T0, value_string="0 status", **MARKER)
         self.assertEqual(fake.to(OWNER)[0][1]["text"], "\n".join([
-            "🔴 Критично · <b>clear transcript bot marker missing</b>",
+            "🔴 Критично: <b>clear transcript bot marker missing</b>",
             "ClearTranscriptBot: нет файла-метки remind_pending",
             "",
-            'finland-01 · с 15:53 МСК · ⏳ не решено · <a href="https://stats/x">netdata ↗</a>',
+            "finland-01, с 15:53 МСК, ⏳ не решено",
+            '<a href="https://stats/x">netdata ↗</a>',
             f"<blockquote expandable>clear_transcript_bot_marker_missing\n{MARKER['chart']}</blockquote>",
         ]))
 
@@ -208,8 +210,8 @@ class OwnerText(Base):
         self.run_alarm(fake, "CRITICAL", T0, value_string="0 status", **MARKER)
         self.run_alarm(fake, "CLEAR", T0 + 540, **MARKER)
         text = fake.to(OWNER)[-1][1]["text"]
-        self.assertTrue(text.startswith("✅ Решено · <b>clear transcript bot marker missing</b>\n"))
-        self.assertIn("finland-01 · 15:53 → 16:02 МСК · 9 мин", text)
+        self.assertTrue(text.startswith("✅ Решено: <b>clear transcript bot marker missing</b>\n"))
+        self.assertIn("finland-01, 15:53 → 16:02 МСК (9 мин)", text)
         self.assertNotIn("status)", text)
 
     def test_value_shown_for_real_units(self):
@@ -224,14 +226,14 @@ class OwnerText(Base):
         self.run_alarm(fake, "CRITICAL", T0, **MARKER)
         self.run_alarm(fake, "REMOVED", T0 + 86_400, **MARKER)
         text = fake.to(OWNER)[-1][1]["text"]
-        self.assertTrue(text.startswith("⚪️ Алерт удалён · "))
-        self.assertIn("15.11 15:53 → 16.11 15:53 МСК · 1 д", text)
+        self.assertTrue(text.startswith("⚪️ Алерт удалён: "))
+        self.assertIn("15.11 15:53 → 16.11 15:53 МСК (1 д)", text)
 
     def test_downgrade_to_warning(self):
         fake = Fake()
         self.run_alarm(fake, "CRITICAL", T0, **MARKER)
         self.run_alarm(fake, "WARNING", T0 + 420, **MARKER)
-        self.assertIn("с 15:53 МСК · снизилось до warning в 16:00 · ⏳ не решено", fake.to(OWNER)[-1][1]["text"])
+        self.assertIn("с 15:53 МСК, снизилось до warning в 16:00, ⏳ не решено", fake.to(OWNER)[-1][1]["text"])
 
 
 HEALTH = dict(name="val_id_health_down", chart="httpcheck_val_id_health.request_status", alarm_id="9",
@@ -270,8 +272,8 @@ class Sweep(Base):
         self.assertIn("⏱ Длилось: 10 мин", p["text"])
         method, p = fake.to(OWNER)[-1]
         self.assertEqual((method, p["message_id"]), ("editMessageText", fake.sent[OWNER]))
-        self.assertTrue(p["text"].startswith("✅ Решено · <b>val id health down (было 0 ok)</b>"))
-        self.assertIn("russia-03 · 15:53 → 16:03 МСК · 10 мин", p["text"])
+        self.assertTrue(p["text"].startswith("✅ Решено: <b>val id health down (было 0 ok)</b>"))
+        self.assertIn("russia-03, 15:53 → 16:03 МСК (10 мин)", p["text"])
         self.assertIn('<a href="https://stats/v">netdata ↗</a>', p["text"])
         self.assertEqual(os.listdir(at.STATE_DIR), [".lock"])
         self.assertEqual(err.count("sweep: closed"), 2)

@@ -110,30 +110,29 @@ def shown_value(v):
 
 
 def render_owner(ep, status, now):
-    """Сверху что случилось (summary + info), снизу одна строка «нода · время ·
-    ссылка», технические имена — в свёрнутой цитате."""
+    """Сверху что случилось (summary + info), снизу строка «нода, время» и
+    ссылка, технические имена — в свёрнутой цитате."""
     e = html.escape
     closed = status in ("CLEAR", "REMOVED")
     summary = (env("summary") or env("name", "")).replace("_", " ")
     value = shown_value(ep["value"] if closed else env("value_string", ""))
     if value:
         summary += f" (было {value})" if closed else f" = {value}"
-    lines = [f"{HEAD.get(status, '⚪️ ' + status)} · <b>{e(summary)}</b>"]
+    lines = [f"{HEAD.get(status, '⚪️ ' + status)}: <b>{e(summary)}</b>"]
     if env("info"):
         lines.append(e(env("info")))
 
     start = ep["start"]
     if closed:
-        span = f"{hhmm(start, now)} → {hhmm(now, start)} МСК · {human(now - start)}"
+        span = f"{hhmm(start, now)} → {hhmm(now, start)} МСК ({human(now - start)})"
     else:
         span = f"с {hhmm(start, now)} МСК"
         if status == "WARNING" and ep["peak"] == "CRITICAL":
-            span += f" · снизилось до warning в {hhmm(now, start)}"
-        span += " · ⏳ не решено"
-    foot = [e(env("host", "")), span]
+            span += f", снизилось до warning в {hhmm(now, start)}"
+        span += ", ⏳ не решено"
+    lines += ["", ", ".join(p for p in (e(env("host", "")), span) if p)]
     if env("goto_url"):
-        foot.append(f'<a href="{e(env("goto_url"), quote=True)}">netdata ↗</a>')
-    lines += ["", " · ".join(p for p in foot if p)]
+        lines.append(f'<a href="{e(env("goto_url"), quote=True)}">netdata ↗</a>')
 
     details = [e(x) for x in (env("name", ""), env("chart", "")) if x]
     if details:
