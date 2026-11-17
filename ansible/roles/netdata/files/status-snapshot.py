@@ -23,6 +23,9 @@ API = 'http://127.0.0.1:19999'
 RANK = {'CRITICAL': 3, 'WARNING': 2, 'UNDEFINED': 1, 'UNINITIALIZED': 1, 'CLEAR': 0}
 CLS = {'CRITICAL': 'crit', 'WARNING': 'warn', 'UNDEFINED': 'nodata', 'UNINITIALIZED': 'nodata', 'CLEAR': 'ok'}
 STALE_SEC = 3600  # алерты снятых с парка нод застывают — отбрасываем
+# После рестарта парента дети отдают алармы не сразу (17.11.2026: 3 минуты
+# четыре prod-проекта стояли в «простое») — столько секунд это «нет данных».
+BOOT_GRACE = 600
 RANGES = {'24h': (86400, 48), '7d': (604800, 42)}
 DAY = 86400
 OK_FROM = 0.999  # отрезок не ниже — зелёный, как bucket() на страницах
@@ -71,6 +74,15 @@ PROBE_KIND = {'httpcheck': 'health check', 'portcheck': 'port', 'ping': 'network
 def get(path):
     with urllib.request.urlopen(API + path, timeout=20) as r:
         return json.load(r)
+
+
+def parent_uptime():
+    """Секунды с запуска netdata на паренте; None, если узнать не вышло."""
+    try:
+        d = get('/api/v1/data?chart=netdata.uptime&after=-60&points=1&format=json')
+        return d['data'][0][1] if d['data'] else None
+    except Exception:
+        return None
 
 
 def base(host, parent):
@@ -258,9 +270,14 @@ def build(cfg):
     merge_prefixes(groups)
     # prod без единого алерта иначе молча пропал бы со страницы: нода не стримит
     # дольше STALE_SEC, парент не отдал её алерты или алерты переименованы
-    for name in prod - groups.keys():
-        groups[name] = [dict(name='project_missing', chart='', status='CRITICAL', host=parent, missing=True,
-                             summary='no alarms for this project on the parent: node not streaming or alarms renamed')]
+    lost = prod - groups.keys()
+    up = parent_uptime() if lost else None
+    booting = up is not None and up < BOOT_GRACE
+    for name in lost:
+        groups[name] = [dict(name='project_missing', chart='', host=parent, missing=True,
+                             status='UNINITIALIZED' if booting else 'CRITICAL',
+                             summary='parent netdata just restarted: waiting for nodes to stream alarms' if booting else
+                             'no alarms for this project on the parent: node not streaming or alarms renamed')]
     for name, names in required.items():
         # опечатка или переименованный алерт молча отключили бы outage проекта
         missing = set(names) - {a['name'] for a in groups.get(name, [])}
