@@ -304,6 +304,13 @@
     label: "{{ item.src | default(item, true) }}"
   notify: Restart netdata
 
+- name: Remove retired health alarm files
+  ansible.builtin.file:
+    path: "/etc/netdata/health.d/{{ item | basename }}"
+    state: absent
+  loop: "{{ netdata_health_files_absent }}"
+  notify: Restart netdata
+
 # Общий модуль маршрутов в чаты проектов (alarm-telegram, status-snapshot). Ставится
 # раньше отправителя: без модуля тот работает, но про чаты проектов не знает.
 - name: Create the alarm library dir

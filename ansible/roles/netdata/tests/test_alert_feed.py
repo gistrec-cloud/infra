@@ -89,5 +89,41 @@ class Feed(unittest.TestCase):
         self.assertEqual((out["chats"], out["owner_chats"]), ([], []))
 
 
+class Projects(unittest.TestCase):
+    def src(self, name):
+        return f"line=1,file=/etc/netdata/health.d/{name}.conf"
+
+    def test_askads_deployments_are_separate_rows(self):
+        cases = [
+            ("askads_health_down", "httpcheck_askads_ru.request_status", self.src("askads_ru"), "askads-ru"),
+            ("askads_mcp_down", "httpcheck_askads_mcp_ru.request_status", self.src("askads_ru"), "askads-ru"),
+            ("askads_health_down", "httpcheck_askads_cloud.request_status", self.src("askads_cloud"), "askads-cloud"),
+            ("askads_mcp_down", "httpcheck_askads_mcp_cloud.request_status", self.src("askads_cloud"), "askads-cloud"),
+            ("pm2_app_down", "app.pm2_askads-ru_processes", self.src("pm2"), "askads-ru"),
+            ("pm2_app_down", "app.pm2_askads-cloud_processes", self.src("pm2"), "askads-cloud"),
+            ("askads_direct_api_down", "httpcheck_askads_direct_ru.request_status", self.src("askads_ru"),
+             "Yandex Direct API"),
+        ]
+        groups = {}
+        for name, chart, source, want in cases:
+            got = ss.project_of(dict(name=name, chart=chart, source=source))
+            self.assertEqual(got, want, (name, chart))
+            groups.setdefault(got, []).append(name)
+        ss.merge_prefixes(groups)
+        self.assertEqual(sorted(groups), ["Yandex Direct API", "askads-cloud", "askads-ru"])
+
+    def test_askads_alarm_files_name_one_deployment_each(self):
+        health = os.path.join(FILES, "..", "..", "..", "files", "netdata", "health.d")
+        self.assertFalse(os.path.exists(os.path.join(health, "askads.conf")))
+        for name, own, other in (("askads_ru", "_ru", "_cloud"), ("askads_cloud", "_cloud", "_ru")):
+            with open(os.path.join(health, name + ".conf")) as f:
+                jobs = [w for line in f if line.startswith("chart labels:")
+                        for w in line.split("_collect_job=", 1)[1].split()]
+            self.assertTrue(jobs)
+            for job in jobs:
+                self.assertTrue(job.endswith(own), (name, job))
+                self.assertFalse(job.endswith(other), (name, job))
+
+
 if __name__ == "__main__":
     unittest.main()
