@@ -351,19 +351,6 @@
     mode: "0755"
   when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
 
-# Фильтр |critical пропускает CLEAR, только если по алерту лежит tracking-файл
-# метода, а метод сменился с telegram на custom. Без переноса уже горящие на
-# момент деплоя алерты молча не сообщили бы о восстановлении. Разовая операция.
-- name: Carry |critical tracking files from telegram to custom
-  ansible.builtin.shell: |
-    set -e
-    src=/var/cache/netdata/alarm-notify/telegram
-    [ -d "$src" ] || exit 0
-    cp -a "$src" /var/cache/netdata/alarm-notify/custom
-  args:
-    creates: /var/cache/netdata/alarm-notify/custom
-  when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
-
 # alarm-notify.sh re-reads this file on every notification — no restart needed.
 # no_log: the rendered file carries the Telegram token and Pushover keys.
 - name: Send health alerts (Telegram + Pushover escalation)
