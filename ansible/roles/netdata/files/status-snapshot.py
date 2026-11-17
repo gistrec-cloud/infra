@@ -99,7 +99,10 @@ def project_of(a):
 
 
 def merge_prefixes(groups):
-    """trade-lab-clock, askads-cloud, dnd-crime-api-staging → к самому короткому префиксу."""
+    """trade-lab-clock, dnd-crime-api-staging → к самому короткому префиксу.
+
+    askads-ru и askads-cloud не сливаются: общего корня «askads» нет ни среди
+    файлов алертов, ни среди pm2-групп."""
     for k in sorted(groups, key=len):
         if k not in groups:
             continue

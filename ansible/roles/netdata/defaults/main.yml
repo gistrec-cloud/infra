@@ -107,6 +107,9 @@ netdata_clickhouse_jobs: []
 # files owned by an app repo (single source of truth in the app's checkout;
 # re-run the play after an app deploy that changes them).
 netdata_health_files: []
+# Имена файлов в /etc/netdata/health.d, которые надо убрать: роль старые файлы
+# сама не чистит, а переименованный файл оставил бы на хосте обе копии алертов.
+netdata_health_files_absent: []
 
 # Каталог страницы projects.html (сводка алертов по проектам) на паренте за
 # stats-vhost; пусто = страница не ставится.
