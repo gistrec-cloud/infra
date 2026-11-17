@@ -394,6 +394,28 @@
     daemon_reload: "{{ netdata_unnotified_units is changed }}"
   when: netdata_stream_destination | length == 0 and netdata_telegram_bot_token | length > 0
 
+# CLEAR после пересоздания алармов (UNINITIALIZED → CLEAR) alarm-notify не шлёт,
+# и «недоступен» висит вечно — уборка закрывает такие сообщения по API netdata.
+# Везде, где стоит отправитель: эпизоды лежат у того, кто слал.
+- name: Install the alarm-telegram sweeper
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - alarm-telegram-sweep.service
+    - alarm-telegram-sweep.timer
+  register: netdata_sweep_units
+  when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
+
+- name: Enable the alarm-telegram sweeper timer
+  ansible.builtin.systemd:
+    name: alarm-telegram-sweep.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ netdata_sweep_units is changed }}"
+  when: netdata_telegram_bot_token | length > 0 and netdata_telegram_chat_id | length > 0
+
 # Статус-страница: status-snapshot раз в минуту собирает из API парента
 # status.json (полный — для приватной страницы за fleet-auth, урезанный — для
 # публичной), страницы — статика, которую раздаёт nginx.
