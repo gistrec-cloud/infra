@@ -54,6 +54,36 @@ class Probes(unittest.TestCase):
         self.assertEqual([p["chart"] for p in probes], ["httpcheck_cleartranscript.request_status"])
 
 
+class Statuses(unittest.TestCase):
+    def test_removed_alarm_is_no_data_not_a_crash(self):
+        for status in ("REMOVED", "RAISED", ""):
+            got = ss.known_status(status)
+            self.assertEqual((got, ss.RANK[got], ss.CLS[got]), ("UNDEFINED", 1, "nodata"))
+        for status in ss.RANK:
+            self.assertEqual(ss.known_status(status), status)
+            self.assertIn(status, ss.CLS)
+
+    def test_build_survives_removed(self):
+        alarms = {"a": dict(id=1, name="val_id_health_down", chart="httpcheck_val_id_health.request_status",
+                            status="REMOVED", last_updated=2_000_000_000, last_status_change=2_000_000_000,
+                            source="line=10,file=/etc/netdata/health.d/val-id.conf", value_string="-", info="i",
+                            summary="", units="ok", recipient="botcrit")}
+
+        def get(path):
+            if path.endswith("/api/v1/info"):
+                return {"mirrored_hosts": ["russia-03"]}
+            if "/api/v1/alarms" in path:
+                return {"alarms": alarms}
+            raise OSError("no network in tests")
+
+        cfg = {"parent": "russia-03", "prod": ["val-id"], "hosts": {}, "required": {}, "sentry": {}}
+        with mock.patch.object(ss, "get", get), mock.patch.object(ss.time, "time", lambda: 2_000_000_000), \
+                mock.patch.object(ss, "restart", lambda *a: None), mock.patch.object(ss, "history", lambda *a: {}):
+            snap = ss.build(cfg)
+        val, = [p for p in snap["projects"] if p["name"] == "val-id"]
+        self.assertEqual((val["worst"], val["outage"]), ("UNDEFINED", False))
+
+
 class Feed(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

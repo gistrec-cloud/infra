@@ -227,6 +227,12 @@ def restart(parent, alarms):
     return min(ups) if ups else None
 
 
+def known_status(status):
+    """REMOVED и прочее вне RANK — «нет данных». netdata 2.12 при смене метки хоста
+    пересоздаёт алармы, и API секунды отдаёт REMOVED: 17.11.2026 снимок на этом падал."""
+    return status if status in RANK else 'UNDEFINED'
+
+
 def build(cfg):
     parent = cfg['parent']
     prod, hosts_map, required = set(cfg['prod']), cfg['hosts'], cfg.get('required', {})
@@ -242,7 +248,7 @@ def build(cfg):
         for a in alarms:
             if now - a['last_updated'] > STALE_SEC:
                 continue
-            a = dict(a, host=h)
+            a = dict(a, host=h, status=known_status(a['status']))
             p = project_of(a)
             # стоковые алерты netdata показываются, только когда горят, — в строке VPS
             if not p and RANK[a['status']] >= 2:
