@@ -18,11 +18,19 @@ alarm-notify.sh в окружении; аргументы — chat id после
 простоя (alarmroutes.is_simple), то же событие уходит и в чаты проекта: только
 CRITICAL и его закрытие, своим текстом — без ноды, чарта и ссылки на netdata
 (она за авторизацией). Эпизод у каждого чата свой. Сбой чата проекта не влияет
-на код возврата: он — про чаты владельца из argv."""
+на код возврата: он — про чаты владельца из argv.
+
+Уборка (--sweep, alarm-telegram-sweep.timer). CLEAR может не прийти вовсе:
+netdata 2.12 при смене метки хоста (_is_parent — отвалились или вернулись все
+дети) пересоздаёт алармы, эпизод кончается переходом UNINITIALIZED → CLEAR, а
+его alarm-notify.sh не шлёт (17.11.2026: «недоступен» провисело до ручной
+правки). Поэтому раз в 2 минуты открытые эпизоды сверяются с API netdata:
+аларм уже CLEAR — сообщение закрывается так же, как закрыл бы его CLEAR."""
 import fcntl
 import html
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -45,6 +53,11 @@ TZ = ZoneInfo("Europe/Moscow")
 HEAD = {"CRITICAL": "🔴 Критично", "WARNING": "⚠️ Внимание", "CLEAR": "✅ Решено", "REMOVED": "⚪️ Алерт удалён"}
 # 0/1-флаги: «было 1 status» ничего не говорит.
 QUIET_UNITS = {"status", "boolean"}
+NETDATA_API = os.environ.get("NETDATA_API", "http://127.0.0.1:19999")
+NOTIFY_CONF = "/etc/netdata/health_alarm_notify.conf"
+# Уборка ждёт дольше штатного пути (delay down + очередь alarm-notify + наши
+# повторы), иначе опоздавший CLEAR не найдёт эпизода и пришлёт второе «решено».
+SWEEP_GRACE = 180
 
 env = os.environ.get
 
@@ -171,6 +184,7 @@ def notify(chat, status, now, view=render_owner, quiet_clear=True):
                 reply_to = ep and ep["message_id"]
                 ep = {"start": ep["start"] if ep else int(env("when") or now), "peak": status}
             ep["value"] = env("value_string", "")
+            ep["goto_url"] = env("goto_url", "")  # уборке ссылку взять больше неоткуда
             if status == "CRITICAL":
                 ep["peak"] = "CRITICAL"
             text = view(ep, status, now)
@@ -220,7 +234,84 @@ def project_chats(owner):
     return route, [c for c in route.get("chats", []) if c not in owner]
 
 
+def host_alarms(host):
+    """{alarm_id: аларм} хоста, включая CLEAR. У парента — и по хостам детей."""
+    url = f"{NETDATA_API}/host/{urllib.parse.quote(host)}/api/v1/alarms?all"
+    with urllib.request.urlopen(url, timeout=15) as r:
+        return {str(a["id"]): a for a in json.load(r)["alarms"].values()}
+
+
+def conf_env():
+    """Токен из конфига уведомлений: у таймера, в отличие от alarm-notify, окружения нет."""
+    if env("TELEGRAM_BOT_TOKEN"):
+        return
+    with open(NOTIFY_CONF) as f:
+        conf = f.read()
+    for var in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_API_URL"):
+        m = re.search(rf'^{var}="([^"]+)"', conf, re.M)
+        if m:
+            os.environ[var] = m.group(1)
+
+
+def sweep(now=None):
+    """Закрыть эпизоды, чей аларм уже CLEAR. Только CLEAR: нет аларма или он не
+    вычислен — «нет данных», а не «починилось». Возвращает число незакрытых из-за сбоя."""
+    now = now or int(time.time())
+    try:
+        keys = sorted(k for k in os.listdir(STATE_DIR) if not k.startswith(".") and not k.endswith(".tmp"))
+    except FileNotFoundError:
+        return 0
+    routes = alarmroutes.load(os.environ.get("ALARM_ROUTES", alarmroutes.ROUTES))["routes"] if alarmroutes else []
+    by_host, failed = {}, 0
+    for key in keys:
+        try:
+            rest, alarm_id = key.rsplit("_", 1)
+            chat, host = rest.split("_", 1)
+            with open(os.path.join(STATE_DIR, key)) as f:
+                ep = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if host not in by_host:
+            try:
+                by_host[host] = host_alarms(host)
+            except (OSError, ValueError, KeyError) as e:
+                print(f"alarm-telegram: sweep: {host}: {e}", file=sys.stderr)
+                by_host[host] = {}
+        a = by_host[host].get(alarm_id)
+        if not a or a.get("status") != "CLEAR":
+            continue
+        when = int(a.get("last_status_change") or 0)
+        if now - max(when, int(a.get("delay_up_to_timestamp") or 0)) < SWEEP_GRACE:
+            continue
+        route = route_of(routes, a)
+        view = project_view(route) if route and chat in route.get("chats", []) else render_owner
+        os.environ.update(host=host, status="CLEAR", alarm_id=alarm_id, when=str(when), name=a.get("name") or "",
+                          chart=a.get("chart") or "", summary=a.get("summary") or "", info=a.get("info") or "",
+                          src=a.get("source") or "", units=a.get("units") or "",
+                          value_string=a.get("value_string") or "", goto_url=ep.get("goto_url") or "")
+        try:
+            notify(chat, "CLEAR", when, view=view, quiet_clear=False)
+            print(f"alarm-telegram: sweep: closed {key} ({a.get('name')})", file=sys.stderr)
+        except Exception as e:  # noqa: BLE001 — Telegram недоступен: остальное в следующий прогон
+            print(f"alarm-telegram: sweep: {key}: {e}", file=sys.stderr)
+            failed += 1
+            if isinstance(e, OSError) and not isinstance(e, urllib.error.HTTPError):
+                break
+    return failed
+
+
+def route_of(routes, a):
+    """Маршрут проекта для аларма простоя из API netdata, иначе None."""
+    if alarmroutes is None:
+        return None
+    route = alarmroutes.route_for(routes, a.get("name") or "", a.get("chart") or "", a.get("source") or "")
+    return route if route and alarmroutes.is_simple(route, a.get("name") or "") else None
+
+
 def main():
+    if sys.argv[1:] == ["--sweep"]:
+        conf_env()
+        sys.exit(1 if sweep() else 0)
     status = env("status", "")
     now = int(env("when") or time.time())
     os.makedirs(STATE_DIR, exist_ok=True)

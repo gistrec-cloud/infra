@@ -234,6 +234,104 @@ class OwnerText(Base):
         self.assertIn("с 15:53 МСК · снизилось до warning в 16:00 · ⏳ не решено", fake.to(OWNER)[-1][1]["text"])
 
 
+HEALTH = dict(name="val_id_health_down", chart="httpcheck_val_id_health.request_status", alarm_id="9",
+              host="russia-03", src="line=10,file=/etc/netdata/health.d/val-id.conf", units="ok",
+              info="Valid: https://val-id.ru/healthz не отвечает", goto_url="https://stats/v")
+
+
+class Sweep(Base):
+    """--sweep: CLEAR не пришёл (алармы пересозданы), эпизод закрывает сверка с API."""
+
+    def api_alarm(self, status="CLEAR", changed=T0 + 600, **over):
+        return {"9": {**dict(id=9, name=HEALTH["name"], chart=HEALTH["chart"], status=status, source=HEALTH["src"],
+                             info=HEALTH["info"], summary="", units="ok", value_string="1 ok",
+                             last_status_change=changed, delay_up_to_timestamp=0), **over}}
+
+    def run_sweep(self, fake, alarms, now):
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {"ALARM_ROUTES": self.routes, "TELEGRAM_BOT_TOKEN": "t"}), \
+                mock.patch.object(at, "api", fake), redirect_stderr(err), \
+                mock.patch.object(at, "host_alarms", lambda host: alarms if host == "russia-03" else {}):
+            return at.sweep(now), err.getvalue()
+
+    def open_episode(self, fake):
+        self.run_alarm(fake, "CRITICAL", T0, value_string="0 ok", **HEALTH)
+        self.assertEqual(len(os.listdir(at.STATE_DIR)), 3)  # владелец, проект, .lock
+
+    def test_clear_alarm_closes_both_chats(self):
+        fake = Fake()
+        self.open_episode(fake)
+        failed, err = self.run_sweep(fake, self.api_alarm(), T0 + 600 + at.SWEEP_GRACE)
+        self.assertEqual(failed, 0)
+        method, p = fake.to(PROJECT)[-1]
+        self.assertEqual((method, p["message_id"]), ("editMessageText", fake.sent[PROJECT]))
+        self.assertIn("<b>val-id</b> снова работает", p["text"])
+        self.assertIn("Было: не отвечает https://val-id.ru/healthz", p["text"])
+        self.assertIn("⏱ Длилось: 10 мин", p["text"])
+        method, p = fake.to(OWNER)[-1]
+        self.assertEqual((method, p["message_id"]), ("editMessageText", fake.sent[OWNER]))
+        self.assertTrue(p["text"].startswith("✅ Решено · <b>val id health down (было 0 ok)</b>"))
+        self.assertIn("russia-03 · 15:53 → 16:03 МСК · 10 мин", p["text"])
+        self.assertIn('<a href="https://stats/v">netdata ↗</a>', p["text"])
+        self.assertEqual(os.listdir(at.STATE_DIR), [".lock"])
+        self.assertEqual(err.count("sweep: closed"), 2)
+
+    def test_not_clear_or_unknown_is_left_alone(self):
+        for alarms in (self.api_alarm("CRITICAL"), self.api_alarm("WARNING"), self.api_alarm("UNINITIALIZED"),
+                       self.api_alarm("UNDEFINED"), {}):
+            fake = Fake()
+            self.open_episode(fake)
+            sent = len(fake.calls)
+            self.assertEqual(self.run_sweep(fake, alarms, T0 + 9000), (0, ""))
+            self.assertEqual(len(fake.calls), sent)
+            self.assertEqual(len(os.listdir(at.STATE_DIR)), 3)
+            for f in os.listdir(at.STATE_DIR):
+                os.remove(os.path.join(at.STATE_DIR, f))
+
+    def test_waits_for_regular_clear(self):
+        fake = Fake()
+        self.open_episode(fake)
+        sent = len(fake.calls)
+        # свежий CLEAR и CLEAR с ещё не истёкшим delay down — их закроет штатный путь
+        self.run_sweep(fake, self.api_alarm(), T0 + 600 + at.SWEEP_GRACE - 1)
+        self.run_sweep(fake, self.api_alarm(delay_up_to_timestamp=T0 + 900), T0 + 900 + at.SWEEP_GRACE - 1)
+        self.assertEqual(len(fake.calls), sent)
+        self.run_sweep(fake, self.api_alarm(delay_up_to_timestamp=T0 + 900), T0 + 900 + at.SWEEP_GRACE)
+        self.assertEqual(os.listdir(at.STATE_DIR), [".lock"])
+
+    def test_telegram_down_retries_next_run(self):
+        fake = Fake()
+        self.open_episode(fake)
+        fake.fail = {OWNER, PROJECT}
+        failed, err = self.run_sweep(fake, self.api_alarm(), T0 + 9000)
+        self.assertEqual(failed, 1, "после первого сетевого сбоя прогон прекращается")
+        self.assertEqual(len(os.listdir(at.STATE_DIR)), 3)
+        fake.fail = set()
+        self.assertEqual(self.run_sweep(fake, self.api_alarm(), T0 + 9120)[0], 0)
+        self.assertEqual(os.listdir(at.STATE_DIR), [".lock"])
+
+    def test_regular_clear_still_works_and_sweep_is_noop(self):
+        fake = Fake()
+        self.open_episode(fake)
+        self.run_alarm(fake, "CLEAR", T0 + 600, **HEALTH)
+        sent = len(fake.calls)
+        self.assertEqual(self.run_sweep(fake, self.api_alarm(), T0 + 9000), (0, ""))
+        self.assertEqual(len(fake.calls), sent)
+
+    def test_metric_alarm_closes_owner_only(self):
+        fake = Fake()
+        metric = dict(HEALTH, name="val_id_chz_auth_failing", chart="prometheus_val_id.x")
+        self.run_alarm(fake, "CRITICAL", T0, **metric)
+        alarms = self.api_alarm()
+        alarms["9"].update(name=metric["name"], chart=metric["chart"])
+        self.run_sweep(fake, alarms, T0 + 9000)
+        self.assertEqual(fake.to(PROJECT), [])
+        self.assertEqual(fake.to(OWNER)[-1][0], "editMessageText")
+
+    def test_no_state_dir(self):
+        self.assertEqual(self.run_sweep(Fake(), {}, T0), (0, ""))
+
+
 class Routing(unittest.TestCase):
     routes = ROUTES["routes"] + [{"name": "val", "chats": ["-1"], "pm2": [], "prefix": "val"}]
 

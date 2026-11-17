@@ -1,0 +1,15 @@
+[Unit]
+Description=Close Telegram alert messages whose netdata alarm is already CLEAR
+After=netdata.service
+
+[Service]
+Type=oneshot
+User=netdata
+Group=netdata
+ExecStart=/usr/local/sbin/alarm-telegram --sweep
+Nice=10
+ProtectSystem=strict
+# Эпизоды alarm-telegram лежат в /var/cache/netdata/alarm-telegram.
+ReadWritePaths=/var/cache/netdata
+PrivateTmp=true
+NoNewPrivileges=true
