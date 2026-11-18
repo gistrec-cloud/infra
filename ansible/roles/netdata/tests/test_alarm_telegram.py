@@ -111,7 +111,7 @@ class ProjectChats(Base):
     def test_metric_alarm_stays_with_owner(self):
         fake = Fake()
         self.run_alarm(fake, "CRITICAL", 1_700_000_000, name="val_id_chz_auth_failing",
-                       chart="prometheus_val_id.znakhub_chz_errors_last_hour-kind=auth", alarm_id="8",
+                       chart="prometheus_val_id.val_id_chz_errors_last_hour-kind=auth", alarm_id="8",
                        host="russia-03", src="line=25,file=/etc/netdata/health.d/val-id.conf")
         self.assertEqual(len(fake.to(OWNER)), 1)
         self.assertEqual(fake.to(PROJECT), [])
