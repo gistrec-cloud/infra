@@ -8,6 +8,7 @@ Each subdirectory is an independent root module with its own state (independent 
 | `gcore/`                  | Gcore                | Geo-routing: names delegated off Cloudflare so RF clients get an RF origin and everyone else the EU one |
 | `aws/`                    | AWS                  | Lambda functions + Function URLs, per-function IAM roles, hourly EventBridge Scheduler timer |
 | `yandex/`                 | Yandex Cloud         | `default` folder: Object Storage, IAM (service accounts + role grants), Lockbox, Cloud Function + timer trigger |
+| `confluent/`              | Confluent Cloud      | `gistrec` environment + `finland-01` Kafka cluster (Basic, GCP `europe-north1`) |
 | `hetzner/`                | Hetzner Cloud        | Existing `finland-01` cloud server |
 | `timeweb/`                | Timeweb Cloud        | `russia-03` server + its SSH key + its floating IPv4 |
 | `yandex-budget-explorer/` | Yandex Cloud         | `budget-explorer` folder: Cloud Functions + timer trigger, Lockbox secrets, SA + IAM grants |

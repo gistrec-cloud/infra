@@ -5,7 +5,7 @@
 Infrastructure as code for the gistrec-cloud fleet.
 
 - Ansible configures what lives *inside* the servers: base hardening, firewall, nginx, registry-driven apps (pm2 / static / docker / cron), self-hosted databases, monitoring.
-- Terraform manages cloud resources: DNS (Cloudflare + Porkbun, geo-routed names on Gcore), Gcore Object Storage, AWS Lambda relays, the Hetzner and Timeweb servers, and Yandex Cloud (Object Storage, Cloud Functions, IAM/Lockbox).
+- Terraform manages cloud resources: DNS (Cloudflare + Porkbun, geo-routed names on Gcore), Gcore Object Storage, AWS Lambda relays, the Hetzner and Timeweb servers, a managed Apache Kafka cluster on Confluent Cloud, and Yandex Cloud (Object Storage, Cloud Functions, IAM/Lockbox).
 
 This public repository holds only code. Live data (real inventory, IPs, tokens and state) is private and never committed. Everything here uses placeholders. Copy the `*.example` files and fill them locally; the copies are already covered by `.gitignore`.
 
@@ -48,6 +48,12 @@ Run `brew install pre-commit && make hooks` after cloning. Nothing in `.pre-comm
                         │             neighbour holds wg0…wg19), which is how the API reaches
                         └──── wg ───► kubectl and how its metrics reach the netdata parent.
                                       6443 is open on the tunnel only, closed to the internet.
+
+              ┌───────────────────┐
+              │   Apache Kafka    │   terraform/confluent — managed cluster on Confluent Cloud
+              │ (Confluent Cloud) │   (Basic, GCP europe-north1 — next door to finland-01).
+              └───────────────────┘   Clients connect over SASL_SSL; sized to stay inside the
+                                      free first eCKU (30 partitions, 20 connections).
 ```
 
 ## Layout
@@ -89,6 +95,7 @@ infra/
 ├── terraform/                    # cloud resources as code (independent root modules, one state each)
 │   ├── dns/                      # Cloudflare + Porkbun DNS records (host_ips: fleet IPs live once)
 │   ├── aws/                      # Lambda relays (openai, anthropic, telegram, github) + yandex-rating-counter
+│   ├── confluent/                # Confluent Cloud: Kafka cluster finland-01 (Basic, GCP europe-north1)
 │   ├── gcore/                    # geo-routed DNS zones (from geo.json) + Object Storage buckets
 │   ├── hetzner/                  # Hetzner Cloud server (finland-01)
 │   ├── timeweb/                  # Timeweb Cloud server (russia-03) + floating IPv4
