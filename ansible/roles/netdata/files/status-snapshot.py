@@ -36,12 +36,12 @@ WARN_FROM = 0.95  # не ниже — жёлтый, ниже — красный
 INFRA_FILES = [
     (r'^mysql$', 'MySQL'), (r'^clickhouse-down$', 'ClickHouse'),
     (r'^(backup-staleness|s3-mirror)$', 'S3 Backups'),
-    (r'^tg-bot-api$', 'Telegram Bot API'), (r'^lambda-relay$', 'AWS Relays'),
+    (r'^tg-bot-api$', 'Telegram Bot API'), (r'^lambda-relay$', 'AWS Relays'), (r'^rag$', 'RAG'),
     (r'^(ping|portcheck-down)$', 'Network'), (r'^(fleet-|disk-space-early|oom-notify|swap$)', 'VPS'),
 ]
 INFRA_CHARTS = [(r'^mysql_', 'MySQL'), (r'^clickhouse_', 'ClickHouse'),
                 (r'^x509check_', 'TLS'), (r'^portcheck_k3s_', 'k3s')]
-INFRA_ROWS = {'MySQL', 'ClickHouse', 'S3 Backups', 'Telegram Bot API', 'AWS Relays', 'k3s', 'Network', 'VPS', 'TLS'}
+INFRA_ROWS = {'MySQL', 'ClickHouse', 'S3 Backups', 'Telegram Bot API', 'AWS Relays', 'RAG', 'k3s', 'Network', 'VPS', 'TLS'}
 # Чужие API, от которых зависят проекты (пробы askads без токена) — своя группа:
 # их сбой не наш, поэтому заголовок страницы от них максимум жёлтый
 EXTERNAL_CHARTS = [(r'^httpcheck_askads_direct_', 'Yandex Direct API'),
@@ -54,9 +54,8 @@ EXTERNAL_ROWS = {row for _, row in EXTERNAL_CHARTS}
 # живом боте. В алертах проекта они видны, в историю доступности не идут
 QUIET_CHARTS = r'^httpcheck_clear_transcript_bot_'
 STOCK_ROW = 'VPS'  # горящие стоковые алерты netdata
-# znakhub — кодовое имя Valid (val-id.ru): файл алертов и pm2-процессы названы по нему
-ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime', 'znakhub': 'val-id',
-           'znakhub-api': 'val-id', 'znakhub-worker': 'val-id'}
+# embedder (pm2) — половина общего RAG-сервиса: в одну строку с пробами rag.conf
+ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime', 'embedder': 'RAG'}
 # Обязательные алерты: любой из них в CRITICAL — проект лежит целиком (outage),
 # а не частично (crit). Проекты из конфига required — своим списком имён.
 # Та же регулярка — класс «простой» для чатов проектов (alarmroutes.REQUIRED)
