@@ -1,3 +1,19 @@
+# Секреты клиентов: `terraform output -json kafka_clients` → 1Password / .env приложений.
+output "kafka_clients" {
+  description = "Kafka API keys per client service account."
+  sensitive   = true
+  value = {
+    marketdata_collector = {
+      key    = confluent_api_key.marketdata_collector.id
+      secret = confluent_api_key.marketdata_collector.secret
+    }
+    clickhouse = {
+      key    = confluent_api_key.clickhouse.id
+      secret = confluent_api_key.clickhouse.secret
+    }
+  }
+}
+
 output "finland_01" {
   description = "Kafka cluster identity and endpoints for clients."
   value = {

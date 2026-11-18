@@ -29,6 +29,24 @@ export CONFLUENT_CLOUD_API_SECRET=$(op read "op://Gistrec Cloud/confluent-cloud-
 The provider reads both variables directly — the module takes no variables, so
 there is no `terraform.tfvars`.
 
+## Topics and clients
+
+`kafka.tf` — everything inside the cluster, managed with the Kafka API key of
+the `tf-admin` service account (CloudClusterAdmin), not with the Cloud key.
+
+| Topic | Partitions | Retention | Producer | Consumer |
+|---|---:|---|---|---|
+| `marketdata.binance.trades` | 1 | 3 days | `marketdata-collector` | `clickhouse` |
+| `marketdata.kraken.trades`  | 1 | 3 days | `marketdata-collector` | `clickhouse` |
+
+The producer is [market-data-collector](https://github.com/gistrec/market-data-collector)
+on `finland-01`; ClickHouse reads both topics with its Kafka engine (consumer
+groups must start with `clickhouse`). Client keys:
+
+```bash
+terraform output -json kafka_clients
+```
+
 ## Notes
 
 - The cluster cannot change cloud or region in place — that is a destroy and
