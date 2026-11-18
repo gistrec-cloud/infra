@@ -11,14 +11,21 @@ WARNING; рестарты и переподключения эпизод не п
 годится: в нём 1000 записей, после рестарта их перетирает churn за минуты.
 
 Каждый переход сообщается один раз; отмеченным считается только после удачной
-отправки, так что сбой Telegram (ТСПУ) повторится на следующем прогоне."""
+отправки, так что сбой Telegram (ТСПУ) повторится на следующем прогоне.
+
+Пока лежит файл заглушки (scripts/mute-alerts.sh), молчим и помечаем найденное
+отмеченным: всё, что горит к концу заглушки, досылает alarm-telegram --sweep."""
 import json
 import os
 import re
 import sqlite3
+import sys
 import time
 import urllib.parse
 import urllib.request
+
+sys.path[:0] = ["/usr/local/lib/netdata-alarms", os.path.dirname(os.path.abspath(__file__))]
+import alarmroutes  # noqa: E402
 
 API = "http://127.0.0.1:19999"
 DB = "file:/var/cache/netdata/netdata-meta.db?mode=ro"
@@ -56,14 +63,14 @@ def unsent_episode(db, host, alarm_id, until=None):
     return rows[0][0], rows[0][3], rows[0][4] or 0
 
 
-def unnotified(db, now):
+def unnotified(db, now, grace=GRACE):
     for host in get("/api/v1/info")["mirrored_hosts"]:
         alarms = get(f"/host/{urllib.parse.quote(host)}/api/v1/alarms")["alarms"]
         for a in alarms.values():
             if a["status"] != "CRITICAL" or a["recipient"] == "silent" or a["silenced"]:
                 continue
             ep = unsent_episode(db, host, a["id"])
-            if ep and now - max(ep[1], ep[2]) >= GRACE:
+            if ep and now - max(ep[1], ep[2]) >= grace:
                 yield ep[0], host, a
 
 
@@ -84,14 +91,17 @@ def send(conf, text):
 def main():
     now = int(time.time())
     db = sqlite3.connect(DB, uri=True, timeout=10)
-    found = {tid: (host, a) for tid, host, a in unnotified(db, now)}
+    m = alarmroutes.mute()
+    muted = bool(m) and now < m[0] + alarmroutes.MUTE_TAIL
+    # Без запаса: аларм, загоревшийся под конец заглушки, досылка уже покажет.
+    found = {tid: (host, a) for tid, host, a in unnotified(db, now, 0 if muted else GRACE)}
     try:
         with open(STATE) as f:
             seen = set(json.load(f))
     except (OSError, ValueError):
         seen = set()
     new = {tid: v for tid, v in found.items() if tid not in seen}
-    if new:
+    if new and not muted:
         lines = [
             f"• {host}: {a['name']} = {a['value_string']}\n  {a['chart']}\n  {a['info']}"
             for host, a in new.values()

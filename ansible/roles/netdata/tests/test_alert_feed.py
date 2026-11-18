@@ -119,6 +119,30 @@ class Feed(unittest.TestCase):
         self.assertEqual((out["chats"], out["owner_chats"]), ([], []))
 
 
+class Maintenance(unittest.TestCase):
+    """Заглушка уведомлений → плашка: причина только на приватной странице."""
+
+    def snap(self, body):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "alarm-mute")
+            if body is not None:
+                with open(path, "w") as f:
+                    f.write(body)
+            with mock.patch.dict(os.environ, {"ALARM_MUTE": path}):
+                return ss.maintenance(1_700_000_000)
+
+    def test_active(self):
+        m = self.snap("1700000600\nребут finland-01\n")
+        self.assertEqual(m, {"until": 1_700_000_600, "reason": "ребут finland-01"})
+        pub = ss.public(dict(generated_at=1, summary={}, projects=[], maintenance=m))
+        self.assertEqual(pub["maintenance"], {"until": 1_700_000_600})
+
+    def test_expired_missing_or_broken(self):
+        for body in ("1699999999\nребут\n", None, "скоро\n"):
+            self.assertIsNone(self.snap(body))
+        self.assertIsNone(ss.public(dict(generated_at=1, summary={}, projects=[]))["maintenance"])
+
+
 class MissingProject(unittest.TestCase):
     """prod без алармов на паренте: простой, но не сразу после рестарта парента."""
     CFG = dict(parent="russia-03", prod=["lost"], hosts={}, sentry={})

@@ -313,7 +313,18 @@ def build(cfg):
         projects = list(ex.map(one, groups.items()))
     projects.sort(key=lambda p: (-RANK[p['worst']], p['name']))
     return dict(generated_at=int(now), parent=parent, nodes=hosts, failed=failed,
-                summary=summary(projects), projects=projects)
+                maintenance=maintenance(now), summary=summary(projects), projects=projects)
+
+
+def maintenance(now):
+    """Идущая заглушка уведомлений (scripts/mute-alerts.sh) — плашка на страницах, иначе None."""
+    sys.path[:0] = ['/usr/local/lib/netdata-alarms', os.path.dirname(os.path.abspath(__file__))]
+    try:
+        import alarmroutes
+    except ImportError:
+        return None
+    m = alarmroutes.mute()
+    return dict(until=m[0], reason=m[1]) if m and m[0] > now else None
 
 
 def summary(projects):
@@ -382,7 +393,10 @@ def public(snap):
         dot = 'outage' if p['outage'] else CLS[p['worst']] if hot else 'nodata' if all(RANK[a['status']] == 1 for a in p['alarms']) else 'ok'
         return dict(name=p['name'], kind=p['kind'], dot=dot, restart=p['restart'],
                     history={rng: hist(h, p['name']) for rng, h in p['history'].items()})
+    # причина наружу не идёт: в ней бывают имена нод
+    m = snap.get('maintenance')
     return dict(generated_at=snap['generated_at'], public=True, summary=snap['summary'],
+                maintenance=m and dict(until=m['until']),
                 projects=[strip(p) for p in snap['projects']])
 
 

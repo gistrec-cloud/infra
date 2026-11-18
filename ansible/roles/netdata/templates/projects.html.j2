@@ -65,6 +65,7 @@ button:focus-visible, .prow:focus-visible, .more:focus-visible { outline: 2px so
 .pill.outage { background: var(--crit-soft); } .pill.outage b, .pill.outage span { color: var(--outage-text); }
 .pill.zero { opacity: .4; }
 #counts .total { color: var(--text-muted-2); margin-left: 6px; }
+#maint { margin: 0; font: 400 14px var(--mono); color: var(--warn); }
 #err { margin: 0; font: 400 14px var(--mono); color: var(--crit-text); }
 .seg { display: flex; border: 1px solid var(--seg-border); border-radius: 6px; overflow: hidden; }
 .seg button { border: 0; cursor: pointer; font: 500 13px var(--mono); padding: 7px 14px; background: transparent; color: var(--text-muted); }
@@ -135,6 +136,7 @@ button:focus-visible, .prow:focus-visible, .more:focus-visible { outline: 2px so
     <div>
       <h1 id="verdict">loading…</h1>
       <div id="counts"></div>
+      <p id="maint" hidden></p>
       <p id="err" hidden></p>
     </div>
     <div class="seg" id="range">
@@ -328,6 +330,11 @@ function render() {
     : (level === 'major' ? '✕ major outage · ' : '✕ ') + [s.outage && `${s.outage} down`, s.verdict_crit && `${s.verdict_crit} critical`,
               s.verdict_warn && `${s.verdict_warn} warning`, s.external && `${s.external} external`].filter(Boolean).join(', ');
   setIcon(level);
+  // заглушка уведомлений (scripts/mute-alerts.sh): вердикт не меняет, только объясняет простой
+  const m = state.snap.maintenance;
+  $('maint').hidden = !m;
+  if (m) $('maint').textContent = `🔧 maintenance until ${new Date(m.until * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+    + (m.reason ? ` — ${m.reason}, alerts muted` : ', alerts muted');
 
   const pill = (cls, n, tag) => `<span class="pill ${cls}${n ? '' : ' zero'}"><b>${n}</b><span>${tag}</span></span>`;
   // DOWN считает проекты, не алерты: вне «of N alerts», и только когда есть
