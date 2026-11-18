@@ -119,6 +119,24 @@ class Feed(unittest.TestCase):
         self.assertEqual((out["chats"], out["owner_chats"]), ([], []))
 
 
+class Verdict(unittest.TestCase):
+    """Заголовок: warning канала красит строку Network, но в verdict_warn не идёт."""
+
+    def summary(self, name, status, kind="infra"):
+        return ss.summary([dict(name="Network", kind=kind, outage=False, worst=status,
+                                alarms=[dict(name=name, status=status, stock=False)])])
+
+    def test_link_warning_is_quiet(self):
+        for name in ("link_packet_loss", "link_latency"):
+            s = self.summary(name, "WARNING")
+            self.assertEqual((s["warn"], s["verdict_warn"]), (1, 0))
+
+    def test_critical_and_other_warnings(self):
+        s = self.summary("link_packet_loss", "CRITICAL")
+        self.assertEqual((s["crit"], s["verdict_crit"]), (1, 1))
+        self.assertEqual(self.summary("portcheck_proxy_down", "WARNING")["verdict_warn"], 1)
+
+
 class Maintenance(unittest.TestCase):
     """Заглушка уведомлений → плашка: причина только на приватной странице."""
 

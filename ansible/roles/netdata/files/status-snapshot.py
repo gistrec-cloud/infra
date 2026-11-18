@@ -60,6 +60,9 @@ ALIASES = {'vkadstool': 'vk-ads-tool', 'dnd-crime-api': 'dnd-crime', 'embedder':
 # а не частично (crit). Проекты из конфига required — своим списком имён.
 # Та же регулярка — класс «простой» для чатов проектов (alarmroutes.REQUIRED)
 REQUIRED = r'^(pm2_app_down|mysql_down|clickhouse_down)$|_health_down$|_healthcheck$'
+# WARNING этих алармов красит строку, но не заголовок: потери и задержка на
+# канале RF↔EU бывают почти каждый вечер и сами по себе ничего не ломают.
+QUIET_WARN = r'^link_'
 MAJOR_FROM = 2  # столько prod-проектов в outage — заголовок «Major outage»
 
 # Публичная подпись пробы: в именах этих джоб — ноды, а ноды наружу не отдаём
@@ -328,14 +331,14 @@ def maintenance(now):
 
 
 def summary(projects):
-    """Плашки считают все наши горящие алерты; заголовок — без warning пет-проектов и стоковых.
+    """Плашки считают все наши горящие алерты; заголовок — без warning пет-проектов, стоковых и QUIET_WARN.
     Чужие API — отдельно: external = сколько их строк не в норме; страница поднимает
     заголовок из-за них максимум до warn. outage — наши проекты, лежащие целиком
     (это проекты, а не алерты: в total - crit - warn не входит); major — их среди
     prod не меньше MAJOR_FROM."""
     ours = [p for p in projects if p['kind'] != 'external']
     hot = [(p, a) for p in ours for a in p['alarms'] if RANK[a['status']] >= 2]
-    serious = [a for p, a in hot if not (a['status'] == 'WARNING' and (a['stock'] or p['kind'] == 'pet'))]
+    serious = [a for p, a in hot if not (a['status'] == 'WARNING' and (a['stock'] or p['kind'] == 'pet' or re.search(QUIET_WARN, a['name'])))]
     return dict(total=sum(len(p['alarms']) for p in ours),
                 crit=sum(a['status'] == 'CRITICAL' for _, a in hot),
                 warn=sum(a['status'] == 'WARNING' for _, a in hot),
