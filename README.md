@@ -52,8 +52,11 @@ Run `brew install pre-commit && make hooks` after cloning. Nothing in `.pre-comm
               ┌───────────────────┐
               │   Apache Kafka    │   terraform/confluent — managed cluster on Confluent Cloud
               │ (Confluent Cloud) │   (Basic, GCP europe-north1 — next door to finland-01).
-              └───────────────────┘   Clients connect over SASL_SSL; sized to stay inside the
-                                      free first eCKU (30 partitions, 20 connections).
+              └─────────┬─────────┘   Clients connect over SASL_SSL; sized to stay inside the
+                        │             free first eCKU (30 partitions, 20 connections).
+                        │  market-data-collector (pm2, finland-01) produces Binance + Kraken
+                        └► trades to marketdata.*.trades; ClickHouse on finland-01 consumes
+                           them with its Kafka engine into marketdata.trades.
 ```
 
 ## Layout
