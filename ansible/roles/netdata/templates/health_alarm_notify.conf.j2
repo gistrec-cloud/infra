@@ -67,3 +67,10 @@ DEFAULT_RECIPIENT_PUSHOVER="disabled"
 role_recipients_pushover[{{ role }}]="{{ keys }}"
 {% endfor %}
 {% endif %}
+
+# Заглушка на время работ (scripts/mute-alerts.sh): первая строка файла — срок.
+# В конце файла, чтобы перекрыть SEND_* выше; истёкший файл снимает alarm-telegram --sweep.
+if read -r _mute_until 2>/dev/null </var/cache/netdata/alarm-mute && [ "${_mute_until:-0}" -gt "$(date +%s)" ] 2>/dev/null; then
+  SEND_CUSTOM="NO"
+  SEND_PUSHOVER="NO"
+fi

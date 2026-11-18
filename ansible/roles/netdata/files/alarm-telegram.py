@@ -25,7 +25,13 @@ netdata 2.12 при смене метки хоста (_is_parent — отвал�
 дети) пересоздаёт алармы, эпизод кончается переходом UNINITIALIZED → CLEAR, а
 его alarm-notify.sh не шлёт (17.11.2026: «недоступен» провисело до ручной
 правки). Поэтому раз в 2 минуты открытые эпизоды сверяются с API netdata:
-аларм уже CLEAR — сообщение закрывается так же, как закрыл бы его CLEAR."""
+аларм уже CLEAR — сообщение закрывается так же, как закрыл бы его CLEAR.
+
+Заглушка (scripts/mute-alerts.sh, файл alarmroutes.MUTE). Пока срок не вышел,
+health_alarm_notify.conf выключает отправку, и сюда уведомления не доходят;
+netdata при этом считает их отправленными и сама не повторит. Поэтому та же
+уборка после срока открывает эпизоды по всему, что горит без сообщения, и
+только потом снимает файл."""
 import fcntl
 import html
 import json
@@ -244,12 +250,105 @@ def conf_env():
     """Токен из конфига уведомлений: у таймера, в отличие от alarm-notify, окружения нет."""
     if env("TELEGRAM_BOT_TOKEN"):
         return
-    with open(NOTIFY_CONF) as f:
+    with open(env("NOTIFY_CONF", NOTIFY_CONF)) as f:
         conf = f.read()
     for var in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_API_URL"):
         m = re.search(rf'^{var}="([^"]+)"', conf, re.M)
         if m:
             os.environ[var] = m.group(1)
+
+
+def alarm_env(host, a, status, alarm_id, when, goto_url=None):
+    """Окружение alarm-notify.sh по аларму из API: им пользуются notify() и тексты."""
+    os.environ.update(host=host, status=status, alarm_id=alarm_id, when=str(when), name=a.get("name") or "",
+                      chart=a.get("chart") or "", summary=a.get("summary") or "", info=a.get("info") or "",
+                      src=a.get("source") or "", units=a.get("units") or "",
+                      value_string=a.get("value_string") or "", goto_url=goto_url or "")
+
+
+def recipients(conf, roles):
+    """{чат: только_critical} для ролей аларма — как их разобрал бы alarm-notify.sh."""
+    out = {}
+    for role in roles.split() or [""]:
+        m = re.search(rf'^role_recipients_custom\[{re.escape(role)}\]="([^"]*)"', conf, re.M) \
+            or re.search(r'^DEFAULT_RECIPIENT_CUSTOM="([^"]*)"', conf, re.M)
+        for item in m.group(1).split() if m else []:
+            chat, _, mod = item.partition("|")
+            if chat not in ("disabled", "silent"):
+                out[chat] = out.get(chat, True) and mod == "critical"
+    return out
+
+
+def raised(chat, host, alarm_id, status):
+    """Эпизод уже открыт и не ниже status — досылать нечего."""
+    try:
+        with open(os.path.join(STATE_DIR, f"{chat}_{host}_{alarm_id}".replace("/", "_"))) as f:
+            ep = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return status != "CRITICAL" or ep.get("peak") == "CRITICAL"
+
+
+def catch_up(now):
+    """Открыть эпизоды по алармам, горящим без сообщения. Возвращает (дослано, все_хосты_ответили):
+    первое False — Telegram недоступен, второе — чьи-то алармы прочитать не удалось."""
+    with open(env("NOTIFY_CONF", NOTIFY_CONF)) as f:
+        conf = f.read()
+    routes = alarmroutes.load(os.environ.get("ALARM_ROUTES", alarmroutes.ROUTES))["routes"]
+    with urllib.request.urlopen(f"{NETDATA_API}/api/v1/info", timeout=15) as r:
+        hosts = json.load(r)["mirrored_hosts"]
+    os.makedirs(STATE_DIR, exist_ok=True)
+    all_hosts = True
+    for host in hosts:
+        try:
+            alarms = host_alarms(host)
+        except (OSError, ValueError, KeyError) as e:
+            print(f"alarm-telegram: mute: {host}: {e}", file=sys.stderr)
+            all_hosts = False
+            continue
+        for alarm_id, a in sorted(alarms.items()):
+            status = a.get("status")
+            if status not in ("CRITICAL", "WARNING") or a.get("silenced") or a.get("recipient") == "silent":
+                continue
+            owner = [c for c, crit in recipients(conf, a.get("recipient") or "").items() if status == "CRITICAL" or not crit]
+            targets = [(c, render_owner) for c in owner]
+            route = route_of(routes, a) if status == "CRITICAL" else None
+            if route:
+                targets += [(c, project_view(route)) for c in route.get("chats", []) if c not in owner]
+            when = int(a.get("last_status_change") or now)
+            for chat, view in targets:
+                if raised(chat, host, alarm_id, status):
+                    continue
+                alarm_env(host, a, status, alarm_id, when)
+                try:
+                    notify(chat, status, now, view=view)
+                    print(f"alarm-telegram: mute: raised {a.get('name')} on {host} for {chat}", file=sys.stderr)
+                except urllib.error.HTTPError as e:  # чат удалён — остальным это не мешает
+                    print(f"alarm-telegram: mute: {chat}: {e}", file=sys.stderr)
+                except OSError as e:
+                    print(f"alarm-telegram: mute: {chat}: {e}", file=sys.stderr)
+                    return False, all_hosts
+    return True, all_hosts
+
+
+def unmute(now=None):
+    """Срок заглушки вышел — дослать и снять файл. Возвращает 1, если досылка не удалась."""
+    now = now or int(time.time())
+    m = alarmroutes.mute() if alarmroutes else None
+    if not m or m[0] > now:
+        return 0
+    try:
+        sent, all_hosts = catch_up(now)
+    except (OSError, ValueError, KeyError) as e:  # netdata ещё не поднялась
+        print(f"alarm-telegram: mute: {e}", file=sys.stderr)
+        sent, all_hosts = True, False
+    # Недосланное из-за Telegram ждёт сколько угодно: больше его никто не пришлёт.
+    # Молчащий хост — только MUTE_TAIL: снятая с парка нода держала бы файл вечно.
+    done = sent and (all_hosts or now - m[0] > alarmroutes.MUTE_TAIL)
+    # Не снимать заглушку, которую успели поставить заново.
+    if done and alarmroutes.mute() == m:
+        os.remove(alarmroutes.mute_path())
+    return 0 if sent and all_hosts else 1
 
 
 def sweep(now=None):
@@ -284,10 +383,7 @@ def sweep(now=None):
             continue
         route = route_of(routes, a)
         view = project_view(route) if route and chat in route.get("chats", []) else render_owner
-        os.environ.update(host=host, status="CLEAR", alarm_id=alarm_id, when=str(when), name=a.get("name") or "",
-                          chart=a.get("chart") or "", summary=a.get("summary") or "", info=a.get("info") or "",
-                          src=a.get("source") or "", units=a.get("units") or "",
-                          value_string=a.get("value_string") or "", goto_url=ep.get("goto_url") or "")
+        alarm_env(host, a, "CLEAR", alarm_id, when, ep.get("goto_url"))
         try:
             notify(chat, "CLEAR", when, view=view, quiet_clear=False)
             print(f"alarm-telegram: sweep: closed {key} ({a.get('name')})", file=sys.stderr)
@@ -310,7 +406,8 @@ def route_of(routes, a):
 def main():
     if sys.argv[1:] == ["--sweep"]:
         conf_env()
-        sys.exit(1 if sweep() else 0)
+        late = unmute()
+        sys.exit(1 if sweep() or late else 0)
     status = env("status", "")
     now = int(env("when") or time.time())
     os.makedirs(STATE_DIR, exist_ok=True)

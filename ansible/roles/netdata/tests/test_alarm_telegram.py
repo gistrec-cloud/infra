@@ -334,6 +334,162 @@ class Sweep(Base):
         self.assertEqual(self.run_sweep(Fake(), {}, T0), (0, ""))
 
 
+class Mute(Base):
+    """Конец заглушки: --sweep открывает эпизоды по горящему и снимает файл."""
+
+    PARENT = 'DEFAULT_RECIPIENT_CUSTOM="111|critical"\nrole_recipients_custom[disk]="111"\n'
+    CHILD = ('DEFAULT_RECIPIENT_CUSTOM="disabled"\nrole_recipients_custom[fleetcrit]="111|critical"\n'
+             'role_recipients_custom[disk]="111"\n')
+
+    def setUp(self):
+        super().setUp()
+        self.mute = os.path.join(self.tmp.name, "alarm-mute")
+        self.conf = os.path.join(self.tmp.name, "notify.conf")
+        self.write_conf(self.PARENT)
+
+    def write_conf(self, text):
+        with open(self.conf, "w") as f:
+            f.write(text)
+
+    def write_mute(self, until):
+        with open(self.mute, "w") as f:
+            f.write(f"{until}\nребут finland-01\n")
+
+    def alarm(self, status="CRITICAL", **over):
+        return {"9": {**dict(id=9, name=HEALTH["name"], chart=HEALTH["chart"], status=status, source=HEALTH["src"],
+                             info=HEALTH["info"], summary="", units="ok", value_string="0 ok", recipient="sysadmin",
+                             silenced=False, last_status_change=T0), **over}}
+
+    def run_unmute(self, fake, alarms, now, info=None, host_alarms=None):
+        err = io.StringIO()
+        envs = {"ALARM_ROUTES": self.routes, "TELEGRAM_BOT_TOKEN": "t", "ALARM_MUTE": self.mute, "NOTIFY_CONF": self.conf}
+        hosts = io.BytesIO(json.dumps({"mirrored_hosts": ["russia-03"]}).encode())
+        with mock.patch.dict(os.environ, envs), mock.patch.object(at, "api", fake), redirect_stderr(err), \
+                mock.patch.object(at.urllib.request, "urlopen", info or (lambda *a, **k: hosts)), \
+                mock.patch.object(at, "host_alarms", host_alarms or (lambda host: alarms)):
+            return at.unmute(now), err.getvalue()
+
+    def test_recipients(self):
+        self.assertEqual(at.recipients(self.PARENT, "sysadmin"), {"111": True})
+        self.assertEqual(at.recipients(self.PARENT, "disk"), {"111": False})
+        self.assertEqual(at.recipients(self.CHILD, "sysadmin"), {})
+        self.assertEqual(at.recipients(self.CHILD, "fleetcrit"), {"111": True})
+        self.assertEqual(at.recipients(self.CHILD, "sysadmin disk"), {"111": False})
+
+    def test_expired_mute_raises_owner_and_project(self):
+        fake = Fake()
+        self.write_mute(T0 + 600)
+        self.assertEqual(self.run_unmute(fake, self.alarm(), T0 + 660)[0], 0)
+        owner = fake.to(OWNER)[0][1]["text"]
+        self.assertTrue(owner.startswith("🔴 Критично: <b>val id health down"))
+        self.assertIn("russia-03, с 15:53 МСК", owner)  # настоящее начало, не конец заглушки
+        self.assertIn("<b>val-id</b> недоступен", fake.to(PROJECT)[0][1]["text"])
+        self.assertFalse(os.path.exists(self.mute))
+        # дальше эпизод закрывается обычным CLEAR
+        self.run_alarm(fake, "CLEAR", T0 + 900, **HEALTH)
+        self.assertEqual(fake.to(OWNER)[-1][0], "editMessageText")
+
+    def test_active_mute_is_left_alone(self):
+        fake = Fake()
+        self.write_mute(T0 + 600)
+        self.assertEqual(self.run_unmute(fake, self.alarm(), T0 + 599), (0, ""))
+        self.assertEqual(fake.calls, [])
+        self.assertTrue(os.path.exists(self.mute))
+
+    def test_no_mute_file(self):
+        self.assertEqual(self.run_unmute(Fake(), self.alarm(), T0), (0, ""))
+
+    def test_open_critical_episode_not_repeated(self):
+        fake = Fake()
+        self.run_alarm(fake, "CRITICAL", T0, value_string="0 ok", **HEALTH)
+        sent = len(fake.calls)
+        self.write_mute(T0 + 600)
+        self.run_unmute(fake, self.alarm(), T0 + 660)
+        self.assertEqual(len(fake.calls), sent)
+        self.assertFalse(os.path.exists(self.mute))
+
+    def test_warning_episode_escalates_by_reply(self):
+        fake = Fake()
+        self.write_conf('DEFAULT_RECIPIENT_CUSTOM="111"\n')
+        self.run_alarm(fake, "WARNING", T0, **HEALTH)
+        first = fake.sent[OWNER]
+        self.write_mute(T0 + 600)
+        self.run_unmute(fake, self.alarm(), T0 + 660)
+        method, p = fake.to(OWNER)[-1]
+        self.assertEqual(method, "sendMessage")
+        self.assertEqual(json.loads(p["reply_parameters"])["message_id"], first)
+
+    def test_warning_only_for_roles_without_critical_filter(self):
+        self.write_mute(T0 + 600)
+        fake = Fake()
+        self.run_unmute(fake, self.alarm("WARNING"), T0 + 660)
+        self.assertEqual(fake.calls, [])
+        self.write_mute(T0 + 600)
+        self.run_unmute(fake, self.alarm("WARNING", recipient="disk"), T0 + 660)
+        self.assertTrue(fake.to(OWNER)[0][1]["text"].startswith("⚠️ Внимание"))
+        self.assertEqual(fake.to(PROJECT), [])
+
+    def test_child_sends_only_its_roles(self):
+        self.write_conf(self.CHILD)
+        self.write_mute(T0 + 600)
+        fake = Fake()
+        self.run_unmute(fake, self.alarm(), T0 + 660)
+        self.assertEqual(fake.to(OWNER), [])
+        self.write_mute(T0 + 600)
+        self.run_unmute(fake, self.alarm(recipient="fleetcrit"), T0 + 660)
+        self.assertEqual(len(fake.to(OWNER)), 1)
+
+    def test_silent_and_clear_alarms_skipped(self):
+        fake = Fake()
+        for a in (self.alarm(recipient="silent"), self.alarm(silenced=True), self.alarm("CLEAR"), self.alarm("UNINITIALIZED")):
+            self.write_mute(T0 + 600)
+            self.run_unmute(fake, a, T0 + 660)
+        self.assertEqual(fake.to(OWNER), [])
+
+    def test_telegram_down_keeps_file_until_sent(self):
+        fake = Fake(fail={OWNER, PROJECT})
+        self.write_mute(T0 + 600)
+        code, err = self.run_unmute(fake, self.alarm(), T0 + 660)
+        self.assertEqual(code, 1)
+        self.assertIn("telegram down", err)
+        # и после MUTE_TAIL: кроме досылки, эти алармы никто не пришлёт
+        self.assertEqual(self.run_unmute(fake, self.alarm(), T0 + 700 + alarmroutes.MUTE_TAIL)[0], 1)
+        self.assertTrue(os.path.exists(self.mute))
+        fake.fail = set()
+        self.assertEqual(self.run_unmute(fake, self.alarm(), T0 + 900 + alarmroutes.MUTE_TAIL)[0], 0)
+        self.assertEqual(len(fake.to(OWNER)), 1)
+        self.assertFalse(os.path.exists(self.mute))
+
+    def test_silent_host_is_retried_until_tail(self):
+        def broken(host):
+            raise OSError("timed out")
+        fake = Fake()
+        self.write_mute(T0 + 600)
+        self.assertEqual(self.run_unmute(fake, {}, T0 + 660, host_alarms=broken)[0], 1)
+        self.assertTrue(os.path.exists(self.mute), "хост не прочитан — досылка не закончена")
+        self.assertEqual(self.run_unmute(fake, self.alarm(), T0 + 780)[0], 0)
+        self.assertEqual(len(fake.to(OWNER)), 1)
+        self.assertFalse(os.path.exists(self.mute))
+        # снятая с парка нода не держит файл вечно
+        self.write_mute(T0 + 600)
+        self.run_unmute(fake, {}, T0 + 601 + alarmroutes.MUTE_TAIL, host_alarms=broken)
+        self.assertFalse(os.path.exists(self.mute))
+
+    def test_netdata_down_gives_up_after_tail(self):
+        def down(*a, **k):
+            raise OSError("connection refused")
+        self.write_mute(T0 + 600)
+        self.assertEqual(self.run_unmute(Fake(), {}, T0 + 660, info=down)[0], 1)
+        self.assertTrue(os.path.exists(self.mute))
+        self.run_unmute(Fake(), {}, T0 + 601 + alarmroutes.MUTE_TAIL, info=down)
+        self.assertFalse(os.path.exists(self.mute), "заглушка не должна висеть вечно")
+
+    def test_broken_file_is_no_mute(self):
+        with open(self.mute, "w") as f:
+            f.write("завтра\n")
+        self.assertEqual(self.run_unmute(Fake(), self.alarm(), T0), (0, ""))
+
+
 class Routing(unittest.TestCase):
     routes = ROUTES["routes"] + [{"name": "val", "chats": ["-1"], "pm2": [], "prefix": "val"}]
 

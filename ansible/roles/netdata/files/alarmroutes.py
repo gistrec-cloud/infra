@@ -10,10 +10,15 @@
 required проекта. Метрические алармы остаются в чате владельца."""
 import ipaddress
 import json
+import os
 import re
 import urllib.parse
 
 ROUTES = "/etc/netdata/alarm-telegram-routes.json"
+# Заглушка уведомлений: scripts/mute-alerts.sh кладёт сюда срок окончания (unix) и причину.
+MUTE = "/var/cache/netdata/alarm-mute"
+# Столько после срока файл ещё ждёт досылки (alarm-telegram --sweep); дальше снимается как есть.
+MUTE_TAIL = 1800
 # Держать в синхроне с REQUIRED в status-snapshot.py (сверяет тест).
 REQUIRED = r"^(pm2_app_down|mysql_down|clickhouse_down)$|_health_down$|_healthcheck$"
 PM2_CHART = re.compile(r"^app\.pm2_(.+)_(processes|mem_usage)$")
@@ -37,6 +42,21 @@ def load(path=ROUTES):
     cfg.setdefault("owner_chats", [])
     cfg.setdefault("status_json", "")
     return cfg
+
+
+def mute_path():
+    return os.environ.get("ALARM_MUTE", MUTE)
+
+
+def mute():
+    """(срок, причина) заглушки или None. Срок может быть уже в прошлом: файл
+    лежит до досылки. Битый файл — нет заглушки."""
+    try:
+        with open(mute_path()) as f:
+            lines = f.read().splitlines()
+        return int(lines[0]), lines[1] if len(lines) > 1 else ""
+    except (OSError, ValueError, IndexError):
+        return None
 
 
 def _key_match(key, cand):

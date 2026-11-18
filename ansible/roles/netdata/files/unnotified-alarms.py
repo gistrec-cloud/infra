@@ -11,14 +11,23 @@ WARNING; рестарты и переподключения эпизод не п
 годится: в нём 1000 записей, после рестарта их перетирает churn за минуты.
 
 Каждый переход сообщается один раз; отмеченным считается только после удачной
-отправки, так что сбой Telegram (ТСПУ) повторится на следующем прогоне."""
+отправки, так что сбой Telegram (ТСПУ) повторится на следующем прогоне.
+
+Пока лежит файл заглушки (scripts/mute-alerts.sh), молчим и помечаем найденное
+отмеченным: всё, что горит к концу заглушки, досылает alarm-telegram --sweep.
+Его досылку netdata-meta.db не видит, поэтому аларм с открытым эпизодом
+alarm-telegram тоже считается сообщённым."""
 import json
 import os
 import re
 import sqlite3
+import sys
 import time
 import urllib.parse
 import urllib.request
+
+sys.path[:0] = ["/usr/local/lib/netdata-alarms", os.path.dirname(os.path.abspath(__file__))]
+import alarmroutes  # noqa: E402
 
 API = "http://127.0.0.1:19999"
 DB = "file:/var/cache/netdata/netdata-meta.db?mode=ro"
@@ -27,6 +36,7 @@ STATE = os.path.join(os.environ.get("STATE_DIRECTORY", "/var/lib/unnotified-alar
 CLEAR, WARNING, CRITICAL = 1, 3, 4
 # Запас поверх delay up: alarm-notify стартует не мгновенно.
 GRACE = 120
+EPISODES = "/var/cache/netdata/alarm-telegram"
 
 
 def get(path):
@@ -56,20 +66,33 @@ def unsent_episode(db, host, alarm_id, until=None):
     return rows[0][0], rows[0][3], rows[0][4] or 0
 
 
-def unnotified(db, now):
+def unnotified(db, now, grace=GRACE):
     for host in get("/api/v1/info")["mirrored_hosts"]:
         alarms = get(f"/host/{urllib.parse.quote(host)}/api/v1/alarms")["alarms"]
         for a in alarms.values():
             if a["status"] != "CRITICAL" or a["recipient"] == "silent" or a["silenced"]:
                 continue
             ep = unsent_episode(db, host, a["id"])
-            if ep and now - max(ep[1], ep[2]) >= GRACE:
+            if ep and now - max(ep[1], ep[2]) >= grace:
                 yield ep[0], host, a
+
+
+def owner_chat(conf):
+    return re.search(r'^DEFAULT_RECIPIENT_CUSTOM="([^"|]+)', conf, re.M).group(1)
+
+
+def shown(chat, host, a):
+    """У владельца уже открыт CRITICAL-эпизод alarm-telegram по этому аларму."""
+    try:
+        with open(os.path.join(EPISODES, f"{chat}_{host}_{a['id']}".replace("/", "_"))) as f:
+            return json.load(f).get("peak") == "CRITICAL"
+    except (OSError, ValueError):
+        return False
 
 
 def send(conf, text):
     token = re.search(r'^TELEGRAM_BOT_TOKEN="([^"]+)"', conf, re.M).group(1)
-    chat = re.search(r'^DEFAULT_RECIPIENT_CUSTOM="([^"|]+)', conf, re.M).group(1)
+    chat = owner_chat(conf)
     data = urllib.parse.urlencode({"chat_id": chat, "text": text}).encode()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     for attempt in range(3):
@@ -84,13 +107,21 @@ def send(conf, text):
 def main():
     now = int(time.time())
     db = sqlite3.connect(DB, uri=True, timeout=10)
-    found = {tid: (host, a) for tid, host, a in unnotified(db, now)}
+    m = alarmroutes.mute()
+    muted = bool(m) and now < m[0] + alarmroutes.MUTE_TAIL
+    # Без запаса: аларм, загоревшийся под конец заглушки, досылка уже покажет.
+    found = {tid: (host, a) for tid, host, a in unnotified(db, now, 0 if muted else GRACE)}
     try:
         with open(STATE) as f:
             seen = set(json.load(f))
     except (OSError, ValueError):
         seen = set()
+    with open(NOTIFY_CONF) as f:
+        conf = f.read()
+    chat = owner_chat(conf)
     new = {tid: v for tid, v in found.items() if tid not in seen}
+    quiet = set(new) if muted else {tid for tid, (host, a) in new.items() if shown(chat, host, a)}
+    new = {tid: v for tid, v in new.items() if tid not in quiet}
     if new:
         lines = [
             f"• {host}: {a['name']} = {a['value_string']}\n  {a['chart']}\n  {a['info']}"
@@ -100,14 +131,12 @@ def main():
             "🔴 CRITICAL без уведомления — алерт загорелся при старте netdata "
             "или переподключении хоста, обычное сообщение не ушло:\n\n" + "\n\n".join(lines)
         )
-        with open(NOTIFY_CONF) as f:
-            conf = f.read()
         if not send(conf, text):
             raise SystemExit("telegram send failed")
     # Храним только ещё активные: позеленевший и снова «родившийся» алерт —
     # новый переход с новым transition_id.
     with open(STATE + ".tmp", "w") as f:
-        json.dump(sorted((seen & set(found)) | set(new)), f)
+        json.dump(sorted((seen & set(found)) | set(new) | quiet), f)
     os.replace(STATE + ".tmp", STATE)
 
 
