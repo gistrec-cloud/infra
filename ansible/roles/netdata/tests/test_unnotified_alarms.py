@@ -14,7 +14,7 @@ spec = importlib.util.spec_from_file_location("unnotified_alarms", os.path.join(
 ua = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ua)
 
-ALARM = dict(name="x_down", value_string="0", chart="c", info="i")
+ALARM = dict(id=7, name="x_down", value_string="0", chart="c", info="i")
 
 
 class Mute(unittest.TestCase):
@@ -23,7 +23,10 @@ class Mute(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.mute = os.path.join(self.tmp.name, "alarm-mute")
         self.conf = os.path.join(self.tmp.name, "conf")
-        open(self.conf, "w").close()
+        with open(self.conf, "w") as f:
+            f.write('DEFAULT_RECIPIENT_CUSTOM="111|critical"\n')
+        ua.EPISODES = os.path.join(self.tmp.name, "episodes")
+        os.mkdir(ua.EPISODES)
         ua.STATE = os.path.join(self.tmp.name, "seen.json")
         ua.NOTIFY_CONF = self.conf
 
@@ -55,6 +58,17 @@ class Mute(unittest.TestCase):
             self.assertEqual((sent, grace, seen), ([], 0, ["T1"]))
         os.remove(self.mute)
         self.assertEqual(self.run_main([("T1", "russia-03", ALARM)])[0], [], "после заглушки не повторяется")
+
+    def test_open_episode_counts_as_notified(self):
+        """Досылку после заглушки делает alarm-telegram: второй раз не сообщаем."""
+        path = os.path.join(ua.EPISODES, "111_russia-03_7")
+        with open(path, "w") as f:
+            json.dump({"peak": "CRITICAL", "message_id": 1}, f)
+        sent, _, seen = self.run_main([("T1", "russia-03", ALARM)])
+        self.assertEqual((sent, seen), ([], ["T1"]))
+        with open(path, "w") as f:
+            json.dump({"peak": "WARNING", "message_id": 1}, f)
+        self.assertEqual(len(self.run_main([("T2", "russia-03", ALARM)])[0]), 1)
 
     def test_forgotten_file_stops_muting(self):
         self.write_mute(time.time() - ua.alarmroutes.MUTE_TAIL - 1)

@@ -290,19 +290,21 @@ def raised(chat, host, alarm_id, status):
 
 
 def catch_up(now):
-    """Открыть эпизоды по алармам, горящим без сообщения. False — Telegram недоступен, повторить."""
+    """Открыть эпизоды по алармам, горящим без сообщения. Возвращает (дослано, все_хосты_ответили):
+    первое False — Telegram недоступен, второе — чьи-то алармы прочитать не удалось."""
     with open(env("NOTIFY_CONF", NOTIFY_CONF)) as f:
         conf = f.read()
     routes = alarmroutes.load(os.environ.get("ALARM_ROUTES", alarmroutes.ROUTES))["routes"]
     with urllib.request.urlopen(f"{NETDATA_API}/api/v1/info", timeout=15) as r:
         hosts = json.load(r)["mirrored_hosts"]
     os.makedirs(STATE_DIR, exist_ok=True)
+    all_hosts = True
     for host in hosts:
         try:
             alarms = host_alarms(host)
         except (OSError, ValueError, KeyError) as e:
-            # Хост не стримит: вернётся — алармы родятся заново, их дошлёт unnotified-alarms.
             print(f"alarm-telegram: mute: {host}: {e}", file=sys.stderr)
+            all_hosts = False
             continue
         for alarm_id, a in sorted(alarms.items()):
             status = a.get("status")
@@ -325,8 +327,8 @@ def catch_up(now):
                     print(f"alarm-telegram: mute: {chat}: {e}", file=sys.stderr)
                 except OSError as e:
                     print(f"alarm-telegram: mute: {chat}: {e}", file=sys.stderr)
-                    return False
-    return True
+                    return False, all_hosts
+    return True, all_hosts
 
 
 def unmute(now=None):
@@ -336,14 +338,17 @@ def unmute(now=None):
     if not m or m[0] > now:
         return 0
     try:
-        done = catch_up(now)
+        sent, all_hosts = catch_up(now)
     except (OSError, ValueError, KeyError) as e:  # netdata ещё не поднялась
         print(f"alarm-telegram: mute: {e}", file=sys.stderr)
-        done = False
+        sent, all_hosts = True, False
+    # Недосланное из-за Telegram ждёт сколько угодно: больше его никто не пришлёт.
+    # Молчащий хост — только MUTE_TAIL: снятая с парка нода держала бы файл вечно.
+    done = sent and (all_hosts or now - m[0] > alarmroutes.MUTE_TAIL)
     # Не снимать заглушку, которую успели поставить заново.
-    if (done or now - m[0] > alarmroutes.MUTE_TAIL) and alarmroutes.mute() == m:
+    if done and alarmroutes.mute() == m:
         os.remove(alarmroutes.mute_path())
-    return 0 if done else 1
+    return 0 if sent and all_hosts else 1
 
 
 def sweep(now=None):

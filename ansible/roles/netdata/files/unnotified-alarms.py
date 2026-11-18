@@ -14,7 +14,9 @@ WARNING; рестарты и переподключения эпизод не п
 отправки, так что сбой Telegram (ТСПУ) повторится на следующем прогоне.
 
 Пока лежит файл заглушки (scripts/mute-alerts.sh), молчим и помечаем найденное
-отмеченным: всё, что горит к концу заглушки, досылает alarm-telegram --sweep."""
+отмеченным: всё, что горит к концу заглушки, досылает alarm-telegram --sweep.
+Его досылку netdata-meta.db не видит, поэтому аларм с открытым эпизодом
+alarm-telegram тоже считается сообщённым."""
 import json
 import os
 import re
@@ -34,6 +36,7 @@ STATE = os.path.join(os.environ.get("STATE_DIRECTORY", "/var/lib/unnotified-alar
 CLEAR, WARNING, CRITICAL = 1, 3, 4
 # Запас поверх delay up: alarm-notify стартует не мгновенно.
 GRACE = 120
+EPISODES = "/var/cache/netdata/alarm-telegram"
 
 
 def get(path):
@@ -74,9 +77,22 @@ def unnotified(db, now, grace=GRACE):
                 yield ep[0], host, a
 
 
+def owner_chat(conf):
+    return re.search(r'^DEFAULT_RECIPIENT_CUSTOM="([^"|]+)', conf, re.M).group(1)
+
+
+def shown(chat, host, a):
+    """У владельца уже открыт CRITICAL-эпизод alarm-telegram по этому аларму."""
+    try:
+        with open(os.path.join(EPISODES, f"{chat}_{host}_{a['id']}".replace("/", "_"))) as f:
+            return json.load(f).get("peak") == "CRITICAL"
+    except (OSError, ValueError):
+        return False
+
+
 def send(conf, text):
     token = re.search(r'^TELEGRAM_BOT_TOKEN="([^"]+)"', conf, re.M).group(1)
-    chat = re.search(r'^DEFAULT_RECIPIENT_CUSTOM="([^"|]+)', conf, re.M).group(1)
+    chat = owner_chat(conf)
     data = urllib.parse.urlencode({"chat_id": chat, "text": text}).encode()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     for attempt in range(3):
@@ -100,8 +116,13 @@ def main():
             seen = set(json.load(f))
     except (OSError, ValueError):
         seen = set()
+    with open(NOTIFY_CONF) as f:
+        conf = f.read()
+    chat = owner_chat(conf)
     new = {tid: v for tid, v in found.items() if tid not in seen}
-    if new and not muted:
+    quiet = set(new) if muted else {tid for tid, (host, a) in new.items() if shown(chat, host, a)}
+    new = {tid: v for tid, v in new.items() if tid not in quiet}
+    if new:
         lines = [
             f"• {host}: {a['name']} = {a['value_string']}\n  {a['chart']}\n  {a['info']}"
             for host, a in new.values()
@@ -110,14 +131,12 @@ def main():
             "🔴 CRITICAL без уведомления — алерт загорелся при старте netdata "
             "или переподключении хоста, обычное сообщение не ушло:\n\n" + "\n\n".join(lines)
         )
-        with open(NOTIFY_CONF) as f:
-            conf = f.read()
         if not send(conf, text):
             raise SystemExit("telegram send failed")
     # Храним только ещё активные: позеленевший и снова «родившийся» алерт —
     # новый переход с новым transition_id.
     with open(STATE + ".tmp", "w") as f:
-        json.dump(sorted((seen & set(found)) | set(new)), f)
+        json.dump(sorted((seen & set(found)) | set(new) | quiet), f)
     os.replace(STATE + ".tmp", STATE)
 
 

@@ -360,13 +360,13 @@ class Mute(Base):
                              info=HEALTH["info"], summary="", units="ok", value_string="0 ok", recipient="sysadmin",
                              silenced=False, last_status_change=T0), **over}}
 
-    def run_unmute(self, fake, alarms, now, info=None):
+    def run_unmute(self, fake, alarms, now, info=None, host_alarms=None):
         err = io.StringIO()
         envs = {"ALARM_ROUTES": self.routes, "TELEGRAM_BOT_TOKEN": "t", "ALARM_MUTE": self.mute, "NOTIFY_CONF": self.conf}
         hosts = io.BytesIO(json.dumps({"mirrored_hosts": ["russia-03"]}).encode())
         with mock.patch.dict(os.environ, envs), mock.patch.object(at, "api", fake), redirect_stderr(err), \
                 mock.patch.object(at.urllib.request, "urlopen", info or (lambda *a, **k: hosts)), \
-                mock.patch.object(at, "host_alarms", lambda host: alarms):
+                mock.patch.object(at, "host_alarms", host_alarms or (lambda host: alarms)):
             return at.unmute(now), err.getvalue()
 
     def test_recipients(self):
@@ -446,15 +446,33 @@ class Mute(Base):
             self.run_unmute(fake, a, T0 + 660)
         self.assertEqual(fake.to(OWNER), [])
 
-    def test_telegram_down_keeps_file_until_tail(self):
+    def test_telegram_down_keeps_file_until_sent(self):
         fake = Fake(fail={OWNER, PROJECT})
         self.write_mute(T0 + 600)
         code, err = self.run_unmute(fake, self.alarm(), T0 + 660)
         self.assertEqual(code, 1)
         self.assertIn("telegram down", err)
+        # и после MUTE_TAIL: кроме досылки, эти алармы никто не пришлёт
+        self.assertEqual(self.run_unmute(fake, self.alarm(), T0 + 700 + alarmroutes.MUTE_TAIL)[0], 1)
         self.assertTrue(os.path.exists(self.mute))
         fake.fail = set()
+        self.assertEqual(self.run_unmute(fake, self.alarm(), T0 + 900 + alarmroutes.MUTE_TAIL)[0], 0)
+        self.assertEqual(len(fake.to(OWNER)), 1)
+        self.assertFalse(os.path.exists(self.mute))
+
+    def test_silent_host_is_retried_until_tail(self):
+        def broken(host):
+            raise OSError("timed out")
+        fake = Fake()
+        self.write_mute(T0 + 600)
+        self.assertEqual(self.run_unmute(fake, {}, T0 + 660, host_alarms=broken)[0], 1)
+        self.assertTrue(os.path.exists(self.mute), "хост не прочитан — досылка не закончена")
         self.assertEqual(self.run_unmute(fake, self.alarm(), T0 + 780)[0], 0)
+        self.assertEqual(len(fake.to(OWNER)), 1)
+        self.assertFalse(os.path.exists(self.mute))
+        # снятая с парка нода не держит файл вечно
+        self.write_mute(T0 + 600)
+        self.run_unmute(fake, {}, T0 + 601 + alarmroutes.MUTE_TAIL, host_alarms=broken)
         self.assertFalse(os.path.exists(self.mute))
 
     def test_netdata_down_gives_up_after_tail(self):
