@@ -131,6 +131,18 @@ mysql_replication_source_port: 3306
 #   mysql_users:
 #     - { name: app,    password: "{{ vault_... }}", database: app, privileges: "ALL" }
 #     - { name: app-ro, password: "{{ vault_... }}", database: app, privileges: "SELECT" }
+#
+# Optional per-user key `grants`: a list of "<privileges> ON <object>" strings that
+# REPLACES the database-wide grant — for a -ro user that must not see secret
+# columns (table-level SELECT + column-level SELECT on the sensitive tables).
+# The tables must already exist, and GRANT is additive: removing a line here does
+# not REVOKE on the server.
+#     - name: app-ro
+#       password: "{{ vault_... }}"
+#       database: app
+#       grants:
+#         - "SELECT ON `app`.`orders`"
+#         - "SELECT (id, created_at) ON `app`.`users`"
 mysql_databases: []
 mysql_users: []
 

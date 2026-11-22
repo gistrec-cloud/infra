@@ -13,6 +13,14 @@
             <max_memory_usage>200000000</max_memory_usage>
             <max_threads>1</max_threads>
         </monitoring>
+        <!-- BI-чтение (DataLens): readonly=2 — только SELECT, но клиент может
+             менять настройки запроса (DataLens шлёт их в каждом запросе). -->
+        <analytics>
+            <readonly>2</readonly>
+            <max_memory_usage>1000000000</max_memory_usage>
+            <max_threads>2</max_threads>
+            <max_execution_time>60</max_execution_time>
+        </analytics>
     </profiles>
 
     <users>
@@ -30,9 +38,18 @@
             <profile>{{ user.profile | default('default') }}</profile>
             <quota>default</quota>
             <networks><ip>{{ user.networks | default('::/0') }}</ip></networks>
+{% if user.grants is defined %}
+            <!-- Точечные права вместо доступа ко всей базе. -->
+            <grants>
+{% for grant in user.grants %}
+                <query>{{ grant }}</query>
+{% endfor %}
+            </grants>
+{% else %}
             <allow_databases>
                 <database>{{ user.database }}</database>
             </allow_databases>
+{% endif %}
         </{{ user.name }}>
 {% endfor %}
     </users>
