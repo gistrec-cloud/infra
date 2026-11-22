@@ -65,7 +65,9 @@ clickhouse_tls_dir: "{{ clickhouse_base_dir }}/tls"
 #   clickhouse_databases: [vk-ads-tool]
 #   clickhouse_users:
 #     - { name: vk-ads-tool, password: "{{ vault_clickhouse_vk_ads_tool }}", database: vk-ads-tool }
-# Optional per-user keys: profile (default: "default"), networks (default: "::/0").
+# Optional per-user keys: profile (default: "default"; "monitoring" and "analytics"
+# are readonly=2), networks (default: "::/0"), grants (list of GRANT queries that
+# replaces allow_databases — e.g. SELECT on two tables for a BI user).
 clickhouse_databases: []
 clickhouse_users: []
 
