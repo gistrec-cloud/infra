@@ -180,14 +180,15 @@ class MissingProject(unittest.TestCase):
     """prod без алармов на паренте: простой, но не сразу после рестарта парента."""
     CFG = dict(parent="russia-03", prod=["lost"], hosts={}, sentry={})
 
-    def build(self, uptime):
+    def build(self, uptime, child_uptime=86_400):
         def get(path):
             if path == "/api/v1/info":
-                return {"mirrored_hosts": ["russia-03"]}
+                return {"mirrored_hosts": ["russia-03", "finland-01"]}
             if "netdata.uptime" in path:
-                if uptime is None:
+                up = child_uptime if path.startswith("/host/finland-01/") else uptime
+                if up is None:
                     raise OSError("no chart")
-                return {"data": [[1, uptime]]}
+                return {"data": [[1, up]]}
             return {"alarms": {}}
         with mock.patch.object(ss, "get", get):
             snap = ss.build(self.CFG)
@@ -205,8 +206,13 @@ class MissingProject(unittest.TestCase):
         self.assertIn("just restarted", p["alarms"][0]["info"])
 
     def test_unknown_uptime_keeps_outage(self):
-        p, _, dot = self.build(None)
+        p, _, dot = self.build(None, None)
         self.assertEqual((p["worst"], p["outage"], dot), ("CRITICAL", True, "outage"))
+
+    def test_no_data_right_after_child_restart(self):
+        p, summary, dot = self.build(86_400, child_uptime=120)
+        self.assertEqual((p["worst"], p["outage"], dot), ("UNINITIALIZED", False, "nodata"))
+        self.assertEqual((summary["outage"], summary["major"]), (0, False))
 
 
 class Projects(unittest.TestCase):

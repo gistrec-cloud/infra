@@ -25,6 +25,7 @@ CLS = {'CRITICAL': 'crit', 'WARNING': 'warn', 'UNDEFINED': 'nodata', 'UNINITIALI
 STALE_SEC = 3600  # алерты снятых с парка нод застывают — отбрасываем
 # После рестарта парента дети отдают алармы не сразу (17.11.2026: 3 минуты
 # четыре prod-проекта стояли в «простое») — столько секунд это «нет данных».
+# То же после рестарта netdata на ребёнке.
 BOOT_GRACE = 600
 RANGES = {'24h': (86400, 48), '7d': (604800, 42)}
 DAY = 86400
@@ -78,10 +79,10 @@ def get(path):
         return json.load(r)
 
 
-def parent_uptime():
-    """Секунды с запуска netdata на паренте; None, если узнать не вышло."""
+def uptime(host, parent):
+    """Секунды с запуска netdata на ноде (у ребёнка — стримнутый чарт); None, если узнать не вышло."""
     try:
-        d = get('/api/v1/data?chart=netdata.uptime&after=-60&points=1&format=json')
+        d = get(f'{base(host, parent)}/api/v1/data?chart=netdata.uptime&after=-60&points=1&format=json')
         return d['data'][0][1] if d['data'] else None
     except Exception:
         return None
@@ -277,12 +278,14 @@ def build(cfg):
     # prod без единого алерта иначе молча пропал бы со страницы: нода не стримит
     # дольше STALE_SEC, парент не отдал её алерты или алерты переименованы
     lost = prod - groups.keys()
-    up = parent_uptime() if lost else None
-    booting = up is not None and up < BOOT_GRACE
+    # чья нода — у пропавшего проекта не узнать, поэтому ждём при рестарте любой:
+    # 23.11.2026 рестарт netdata на finland-01 на 3 минуты уронил пять её проектов
+    booting = bool(lost) and any((up := uptime(h, parent)) is not None and up < BOOT_GRACE
+                                 for h in [parent] + [h for h in hosts if h != parent and h not in failed])
     for name in lost:
         groups[name] = [dict(name='project_missing', chart='', host=parent, missing=True,
                              status='UNINITIALIZED' if booting else 'CRITICAL',
-                             summary='parent netdata just restarted: waiting for nodes to stream alarms' if booting else
+                             summary='netdata just restarted: waiting for nodes to stream alarms' if booting else
                              'no alarms for this project on the parent: node not streaming or alarms renamed')]
     for name, names in required.items():
         # опечатка или переименованный алерт молча отключили бы outage проекта
