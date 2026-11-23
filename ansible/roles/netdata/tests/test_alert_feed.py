@@ -53,6 +53,21 @@ class Probes(unittest.TestCase):
         ])
         self.assertEqual([p["chart"] for p in probes], ["httpcheck_cleartranscript.request_status"])
 
+    def test_stale_glucose_is_no_data_and_pm2_decides_uptime(self):
+        alarms = [alarm("glucose_data_stale", "CRITICAL", "filecheck_glucose.file_modification_time_ago"),
+                  alarm("pm2_app_down", "CLEAR", "app.pm2_glucose-libre_processes")]
+        _, points = ss.RANGES["24h"]
+        fresh = [60] * (points - 4) + [7200, 7200, 60, 60]  # 2 отрезка без замеров
+        procs = [1] * (points - 1) + [0]  # в последнем сборщик упал
+
+        def series(parent, host, chart, dim, group, rng):
+            return (fresh if chart.startswith("filecheck_") else procs), list(range(points))
+
+        with mock.patch.object(ss, "series", series):
+            h = ss.history("russia-03", alarms, "24h")
+        self.assertEqual(h["v"][-4:], [1, 1, 1, 0])
+        self.assertEqual(h["uptime"], round((points - 1) / points * 100, 2))
+
 
 class Statuses(unittest.TestCase):
     def test_removed_alarm_is_no_data_not_a_crash(self):

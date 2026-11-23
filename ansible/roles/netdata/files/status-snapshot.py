@@ -137,13 +137,13 @@ def answered_success(d):
 
 def probes(alarms):
     """Пробы истории: значение отрезка 1 = норма, 0.95–0.999 = warn, ниже = crit.
-    Если проб нет — живость pm2-процесса."""
+    Если проб доступности нет (только свежесть данных) — ещё живость pm2-процесса."""
     out, pm2 = {}, {}
 
-    def add(a, chart, dim, group, fn=lambda v: v, gap_down=False):
+    def add(a, chart, dim, group, fn=lambda v: v, gap_down=False, data_only=False):
         # «from»: хост — откуда данные; у http/port/ping это проверяющий, не место приложения
         out[a['host'] + chart] = dict(host=a['host'], chart=chart, dim=dim, group=group, fn=fn, gap_down=gap_down,
-                                      label=f"{chart.split('.')[0]} from {a['host']}")
+                                      data_only=data_only, label=f"{chart.split('.')[0]} from {a['host']}")
 
     for a in alarms:
         c = a['chart']
@@ -162,9 +162,13 @@ def probes(alarms):
             add(a, f'mysql_{m[1]}.queries', 'queries', 'average', lambda v: 1, True)
         elif m := re.match(r'^clickhouse_([^.]+)\.', c):
             add(a, f'clickhouse_{m[1]}.uptime', 'uptime', 'average', lambda v: 1, True)
-        elif m := re.match(r'^filecheck_(.+_backup|s3_mirror|glucose)\..+modification_time_ago$', c):
+        elif re.match(r'^filecheck_glucose\..+modification_time_ago$', c):
+            # нет замеров — сенсор снят или телефон далеко, не простой: старое = «нет данных»,
+            # доступность меряет pm2 (history)
+            add(a, c, 'mtime_ago', 'max', lambda v: 1 if v < 1800 else None, data_only=True)
+        elif m := re.match(r'^filecheck_(.+_backup|s3_mirror)\..+modification_time_ago$', c):
             # пороги (warn, crit в часах) как в алертах: бэкапы суточные, зеркало раз в 6 ч
-            warn_h, crit_h = {'s3_mirror': (13, 25), 'glucose': (0.5, 1)}.get(m[1], (30, 50))
+            warn_h, crit_h = {'s3_mirror': (13, 25)}.get(m[1], (30, 50))
             add(a, c, 'mtime_ago', 'max', fresh_ok(warn_h, crit_h))
         elif m := re.match(r'^(x509check_[^.]+)\.', c):
             add(a, m[1] + '.cert_depth0_time_until_expiration', 'expiry', 'min',
@@ -203,7 +207,7 @@ def history(parent, alarms, rng):
         labels.append(s['label'])
         if len(ts) == points:
             t = ts
-    if not plist:
+    if all(s['data_only'] for s in plist):
         for s in pm2:
             try:
                 v, ts = series(parent, s['host'], f"app.pm2_{s['app']}_processes", 'processes', 'min', rng)
