@@ -9,7 +9,7 @@ PrivateKey = {{ wireguard_private_key }}
 # {{ peer }}
 [Peer]
 PublicKey = {{ hostvars[peer].wireguard_pubkey }}
-Endpoint = {{ hostvars[peer].ansible_host }}:{{ hostvars[peer].wireguard_port | default(wireguard_port) }}
+Endpoint = {{ hostvars[peer].ansible_host }}:{{ hostvars[peer].wireguard_port | default(wireguard_default_port) }}
 AllowedIPs = {{ hostvars[peer].wireguard_ip }}/32
 PersistentKeepalive = {{ wireguard_keepalive }}
 {% endfor %}
