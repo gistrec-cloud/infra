@@ -8,7 +8,11 @@
 # inventory ansible_host.
 wireguard_interface: wg0
 wireguard_subnet_cidr: 24
-wireguard_port: 51820
+# Порт по умолчанию — отдельной переменной: шаблон подставляет его пиру, у которого
+# своего wireguard_port нет. `default(wireguard_port)` там брал бы порт ТЕКУЩЕГО
+# хоста, и хост с переопределённым портом стучался бы ко всем пирам на свой порт.
+wireguard_default_port: 51820
+wireguard_port: "{{ wireguard_default_port }}"
 
 # This host's private key — from the vault, keyed by host: vault_wg_privkey_<host>
 # with dashes as underscores (e.g. vault_wg_privkey_russia_03). Generate a pair

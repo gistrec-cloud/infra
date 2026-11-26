@@ -65,7 +65,10 @@ cat /tmp/wg.priv                                # the PRIVATE key
 
 ## Firewall
 
-WireGuard listens on UDP `51820`. On hosts with `firewall_managed: true`, open it
+WireGuard listens on UDP `51820` (`wireguard_default_port`). A host can listen
+elsewhere by setting `wireguard_port` in its host_vars; every peer's `Endpoint`
+for that host follows it, and peers keep their own port. Peer firewalls filter on
+their own dport, so they need no change. On hosts with `firewall_managed: true`, open it
 to the mesh peers via `firewall_allow_udp` (see the `firewall` role) — live
 host_vars name the peer through `hostvars`, never a literal IP:
 
