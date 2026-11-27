@@ -51,6 +51,7 @@ data "archive_file" "budget_explorer" {
     ".ruff_cache",
     ".pytest_cache",
     "__pycache__",
+    ".omp",
     "deploy.sh",
     "README.md",
     "pyvenv.cfg",
