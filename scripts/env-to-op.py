@@ -121,17 +121,20 @@ def main(argv):
     )
     env = {k: v for k, v in os.environ.items() if k not in values}
 
-    def resolved(env_file):
+    def resolved(env_file, names):
         res = subprocess.run(
-            ["op", "run", "--no-masking", "--env-file", env_file, "--", sys.executable, "-c", probe, *keys],
+            ["op", "run", "--no-masking", "--env-file", env_file, "--", sys.executable, "-c", probe, *names],
             capture_output=True, text=True, env=env,
         )
         return res.stdout.strip() if res.returncode == 0 else f"error: {res.stderr.strip()[:300]}"
 
-    before, after = resolved(path), resolved(tmp)
-    if after != before or after != digest(values):
+    # Every key resolves the same before and after (kept keys may already be op:// refs),
+    # and every moved key resolves to the plaintext value it had in the file.
+    before, after = resolved(path, keys), resolved(tmp, keys)
+    moved = resolved(tmp, sorted(secrets))
+    if before.startswith("error:") or after != before or moved != digest(secrets):
         os.remove(tmp)
-        sys.exit(f"  VERIFY FAILED, original file kept; delete item '{title}' before retrying. before={before[:80]} after={after[:80]}")
+        sys.exit(f"  VERIFY FAILED, original file kept; delete item '{title}' before retrying. before={before[:80]} after={after[:80]} moved={moved[:80]}")
     os.replace(tmp, path)
     print("  verified: under op run every key of the file resolves to the same value as before")
     print(f"  {fname} rewritten; run the app with: op run --env-file {fname} -- <command>")
