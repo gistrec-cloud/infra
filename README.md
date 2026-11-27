@@ -265,6 +265,41 @@ scripts/env-compare.py --delete-identical <file>... # drop copies that 1Password
 scripts/env-pull.py "dotenv <app>" <file> [--keep=MYSQL_HOST]  # refresh a local prod copy, keep local overrides
 ```
 
+## omp command guard: Agent Privilege Manager
+
+The omp bash guard (`~/.omp/agent/hooks/pre/command-guard.ts`, logic in
+`~/.omp/agent/guard/lib.ts`) lets the agent push branches and work with PRs,
+issues and CI runs in my own GitHub repositories (`TRUSTED_OWNERS`) without
+asking; it resolves the real remote of the checkout and refuses forks, force,
+deletions and shell tricks. Pushes to main/master or the default branch (as GitHub
+reports it for the push URL; while gh cannot tell, every push), tags, `gh pr merge`
+and `gh release` also need Touch ID: one confirmation opens a 60-minute window for
+that repository in that omp session. Bug-hunt sessions get
+no shortcut. The dialog comes from Agent Privilege Manager, a small Swift app
+bundle installed into `~/.omp/agent/guard/bin`, which omp restricts for agents:
+
+```sh
+scripts/build-agent-privilege-manager.sh   # build, ad-hoc sign, install
+```
+
+Without the bundle the guard falls back to the omp confirmation dialog.
+Decisions are logged to `~/.omp/agent/guard/decisions.jsonl`.
+
+The guard also guards itself. Any `.omp` directory (the global one with hooks, guard
+and `config.yml`, or a project's approval rules) changes only after the user confirms,
+without a model in the loop: bash lines that are not read-only and name such a path or
+run inside one, and `edit`/`write` into it (resolved through symlinks). eval cells that
+name `.omp`, `git push` or `gh` calls that may write ask too, since eval code is not
+checked against remotes (`hooks/pre/config-guard.ts`). For eval this is text matching:
+it stops a naive injection, not a deliberate one.
+
+The hard limit sits on GitHub. Repositories where a merge to the default branch deploys,
+plus this one, have the ruleset `default branch: PR only`: no direct push, force push or
+deletion, and no bypass, admins included. It is set on `gistrec-cloud/infra`,
+`gistrec/usage-beacon`, `gistrec/aleksandravoo` and `gistrec/jobs`, so changes
+land through a PR. The ruleset does not stop a merge or a ruleset change made with my
+`gh` token; only the client-side guard asks about those.
+
 ## Quickstart
 
 All commands are run from the repository root.
