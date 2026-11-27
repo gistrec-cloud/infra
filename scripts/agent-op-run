@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs an MCP server with op:// references in its environment resolved from the
+# "Agent Access" vault via the read-only service account token in the Keychain.
+# Used by Claude Code MCP configs: command "/Users/gistrec/Projects/infra/scripts/agent-op-run",
+# args [<server command>, ...].
+OP_SERVICE_ACCOUNT_TOKEN="$(security find-generic-password -s op-agent-access -w)" || exit 1
+export OP_SERVICE_ACCOUNT_TOKEN
+exec op run --no-masking -- "$@"

@@ -107,7 +107,7 @@ infra/
 │   └── yandex-vk-ads-tool/       # own YC folder: Object Storage (landing bucket)
 ├── docs/runbooks/                # operational procedures (move-apps, break-glass, s3-mirror)
 ├── geo.json                      # (gitignored) two-sided names — read by terraform AND ansible
-└── scripts/                      # backups (envs, repo-private files), move-apps, S3 mirror tools, pre-commit checks
+└── scripts/                      # backups (envs, repo-private files), move-apps, S3 mirror tools, pre-commit checks, local secrets (agents, dev .env)
 ```
 
 ## Roles
@@ -239,6 +239,30 @@ keeps no state at all, and the fronts that do proxy over the mesh
 (`glucose`, `pdf-v-excel`, `subtitry`, `flights`, `govorit`,
 `clear-transcript-bot`) do so because the application runs only on finland-01
 (`usage` the other way round: it runs only on russia-03).
+
+## Local secrets: AI agents and dev `.env`
+
+Coding agents (omp, Claude Code) get MCP credentials from a separate 1Password
+vault, **Agent Access**, through a read-only service account whose token sits in
+the macOS Keychain (`op-agent-access`). No Touch ID prompt, and the account can
+read nothing outside that vault.
+
+```sh
+scripts/setup-agent-access.sh   # one-off: vault + service account + Keychain item
+scripts/agent-secret 'op://Agent Access/<item>/<field>'   # omp MCP env: "!…/agent-secret '…'"
+scripts/agent-op-run <server command…>                    # Claude MCP: env with op:// refs resolved
+```
+
+Local `.env` files keep secrets only as `op://` references to the `Gistrec Cloud`
+vault, so a leaked checkout or a curious agent gets references, not values. Run
+the app with `op run --env-file .env -- <command>`. Neither script prints a value.
+
+```sh
+scripts/env-to-op.py <project-dir> [.env]           # dry run: which keys move
+scripts/env-to-op.py <project-dir> [.env] --apply   # backup doc + item, verify, rewrite
+scripts/env-compare.py <file>...                    # local prod copy vs "dotenv <app>" docs (key names only)
+scripts/env-compare.py --delete-identical <file>... # drop copies that 1Password already has
+```
 
 ## Quickstart
 
