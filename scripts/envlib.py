@@ -4,10 +4,13 @@ import re
 import subprocess
 
 KEY_LINE = re.compile(r"^(\s*(?:export\s+)?)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
-SECRET_NAME = re.compile(
-    r"PASS|SECRET|TOKEN|KEY|DSN|AUTH|PRIVATE|CREDENTIAL|SALT|COOKIE|SESSION|WEBHOOK|SIGNING|CERT",
-    re.IGNORECASE,
-)
+COMMENTED = re.compile(r"^\s*#+\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+# Whole words of the key name (split on "_"): MAX_OUTPUT_TOKENS, ENABLE_SECURE_COOKIES and
+# YANDEX_OAUTH_CLIENT_ID are settings, TELEGRAM_API_HASH and TOKEN_ENCRYPTION_KEY are secrets.
+SECRET_WORDS = {
+    "PASS", "PASSWD", "PASSWORD", "PWD", "SECRET", "TOKEN", "KEY", "APIKEY", "DSN",
+    "HASH", "PRIVATE", "CREDENTIAL", "CREDENTIALS", "SALT", "WEBHOOK", "SIGNING",
+}
 URL_WITH_PASSWORD = re.compile(r"://[^/@\s:]+:[^/@\s]+@")
 
 
@@ -37,10 +40,11 @@ def parse(text):
     return out
 
 
-def is_secret(key, value):
-    if not value or value.startswith("op://"):
+def is_secret(key, value, also=(), keep=()):
+    if not value or value.startswith("op://") or key in keep:
         return False
-    return bool(SECRET_NAME.search(key) or URL_WITH_PASSWORD.search(value))
+    words = set(key.upper().split("_"))
+    return bool(key in also or words & SECRET_WORDS or URL_WITH_PASSWORD.search(value))
 
 
 def op(*args, stdin=None):
