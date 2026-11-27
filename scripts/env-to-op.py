@@ -49,12 +49,18 @@ def main(argv):
     lines = text.splitlines(keepends=True)
     skipped = []
     stale = []  # commented-out secrets and overridden duplicates: dotenv ignores them, the file still leaks them
+    in_quote = None  # inside a multi-line quoted value: its lines are data, not assignments or comments
     for i, line in enumerate(lines):
+        if in_quote:
+            if in_quote in line:
+                in_quote = None
+            continue
         m = KEY_LINE.match(line.rstrip("\n"))
         if m:
             value = unquote(m.group(3))
             if value is None:
                 skipped.append(m.group(2))
+                in_quote = m.group(3).strip()[0]
             elif m.group(2) in secrets and value != secrets[m.group(2)]:
                 stale.append((i, m.group(2)))
             continue
@@ -74,6 +80,8 @@ def main(argv):
     if not apply or not secrets:
         print("  (dry run)" if not apply else "  nothing to do")
         return
+    if skipped:
+        sys.exit("  multi-line values are not supported: file left untouched, move these secrets by hand")
 
     existing = [i for i in op_json("item", "list", "--vault", VAULT) if i["title"] == title]
     if existing:
@@ -106,21 +114,26 @@ def main(argv):
         f.writelines(out)
     os.chmod(tmp, 0o600)
 
-    keys = sorted(secrets)
+    keys = sorted(values)
     probe = (
         "import hashlib,json,os,sys;"
         "print(hashlib.sha256(json.dumps({k: os.environ.get(k) for k in sys.argv[1:]}, sort_keys=True).encode()).hexdigest())"
     )
-    env = {k: v for k, v in os.environ.items() if k not in secrets}
-    res = subprocess.run(
-        ["op", "run", "--no-masking", "--env-file", tmp, "--", sys.executable, "-c", probe, *keys],
-        capture_output=True, text=True, env=env,
-    )
-    if res.returncode != 0 or res.stdout.strip() != digest({k: secrets[k] for k in keys}):
+    env = {k: v for k, v in os.environ.items() if k not in values}
+
+    def resolved(env_file):
+        res = subprocess.run(
+            ["op", "run", "--no-masking", "--env-file", env_file, "--", sys.executable, "-c", probe, *keys],
+            capture_output=True, text=True, env=env,
+        )
+        return res.stdout.strip() if res.returncode == 0 else f"error: {res.stderr.strip()[:300]}"
+
+    before, after = resolved(path), resolved(tmp)
+    if after != before or after != digest(values):
         os.remove(tmp)
-        sys.exit(f"  VERIFY FAILED, original file kept. {res.stderr.strip()[:300]}")
+        sys.exit(f"  VERIFY FAILED, original file kept; delete item '{title}' before retrying. before={before[:80]} after={after[:80]}")
     os.replace(tmp, path)
-    print("  verified: op run resolves every reference to the original value")
+    print("  verified: under op run every key of the file resolves to the same value as before")
     print(f"  {fname} rewritten; run the app with: op run --env-file {fname} -- <command>")
 
 

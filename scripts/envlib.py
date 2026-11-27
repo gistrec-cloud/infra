@@ -29,13 +29,21 @@ def unquote(raw):
 
 
 def parse(text):
-    """{key: value} for every single-line assignment; later keys win, like dotenv."""
+    """{key: value} for every single-line assignment; later keys win, like dotenv.
+    Lines inside a multi-line quoted value are data, not assignments."""
     out = {}
+    in_quote = None
     for line in text.splitlines():
+        if in_quote:
+            if in_quote in line:
+                in_quote = None
+            continue
         m = KEY_LINE.match(line)
         if m:
             value = unquote(m.group(3))
-            if value is not None:
+            if value is None:
+                in_quote = m.group(3).strip()[0]
+            else:
                 out[m.group(2)] = value
     return out
 
