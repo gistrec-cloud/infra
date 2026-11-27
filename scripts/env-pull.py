@@ -24,6 +24,8 @@ def main(argv):
         sys.exit(__doc__)
     doc, path = args
     text = op("document", "get", doc, "--vault", VAULT)
+    if not parse(text):
+        sys.exit(f"{path}: document '{doc}' is empty or has no KEY=value lines; file left untouched")
     old_text = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
 
     old_lines = old_text.splitlines(keepends=True)
