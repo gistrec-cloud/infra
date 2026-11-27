@@ -1,4 +1,4 @@
-"""Shared helpers for env-compare.py and env-to-op.py. Never prints values."""
+"""Shared helpers for the env-*.py scripts. Never prints values."""
 import json
 import re
 import subprocess
@@ -28,24 +28,27 @@ def unquote(raw):
     return re.split(r"\s+#", raw, maxsplit=1)[0].strip()
 
 
-def parse(text):
-    """{key: value} for every single-line assignment; later keys win, like dotenv.
+def assignments(lines):
+    """(index, key, value) for every single-line assignment in a list of lines.
     Lines inside a multi-line quoted value are data, not assignments."""
-    out = {}
     in_quote = None
-    for line in text.splitlines():
+    for i, line in enumerate(lines):
         if in_quote:
             if in_quote in line:
                 in_quote = None
             continue
-        m = KEY_LINE.match(line)
+        m = KEY_LINE.match(line.rstrip("\n"))
         if m:
             value = unquote(m.group(3))
             if value is None:
                 in_quote = m.group(3).strip()[0]
             else:
-                out[m.group(2)] = value
-    return out
+                yield i, m.group(2), value
+
+
+def parse(text):
+    """{key: value} for every single-line assignment; later keys win, like dotenv."""
+    return {key: value for _, key, value in assignments(text.splitlines())}
 
 
 def is_secret(key, value, also=(), keep=()):

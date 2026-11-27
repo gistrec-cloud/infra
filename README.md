@@ -255,13 +255,14 @@ scripts/agent-op-run <server command…>                    # Claude MCP: env wi
 
 Local `.env` files keep secrets only as `op://` references to the `Gistrec Cloud`
 vault, so a leaked checkout or a curious agent gets references, not values. Run
-the app with `op run --env-file .env -- <command>`. Neither script prints a value.
+the app with `op run --env-file .env -- <command>`. None of these scripts prints a value.
 
 ```sh
 scripts/env-to-op.py <project-dir> [.env]           # dry run: which keys move
 scripts/env-to-op.py <project-dir> [.env] --apply   # backup doc + item, verify, rewrite
 scripts/env-compare.py <file>...                    # local prod copy vs "dotenv <app>" docs (key names only)
 scripts/env-compare.py --delete-identical <file>... # drop copies that 1Password already has
+scripts/env-pull.py "dotenv <app>" <file> [--keep=MYSQL_HOST]  # refresh a local prod copy, keep local overrides
 ```
 
 ## Quickstart
