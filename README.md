@@ -265,6 +265,48 @@ scripts/env-compare.py --delete-identical <file>... # drop copies that 1Password
 scripts/env-pull.py "dotenv <app>" <file> [--keep=MYSQL_HOST]  # refresh a local prod copy, keep local overrides
 ```
 
+## Bug-hunt: advisory status and VM dispatcher
+
+A daily launchd job (`~/Library/LaunchAgents/cloud.gistrec.bughunt-status.plist`,
+09:30, log `~/Library/Logs/bughunt-status.log`) runs `scripts/hunt-status-daily`:
+
+1. `~/Projects/bug-hunt/.hunt/bin/hunt-status` makes read-only `gh api` calls for
+   every GHSA I filed, stores state and events in `.hunt/hunt.db`, rewrites
+   `.hunt/ACTIONS.md` ("needs you" / "for the agent") and queues one Telegram
+   message in `.hunt/status/outbox/`. It runs with no secret in its environment.
+2. `scripts/hunt-tg-notify` sends the queue through @GistrecCloudBot to the
+   bug-hunt topic of the Gistrec Cloud chat (`-1004479872750:375`). Only this
+   step gets the bot token: `agent-op-run` resolves
+   `op://Agent Access/telegram-GistrecCloudBot/credential`. It only reads text files from
+   the bug-hunt workspace, never runs code from there. Sending is one-way
+   (`sendMessage`), so it does not clash with the bot app's own `getUpdates`.
+
+Before the sweep the job runs `.hunt/bin/hunt-file-queue`: reports the user has
+already approved (`.hunt/queue/<slug>.json` with a `not_before` date) are filed
+through `gh api`, and the result goes to the same Telegram topic. It exists for
+GitHub's daily limit on private vulnerability reports: a report refused with
+that 403 stays queued for the next day.
+
+```sh
+launchctl load ~/Library/LaunchAgents/cloud.gistrec.bughunt-status.plist   # enable
+launchctl start cloud.gistrec.bughunt-status                                # run now
+```
+
+Untrusted code from audited projects runs only on the VMs, through a
+forced-command SSH key: `~/.ssh/hunt_dispatch_ed25519` is in each VM's
+`authorized_keys` as `restrict,command="…/.local/share/hunt/hunt_dispatch.py"`
+(source and per-host limits: `~/Projects/bug-hunt/.hunt/vm/`). The
+`hunt-<vm>` aliases in `~/.ssh/config` (block installed by
+`.hunt/vm/install-ssh-alias.sh`) use only that key and no agent. They multiplex
+only among themselves (`ControlPath ~/.ssh/cm-hunt-%n`, `ControlPersist 10m`),
+never over the full-access connections; without it parallel agents hit sshd's
+per-source limits. The forced command applies to every session on the master.
+The dispatcher runs labelled (`bughunt=1`) containers with
+no network, uid 1000, no capabilities and resource limits, and never touches
+unlabelled containers, so it cannot reach the host's own services. Ansible sets
+keys with `exclusive: false`, so a playbook run keeps the line; remove it by hand
+(backup `~/.ssh/authorized_keys.bak-hunt` on each VM) to revoke.
+
 ## omp command guard: Agent Privilege Manager
 
 The omp bash guard (`~/.omp/agent/hooks/pre/command-guard.ts`, logic in

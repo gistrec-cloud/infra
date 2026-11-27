@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Send queued bug-hunt status messages to Telegram, then move them to sent/.
+
+    hunt-tg-notify <outbox-dir> <chat_id[:thread_id]>
+
+Each *.html file in <outbox-dir> is one message (Telegram HTML parse mode),
+written by ~/Projects/bug-hunt/.hunt/bin/hunt-status. This script only reads
+those text files; it never runs code from the bug-hunt workspace, so the bot
+token stays out of that workspace's processes.
+
+TELEGRAM_BOT_TOKEN comes from the environment. launchd runs it through
+scripts/agent-op-run with TELEGRAM_BOT_TOKEN="op://Agent Access/..." (see
+README, "Bug-hunt: advisory status and VM dispatcher"). Nothing here prints the token.
+"""
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+LIMIT = 3900  # Telegram caps a message at 4096 characters
+
+
+def chunks(text: str):
+    cur = ""
+    for line in text.split("\n"):
+        if cur and len(cur) + len(line) + 1 > LIMIT:
+            yield cur
+            cur = ""
+        cur += line + "\n"
+    if cur.strip():
+        yield cur
+
+
+def send(token: str, chat: str, thread: str, text: str) -> None:
+    payload = {"chat_id": chat, "text": text, "parse_mode": "HTML", "disable_web_page_preview": "true"}
+    if thread:
+        payload["message_thread_id"] = thread
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
+                                 data=urllib.parse.urlencode(payload).encode())
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            if not json.load(resp).get("ok"):
+                raise RuntimeError("Telegram answered ok=false")
+    except urllib.error.HTTPError as e:  # the exception text would contain the URL, i.e. the token
+        raise RuntimeError(f"Telegram HTTP {e.code}: {e.read()[:300]!r}") from None
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Telegram unreachable: {e.reason}") from None
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        print(__doc__, file=sys.stderr)
+        return 2
+    outbox = Path(sys.argv[1])
+    chat, _, thread = sys.argv[2].partition(":")
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not token or token.startswith("op://"):
+        print("hunt-tg-notify: TELEGRAM_BOT_TOKEN is not resolved", file=sys.stderr)
+        return 1
+    sent_dir = outbox / "sent"
+    sent_dir.mkdir(parents=True, exist_ok=True)
+    rc = 0
+    for msg in sorted(outbox.glob("*.html")):
+        try:
+            for part in chunks(msg.read_text(encoding="utf-8")):
+                send(token, chat, thread, part)
+            msg.rename(sent_dir / msg.name)
+            print(f"sent {msg.name}")
+        except Exception as e:  # keep the file for the next run
+            print(f"hunt-tg-notify: {msg.name}: {e}", file=sys.stderr)
+            rc = 1
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())
