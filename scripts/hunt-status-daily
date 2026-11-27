@@ -1,0 +1,23 @@
+#!/bin/sh
+# Daily bug-hunt advisory status (launchd: ~/Library/LaunchAgents/cloud.gistrec.bughunt-status.plist).
+#
+# 1. ~/Projects/bug-hunt/.hunt/bin/hunt-status: read-only `gh api` sweep, writes
+#    .hunt/ACTIONS.md and queues a Telegram message in .hunt/status/outbox/.
+#    It runs WITHOUT any secret in its environment.
+# 2. hunt-tg-notify sends the queued messages to the GistrecCloudBot topic.
+#    Only this step gets the bot token, resolved by agent-op-run from the
+#    "Agent Access" vault.
+export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+HUNT=/Users/gistrec/Projects/bug-hunt
+CHAT="-1004479872750:375"   # Gistrec Cloud, bug-hunt topic
+SCRIPTS=$(cd "$(dirname "$0")" && pwd)
+
+echo "=== $(date '+%F %T')"
+(cd "$HUNT" && .hunt/bin/hunt-file-queue)   # reports the user already approved, due today
+(cd "$HUNT" && .hunt/bin/hunt-status)
+st=$?
+TELEGRAM_BOT_TOKEN='op://Agent Access/telegram-GistrecCloudBot/credential' \
+  "$SCRIPTS/agent-op-run" "$SCRIPTS/hunt-tg-notify" "$HUNT/.hunt/status/outbox" "$CHAT"
+nt=$?
+echo "hunt-status rc=$st, notify rc=$nt"
+[ "$st" -eq 0 ] && [ "$nt" -eq 0 ]
